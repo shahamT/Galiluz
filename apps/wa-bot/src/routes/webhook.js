@@ -10,6 +10,7 @@ import { logger } from '../utils/logger.js'
 import {
   LOG_PREFIXES,
   WELCOME_INTERACTIVE,
+  CONTACT_MESSAGE,
   DISCOVER_ASK_CATEGORY,
   DISCOVER_ASK_TIME,
   DISCOVER_AFTER_LIST,
@@ -311,6 +312,9 @@ function processOneMessage(phoneNumberId, from, msg, context = {}) {
     }
     if (id === 'publish') {
       return handlePublishButton(phoneNumberId, from, profileName)
+    }
+    if (id === 'contact') {
+      return sendText(phoneNumberId, from, CONTACT_MESSAGE)
     }
     if (id === 'back_to_menu' || id === 'back_to_main') {
       return handleBackToMenu(phoneNumberId, from)

@@ -19,12 +19,17 @@ export const API_VERSION = 'v22.0'
  * Welcome message: reply buttons (quick replies, max 3, title max 20 chars).
  */
 export const WELCOME_INTERACTIVE = {
-  body: 'היי! 👋\nאני הבוט של אפליקציית *גלילו"ז* - Galiluz 🤖\n\nכנסו לאפליקציה כדי לגלות כל מה שקורה בצפון 🎉🏔️🎉\n\n*גלילו"ז* - https://galiluz.co.il\n\n*איך אפשר לעזור לכם?* 😊',
+  body: 'היי! 👋\nאני הבוט של אפליקציית *גלילו"ז* - Galiluz\n\nכנסו לאפליקציה כדי לגלות כל מה שקורה בצפון\n*גלילו"ז*🏔️ - https://galiluz.co.il\n\n*איך אפשר לעזור לכם?* 😊',
   buttons: [
     { id: 'discover', title: '?מה קורה בצפון 🏔️' },
     { id: 'publish', title: 'פרסום אירוע 📅' },
+    { id: 'contact', title: 'צרו קשר 📩' },
   ],
 }
+
+/** Contact: message with wa.me link so user can open chat with the number */
+export const CONTACT_MESSAGE =
+  'לצורך יצירת קשר ניתן לשלוח הודעה ישירות:\nhttps://wa.me/972552835970'
 
 /** Discover flow: ask category (list body) */
 export const DISCOVER_ASK_CATEGORY = 'איזה אירועים את/ה מחפש/ת?'
@@ -55,7 +60,7 @@ export const PUBLISH_REPLY = '*פרסום אירוע יגיע בקרוב!* עד 
 
 /** Publish flow: not registered — body + sign up / back to menu */
 export const PUBLISH_NOT_REGISTERED = {
-  body: '*פעם ראשונה?* 🤩\nבואו נעבור אימות קצרצר (זה לוקח דקה)\n\n❕ _חשוב לנו לוודא שרק מפרסמים מאומתים מעלים אירועים אמיתיים ולגיטימיים למערכת_ ❕',
+  body: '*פעם ראשונה?* 🤩\nבואו נעבור אימות קצרצר (זה לוקח דקה)\n\n _חשוב לנו לוודא שרק מפרסמים מאומתים מעלים אירועים אמיתיים ולגיטימיים למערכת_ ',
   buttons: [
     { id: 'publish_sign_me_up', title: 'בואו נתחיל' },
     { id: 'back_to_main', title: 'בחזרה לתפריט הראשי' },
@@ -65,9 +70,9 @@ export const PUBLISH_NOT_REGISTERED = {
 /** Publish flow: registration steps (text prompts) */
 export const PUBLISH_ASK_FULL_NAME = 'מה השם המלא שלך?'
 export const PUBLISH_ASK_PUBLISHING_AS =
-  'מטעם מי אתם מפרסמים? _יוזמה פרטית / שם העסק_'
+  'מטעם מי אתם מפרסמים?\n_יוזמה פרטית / שם העסק_'
 export const PUBLISH_ASK_EVENT_TYPES =
-  'אילו אירועים אתם מתכוונים לפרסם בגלילו"ז?\n_תיאור כללי, לדוגמה - \'מסיבות בפאב השכונתי\'_'
+  'אילו אירועים אתם מתכוונים לפרסם בגלילו"ז?\n(תיאור כללי)\n_לדוגמה - מסיבה בפאב השכונתי_'
 
 /** Publish flow: commitment step — body + buttons */
 export const PUBLISH_ASK_COMMITMENT = {
