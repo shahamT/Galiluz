@@ -3,8 +3,8 @@
  * Keys: step (welcome | discover_* | publish_* | event_add_*), categoryGroupId?, timeChoice?,
  *       fullName?, publishingAs?, eventTypesDescription?, profileName? (for publish flow).
  *       eventAdd* (for event-add flow): eventAddTitle, eventAddDateTime, eventAddMainCategoryGroupId?,
- *       eventAddMainCategory,
- *       eventAddExtraCategories[], eventAddPlaceName, eventAddCity, eventAddAddressLine1,
+ *       eventAddMainCategory, eventAddExtraCategories[] (no longer collected in flow; kept for API, always []),
+ *       eventAddPlaceName, eventAddCity, eventAddAddressLine1,
  *       eventAddAddressLine2, eventAddLocationNotes, eventAddWazeLink, eventAddGmapsLink,
  *       eventAddPrice, eventAddDescription, eventAddLinks, eventAddMedia[], eventAddLastActivityAt (ms).
  *

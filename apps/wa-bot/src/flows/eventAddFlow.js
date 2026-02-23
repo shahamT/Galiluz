@@ -17,11 +17,12 @@ import {
   EVENT_ADD_INITIAL,
   EVENT_ADD_ASK_TITLE,
   EVENT_ADD_ASK_DATETIME,
+  EVENT_ADD_CATEGORY_INTRO,
   EVENT_ADD_ASK_CATEGORY_GROUP,
   EVENT_ADD_ASK_MAIN_CATEGORY,
-  EVENT_ADD_ASK_EXTRA_CATEGORIES,
-  EVENT_ADD_EXTRA_CAT_BUTTON,
-  EVENT_ADD_CONTINUE_BUTTON,
+  EVENT_ADD_CATEGORY_AI_NOTE,
+  EVENT_ADD_CHANGE_GROUP_PROMPT,
+  EVENT_ADD_CHANGE_GROUP_BUTTON,
   EVENT_ADD_LOCATION_INTRO,
   EVENT_ADD_ASK_PLACE_NAME,
   EVENT_ADD_SKIP_BUTTON,
@@ -44,13 +45,13 @@ import {
   EVENT_ADD_LOCATION_NOTES_MAX,
   EVENT_ADD_WAZE_GMAPS_MAX,
   EVENT_ADD_PRICE_MAX,
+  EVENT_ADD_DESCRIPTION_MIN,
   EVENT_ADD_DESCRIPTION_MAX,
   EVENT_ADD_LINKS_MAX,
   EVENT_ADD_VALIDATE_TITLE,
   EVENT_ADD_VALIDATE_DATETIME,
   EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP,
   EVENT_ADD_VALIDATE_MAIN_CATEGORY,
-  EVENT_ADD_VALIDATE_EXTRA_CATEGORIES,
   EVENT_ADD_VALIDATE_PLACE_NAME,
   EVENT_ADD_VALIDATE_CITY,
   EVENT_ADD_VALIDATE_ADDRESS,
@@ -60,6 +61,7 @@ import {
   EVENT_ADD_VALIDATE_DESCRIPTION,
   EVENT_ADD_VALIDATE_LINKS,
   EVENT_ADD_VALIDATE_MEDIA,
+  EVENT_ADD_MEDIA_UPLOAD_FAILED,
   LOG_PREFIXES,
 } from '../consts/index.js'
 import { WELCOME_INTERACTIVE } from '../consts/index.js'
@@ -69,7 +71,6 @@ const VALID_CATEGORY_IDS = new Set(Object.keys(EVENT_CATEGORIES))
 const VALID_GROUP_IDS = new Set(CATEGORY_GROUPS.map((g) => g.id))
 
 const STEPS = conversationState.STEPS
-const MAX_EXTRA_CATEGORIES = 3
 const MAX_MEDIA = 5
 const EVENT_ADD_TIMEOUT_MS = 30 * 60 * 1000
 
@@ -79,7 +80,6 @@ const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_DATETIME,
   STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP,
   STEPS.EVENT_ADD_MAIN_CATEGORY,
-  STEPS.EVENT_ADD_EXTRA_CATEGORIES,
   STEPS.EVENT_ADD_PLACE_NAME,
   STEPS.EVENT_ADD_CITY,
   STEPS.EVENT_ADD_ADDRESS,
@@ -111,19 +111,20 @@ function buildCategoryGroupList() {
 }
 
 /**
- * Categories in one group only (max 7 rows). Optionally exclude already-selected ids.
+ * Categories in one group only (max 7 rows). Optionally exclude ids and override body.
  * @param {string} groupId - CATEGORY_GROUPS[].id
- * @param {{ excludeIds?: string[] }} [opts]
+ * @param {{ excludeIds?: string[], bodyOverride?: string }} [opts]
  */
 function buildCategoryListForGroup(groupId, opts = {}) {
   const group = CATEGORY_GROUPS.find((g) => g.id === groupId)
-  if (!group) return { body: EVENT_ADD_ASK_MAIN_CATEGORY, button: 'בחר קטגוריה', sections: [{ title: '', rows: [] }] }
+  const defaultBody = EVENT_ADD_ASK_MAIN_CATEGORY + '\n' + EVENT_ADD_CATEGORY_AI_NOTE
+  if (!group) return { body: opts.bodyOverride || defaultBody, button: 'בחר קטגוריה', sections: [{ title: '', rows: [] }] }
   const excludeIds = opts.excludeIds || []
   const rows = group.categoryIds
     .filter((id) => !excludeIds.includes(id))
     .map((id) => ({ id, title: EVENT_CATEGORIES[id]?.label || id }))
   return {
-    body: EVENT_ADD_ASK_MAIN_CATEGORY,
+    body: opts.bodyOverride || defaultBody,
     button: 'בחר קטגוריה',
     sections: [{ title: group.label, rows }],
   }
@@ -323,97 +324,73 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       )
     }
     conversationState.set(from, { eventAddDateTime: textBody, step: STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP })
-    return sendInteractiveList(phoneNumberId, from, buildCategoryGroupList())
+    const groupListPayload = { ...buildCategoryGroupList(), body: EVENT_ADD_CATEGORY_INTRO + '\n' + EVENT_ADD_ASK_CATEGORY_GROUP }
+    return sendInteractiveList(phoneNumberId, from, groupListPayload)
   }
 
   if (step === STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP) {
+    const groupListPayload = { ...buildCategoryGroupList(), body: EVENT_ADD_CATEGORY_INTRO + '\n' + EVENT_ADD_ASK_CATEGORY_GROUP }
     if (listReplyId && !VALID_GROUP_IDS.has(listReplyId)) {
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP, () =>
-        sendInteractiveList(phoneNumberId, from, buildCategoryGroupList()),
+        sendInteractiveList(phoneNumberId, from, groupListPayload),
       )
     }
     if (!listReplyId) {
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP, () =>
-        sendInteractiveList(phoneNumberId, from, buildCategoryGroupList()),
+        sendInteractiveList(phoneNumberId, from, groupListPayload),
       )
     }
     conversationState.set(from, {
       eventAddMainCategoryGroupId: listReplyId,
       step: STEPS.EVENT_ADD_MAIN_CATEGORY,
     })
-    return sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(listReplyId))
+    const categoryListPayload = buildCategoryListForGroup(listReplyId)
+    return sendInteractiveList(phoneNumberId, from, categoryListPayload).then((r) => {
+      if (r && !r.success) return r
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD_CHANGE_GROUP_PROMPT,
+        buttons: [EVENT_ADD_CHANGE_GROUP_BUTTON],
+      })
+    })
   }
 
   if (step === STEPS.EVENT_ADD_MAIN_CATEGORY) {
+    if (buttonId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP })
+      const groupListPayload = { ...buildCategoryGroupList(), body: EVENT_ADD_CATEGORY_INTRO + '\n' + EVENT_ADD_ASK_CATEGORY_GROUP }
+      return sendInteractiveList(phoneNumberId, from, groupListPayload)
+    }
+    const sendCategoryListThenChangeGroupButton = (groupId) =>
+      sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(groupId)).then((r) => {
+        if (r && !r.success) return r
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD_CHANGE_GROUP_PROMPT,
+          buttons: [EVENT_ADD_CHANGE_GROUP_BUTTON],
+        })
+      })
     if (listReplyId && !VALID_CATEGORY_IDS.has(listReplyId)) {
       const groupId = state.eventAddMainCategoryGroupId
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
-        sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(groupId)),
+        sendCategoryListThenChangeGroupButton(groupId),
       )
     }
     if (!listReplyId) {
       const groupId = state.eventAddMainCategoryGroupId
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
-        sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(groupId)),
+        sendCategoryListThenChangeGroupButton(groupId),
       )
     }
     conversationState.set(from, {
       eventAddMainCategory: listReplyId,
       eventAddExtraCategories: [],
-      step: STEPS.EVENT_ADD_EXTRA_CATEGORIES,
+      step: STEPS.EVENT_ADD_PLACE_NAME,
     })
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_EXTRA_CATEGORIES,
-      buttons: [EVENT_ADD_EXTRA_CAT_BUTTON, EVENT_ADD_CONTINUE_BUTTON],
-    })
+    return sendLocationIntroAndPlaceName(phoneNumberId, from)
   }
 
   if (step === STEPS.EVENT_ADD_EXTRA_CATEGORIES) {
-    if (buttonId === EVENT_ADD_CONTINUE_BUTTON.id) {
-      return sendLocationIntroAndPlaceName(phoneNumberId, from)
-    }
-    if (buttonId === EVENT_ADD_EXTRA_CAT_BUTTON.id) {
-      const extras = state.eventAddExtraCategories || []
-      if (extras.length >= MAX_EXTRA_CATEGORIES) {
-        return sendLocationIntroAndPlaceName(phoneNumberId, from)
-      }
-      const groupId = state.eventAddMainCategoryGroupId
-      const mainId = state.eventAddMainCategory
-      const listPayload = buildCategoryListForGroup(groupId, {
-        excludeIds: [mainId, ...extras],
-      })
-      if (listPayload.sections[0].rows.length === 0) {
-        return sendText(phoneNumberId, from, 'כל הקטגוריות בקבוצה זו כבר נבחרו.').then((r) => {
-          if (r && !r.success) return r
-          return sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_EXTRA_CATEGORIES,
-            buttons: [EVENT_ADD_EXTRA_CAT_BUTTON, EVENT_ADD_CONTINUE_BUTTON],
-          })
-        })
-      }
-      return sendInteractiveList(phoneNumberId, from, listPayload)
-    }
-    if (listReplyId) {
-      const mainId = state.eventAddMainCategory
-      const extras = state.eventAddExtraCategories || []
-      if (mainId !== listReplyId && !extras.includes(listReplyId) && extras.length < MAX_EXTRA_CATEGORIES) {
-        const nextExtras = [...extras, listReplyId]
-        conversationState.set(from, { eventAddExtraCategories: nextExtras })
-        if (nextExtras.length >= MAX_EXTRA_CATEGORIES) {
-          return sendLocationIntroAndPlaceName(phoneNumberId, from)
-        }
-      }
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_EXTRA_CATEGORIES,
-        buttons: [EVENT_ADD_EXTRA_CAT_BUTTON, EVENT_ADD_CONTINUE_BUTTON],
-      })
-    }
-    return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_EXTRA_CATEGORIES, () =>
-      sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_EXTRA_CATEGORIES,
-        buttons: [EVENT_ADD_EXTRA_CAT_BUTTON, EVENT_ADD_CONTINUE_BUTTON],
-      }),
-    )
+    conversationState.set(from, { step: STEPS.EVENT_ADD_PLACE_NAME })
+    return sendLocationIntroAndPlaceName(phoneNumberId, from)
   }
 
   if (step === STEPS.EVENT_ADD_PLACE_NAME) {
@@ -447,11 +424,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       )
     }
     const placeName = (state.eventAddPlaceName ?? '').trim()
-    const nextStep = placeName ? STEPS.EVENT_ADD_LOCATION_NOTES : STEPS.EVENT_ADD_ADDRESS
-    conversationState.set(from, { eventAddCity: textBody, step: nextStep })
+    conversationState.set(from, { eventAddCity: textBody, step: STEPS.EVENT_ADD_ADDRESS })
     if (placeName) {
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_LOCATION_NOTES,
+        body: EVENT_ADD_ASK_ADDRESS,
         buttons: [EVENT_ADD_SKIP_BUTTON],
       })
     }
@@ -459,18 +435,51 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_ADDRESS) {
-    if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS)
+    const placeName = (state.eventAddPlaceName ?? '').trim()
+    const addressCanSkip = !!placeName
+
+    if (buttonId === EVENT_ADD_SKIP_BUTTON.id && addressCanSkip) {
+      conversationState.set(from, {
+        eventAddAddressLine1: '',
+        eventAddAddressLine2: '',
+        step: STEPS.EVENT_ADD_LOCATION_NOTES,
+      })
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD_ASK_LOCATION_NOTES,
+        buttons: [EVENT_ADD_SKIP_BUTTON],
+      })
+    }
+    if (!textBody) {
+      if (addressCanSkip) {
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD_ASK_ADDRESS,
+          buttons: [EVENT_ADD_SKIP_BUTTON],
+        })
+      }
+      return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS)
+    }
     const lines = textBody.split(/\n/).map((s) => s.trim()).filter(Boolean)
     const firstLine = (lines[0] ?? '').trim()
     if (lines.length === 0 || firstLine === '') {
+      if (addressCanSkip) {
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD_ASK_ADDRESS,
+          buttons: [EVENT_ADD_SKIP_BUTTON],
+        })
+      }
       return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS)
     }
     const line1TooLong = (lines[0]?.length ?? 0) > EVENT_ADD_ADDRESS_MAX
     const line2TooLong = (lines[1]?.length ?? 0) > EVENT_ADD_ADDRESS_MAX
     if (line1TooLong || line2TooLong) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_ADDRESS, () =>
-        sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS),
-      )
+      const reask = () =>
+        addressCanSkip
+          ? sendInteractiveButtons(phoneNumberId, from, {
+              body: EVENT_ADD_ASK_ADDRESS,
+              buttons: [EVENT_ADD_SKIP_BUTTON],
+            })
+          : sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS)
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_ADDRESS, reask)
     }
     conversationState.set(from, {
       eventAddAddressLine1: lines[0] ?? '',
@@ -573,7 +582,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_DESCRIPTION) {
     if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION)
-    if (textBody.length > EVENT_ADD_DESCRIPTION_MAX) {
+    if (textBody.length < EVENT_ADD_DESCRIPTION_MIN || textBody.length > EVENT_ADD_DESCRIPTION_MAX) {
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_DESCRIPTION, () =>
         sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION),
       )
@@ -624,7 +633,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     }
     if (mediaId) {
       const item = await processIncomingMedia(mediaId, state)
-      if (!item) return sendText(phoneNumberId, from, 'לא הצלחתי לקבל את הקובץ. נסה שוב.')
+      if (!item) {
+        return sendText(phoneNumberId, from, EVENT_ADD_MEDIA_UPLOAD_FAILED).then((r) => {
+          if (r && !r.success) return r
+          return sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD_ASK_MEDIA_FIRST,
+            buttons: [EVENT_ADD_SKIP_BUTTON],
+          })
+        })
+      }
       const media = [...(state.eventAddMedia || []), item]
       conversationState.set(from, { eventAddMedia: media })
       if (media.length >= MAX_MEDIA) {
@@ -658,7 +675,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     }
     if (mediaId) {
       const item = await processIncomingMedia(mediaId, state)
-      if (!item) return sendText(phoneNumberId, from, 'לא הצלחתי לקבל את הקובץ. נסה שוב.')
+      if (!item) {
+        return sendText(phoneNumberId, from, EVENT_ADD_MEDIA_UPLOAD_FAILED).then((r) => {
+          if (r && !r.success) return r
+          return sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD_ASK_MEDIA_MORE,
+            buttons: [EVENT_ADD_SKIP_BUTTON],
+          })
+        })
+      }
       const media = [...(state.eventAddMedia || []), item]
       conversationState.set(from, { eventAddMedia: media })
       if (media.length >= MAX_MEDIA) {
