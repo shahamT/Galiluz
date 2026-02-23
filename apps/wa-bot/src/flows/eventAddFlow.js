@@ -625,11 +625,9 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_MEDIA) {
     if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
-      conversationState.set(from, { eventAddMedia: [], step: STEPS.EVENT_ADD_MEDIA_MORE })
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_MEDIA_MORE,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
-      })
+      conversationState.set(from, { eventAddMedia: [] })
+      const s = conversationState.get(from)
+      return submitEvent(phoneNumberId, from, s, context)
     }
     if (mediaId) {
       const item = await processIncomingMedia(mediaId, state)

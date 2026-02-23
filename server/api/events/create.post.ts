@@ -67,12 +67,9 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const rawEventWithPublisher = {
-    ...rawEvent,
-    publisher: {
-      ...(typeof rawEvent.publisher === 'object' && rawEvent.publisher ? rawEvent.publisher : {}),
-      publisherId: publisherId ?? undefined,
-    },
+  const publisherWithId = {
+    ...(typeof rawEvent.publisher === 'object' && rawEvent.publisher ? rawEvent.publisher : {}),
+    publisherId: publisherId ?? undefined,
   }
 
   try {
@@ -80,12 +77,14 @@ export default defineEventHandler(async (event) => {
     const collection = db.collection(eventsCollectionName)
     const doc = {
       createdAt: new Date(),
-      rawEvent: rawEventWithPublisher,
-      media,
-      mainCategory,
-      categories,
       isActive: false,
       event: null,
+      ...rawEvent,
+      publisher: publisherWithId,
+      publisherId: publisherId ?? undefined,
+      mainCategory,
+      categories,
+      media,
     }
     const result = await collection.insertOne(doc)
     const id = result.insertedId.toString()

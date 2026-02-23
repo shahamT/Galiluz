@@ -136,17 +136,17 @@ export const APPROVER_CONFIRM_REJECTED = '*{fullName}* לא אושר/ה כמפר
 // --- Event add flow (publisher adds new event) ---
 
 export const EVENT_ADD_INITIAL =
-  'בואו נפרסם אירוע חדש.\nבכל שלב ניתן לשלוח *ביטול* על מנת לחזור לתפריט הראשי\nלא ניתן לדלג על שדות חובה.'
+  'בואו נפרסם אירוע חדש.\n🔹 בכל שלב ניתן לשלוח *ביטול* על מנת לחזור לתפריט הראשי\n🔹 לא ניתן לדלג על שדות חובה.'
 
 export const EVENT_ADD_ASK_TITLE = 'שם האירוע (חובה)'
 
 export const EVENT_ADD_ASK_DATETIME =
-  'מתי האירוע קורה? (חובה)\nניתן להזין בפורמטים הבאים:\nתאריך, שעת התחלה (חובה) - שעת סיום (אופציונלי) או "כל היום"\nטווח תאריכים עם שעות קבועות.\nמספר תאריכים שלכל אחד שעות משלו.'
+  'מתי האירוע קורה? (חובה)\nדוגמאות:\n27.2, 10 בערב\n5-7 בפברואר 8:00 עד 15:00\n10.2 - 13:00, 11.2 - 14:00'
 
 export const EVENT_ADD_CATEGORY_INTRO = 'בואו נשייך את האירוע שלכם לקטגוריה ראשית'
 export const EVENT_ADD_ASK_CATEGORY_GROUP = 'בחרו אחת מארבע הקבוצות הבאות'
 export const EVENT_ADD_ASK_MAIN_CATEGORY = 'בחרו את הקטגוריה המתאימה ביותר לאירוע שלכם'
-export const EVENT_ADD_CATEGORY_AI_NOTE = 'ה-AI כבר ישייך את האירוע לקטגוריות מתאימות נוספות.'
+export const EVENT_ADD_CATEGORY_AI_NOTE = '_ה-AI כבר ישייך את האירוע לקטגוריות מתאימות נוספות._'
 export const EVENT_ADD_CHANGE_GROUP_PROMPT = 'לא מתאים? אפשר לבחור קבוצה אחרת.'
 export const EVENT_ADD_CHANGE_GROUP_BUTTON = { id: 'event_add_change_group', title: 'בחירת קבוצה אחרת' }
 
@@ -157,10 +157,10 @@ export const EVENT_ADD_SKIP_BUTTON = { id: 'event_add_skip', title: 'דלג' }
 
 export const EVENT_ADD_ASK_CITY = 'יישוב (חובה)'
 
-export const EVENT_ADD_ASK_ADDRESS = 'כתובת - עד שתי שורות'
+export const EVENT_ADD_ASK_ADDRESS = 'כתובת\n_עד שתי שורות_'
 
 export const EVENT_ADD_ASK_LOCATION_NOTES =
-  'הערות נוספות למיקום (לדוגמה - הכוונה של איך להיכנס)'
+  'הערות נוספות למיקום\n_לדוגמה - הכוונה של איך להגיע לכניסה_'
 
 export const EVENT_ADD_ASK_WAZE_GMAPS =
   'ניתן להוסיף לינקים למיקום ספציפי או לניווט עם Waze.'
@@ -169,10 +169,10 @@ export const EVENT_ADD_ASK_PRICE =
   'מחיר האירוע\n_לדוגמה - 20 ש"ח / חינם_'
 
 export const EVENT_ADD_ASK_DESCRIPTION =
-  'תיאור מלא של האירוע (חובה)\nללא לינקים ומספרי טלפון, ניתן להוסיף לינקים וטלפונים בשדה הבא'
+  'תיאור מלא של האירוע (חובה)\n_ללא לינקים ומספרי טלפון, ניתן להוסיף לינקים וטלפונים בשדה הבא_'
 
 export const EVENT_ADD_ASK_LINKS =
-  'ניתן להוסיף לינקים וטלפונים\nיש להוסיף תיאור לכל לינק, לדוגמה:\nלקניית כרטיסים: tickets.co.il'
+  'ניתן להוסיף לינקים וטלפונים\n_יש להוסיף תיאור לכל לינק, לדוגמה:_\n_לקניית כרטיסים: tickets.co.il_'
 
 export const EVENT_ADD_ASK_MEDIA_FIRST =
   'הוספת תמונות וסרטונים (אופציונלי)\nשלח/י תמונה/סרטון ראשי'
