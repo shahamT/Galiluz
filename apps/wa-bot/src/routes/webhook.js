@@ -12,8 +12,17 @@ import {
   WELCOME_INTERACTIVE,
   DISCOVER_ASK_CATEGORY,
   DISCOVER_ASK_TIME,
+  DISCOVER_AFTER_LIST,
   PUBLISH_REPLY,
+  PUBLISH_NOT_REGISTERED,
+  PUBLISH_ASK_FULL_NAME,
+  PUBLISH_ASK_PUBLISHING_AS,
+  PUBLISH_ASK_EVENT_TYPES,
+  PUBLISH_ASK_COMMITMENT,
+  PUBLISH_THANK_YOU,
+  PUBLISH_PENDING_MESSAGE,
 } from '../consts/index.js'
+import { checkPublisher, registerPublisher } from '../services/publishers.service.js'
 import { CATEGORY_GROUPS, CATEGORY_ALL_ID } from '../consts/categories.const.js'
 
 /**
@@ -57,14 +66,68 @@ function handleDiscoverTimeButton(phoneNumberId, from, timeChoice) {
   const categoryGroupId = state.categoryGroupId || CATEGORY_ALL_ID
   conversationState.clear(from)
   const dateString = getDateIsrael(timeChoice)
-  return getEventsMessageForDateAndCategory(dateString, categoryGroupId, timeChoice).then((messageBody) =>
-    sendText(phoneNumberId, from, messageBody)
-  )
+  return getEventsMessageForDateAndCategory(dateString, categoryGroupId, timeChoice)
+    .then((messageBody) => sendText(phoneNumberId, from, messageBody))
+    .then((result) => {
+      if (result?.success) return sendInteractiveButtons(phoneNumberId, from, DISCOVER_AFTER_LIST)
+      return result
+    })
 }
 
-function processOneMessage(phoneNumberId, from, msg) {
+async function handlePublishButton(phoneNumberId, from, profileName) {
+  const { status } = await checkPublisher(from)
+  if (status === 'approved') {
+    return sendText(phoneNumberId, from, PUBLISH_REPLY)
+  }
+  if (status === 'pending') {
+    return sendText(phoneNumberId, from, PUBLISH_PENDING_MESSAGE)
+  }
+  return sendInteractiveButtons(phoneNumberId, from, PUBLISH_NOT_REGISTERED)
+}
+
+function handleBackToMenu(phoneNumberId, from) {
+  conversationState.clear(from)
+  return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+}
+
+function handlePublishSignMeUp(phoneNumberId, from, profileName) {
+  conversationState.set(from, {
+    step: conversationState.STEPS.PUBLISH_ASK_FULL_NAME,
+    ...(profileName && { profileName }),
+  })
+  return sendText(phoneNumberId, from, PUBLISH_ASK_FULL_NAME)
+}
+
+function handlePublishCommitNo(phoneNumberId, from) {
+  conversationState.clear(from)
+  return sendInteractiveButtons(phoneNumberId, from, PUBLISH_NOT_REGISTERED)
+}
+
+async function handlePublishCommitYes(phoneNumberId, from) {
+  const state = conversationState.get(from)
+  const waId = from
+  const profileName = state.profileName || undefined
+  const fullName = state.fullName || ''
+  const publishingAs = state.publishingAs || ''
+  const eventTypesDescription = state.eventTypesDescription || ''
+  conversationState.clear(from)
+  const result = await registerPublisher({
+    waId,
+    profileName,
+    fullName,
+    publishingAs,
+    eventTypesDescription,
+  })
+  if (!result.success) {
+    return sendText(phoneNumberId, from, 'משהו השתבש. נסה שוב מאוחר יותר.')
+  }
+  return sendInteractiveButtons(phoneNumberId, from, PUBLISH_THANK_YOU)
+}
+
+function processOneMessage(phoneNumberId, from, msg, context = {}) {
   const interactive = msg.interactive
   const state = conversationState.get(from)
+  const profileName = context.profileName
 
   if (interactive?.type === 'button_reply') {
     const id = interactive.button_reply?.id
@@ -72,7 +135,19 @@ function processOneMessage(phoneNumberId, from, msg) {
       return handleDiscoverButton(phoneNumberId, from)
     }
     if (id === 'publish') {
-      return sendText(phoneNumberId, from, PUBLISH_REPLY)
+      return handlePublishButton(phoneNumberId, from, profileName)
+    }
+    if (id === 'back_to_menu' || id === 'back_to_main') {
+      return handleBackToMenu(phoneNumberId, from)
+    }
+    if (id === 'publish_sign_me_up') {
+      return handlePublishSignMeUp(phoneNumberId, from, profileName)
+    }
+    if (id === 'publish_commit_no') {
+      return handlePublishCommitNo(phoneNumberId, from)
+    }
+    if (id === 'publish_commit_yes' && state.step === conversationState.STEPS.PUBLISH_ASK_COMMITMENT) {
+      return handlePublishCommitYes(phoneNumberId, from)
     }
     if ((id === 'today' || id === 'tomorrow') && state.step === conversationState.STEPS.DISCOVER_TIME) {
       return handleDiscoverTimeButton(phoneNumberId, from, id)
@@ -82,6 +157,38 @@ function processOneMessage(phoneNumberId, from, msg) {
   if (interactive?.type === 'list_reply' && state.step === conversationState.STEPS.DISCOVER_CATEGORY) {
     const listReplyId = interactive.list_reply?.id
     if (listReplyId) return handleDiscoverListReply(phoneNumberId, from, listReplyId)
+  }
+
+  if (msg.type === 'text' && msg.text?.body) {
+    const textBody = String(msg.text.body).trim()
+    if (state.step === conversationState.STEPS.PUBLISH_ASK_FULL_NAME) {
+      conversationState.set(from, { fullName: textBody, step: conversationState.STEPS.PUBLISH_ASK_PUBLISHING_AS })
+      return sendText(phoneNumberId, from, PUBLISH_ASK_PUBLISHING_AS)
+    }
+    if (state.step === conversationState.STEPS.PUBLISH_ASK_PUBLISHING_AS) {
+      conversationState.set(from, { publishingAs: textBody, step: conversationState.STEPS.PUBLISH_ASK_EVENT_TYPES })
+      return sendText(phoneNumberId, from, PUBLISH_ASK_EVENT_TYPES)
+    }
+    if (state.step === conversationState.STEPS.PUBLISH_ASK_EVENT_TYPES) {
+      conversationState.set(from, {
+        eventTypesDescription: textBody,
+        step: conversationState.STEPS.PUBLISH_ASK_COMMITMENT,
+      })
+      return sendInteractiveButtons(phoneNumberId, from, PUBLISH_ASK_COMMITMENT)
+    }
+    if (state.step === conversationState.STEPS.PUBLISH_ASK_COMMITMENT) {
+      return sendInteractiveButtons(phoneNumberId, from, PUBLISH_ASK_COMMITMENT)
+    }
+  }
+
+  const publishSteps = [
+    conversationState.STEPS.PUBLISH_ASK_FULL_NAME,
+    conversationState.STEPS.PUBLISH_ASK_PUBLISHING_AS,
+    conversationState.STEPS.PUBLISH_ASK_EVENT_TYPES,
+    conversationState.STEPS.PUBLISH_ASK_COMMITMENT,
+  ]
+  if (publishSteps.includes(state.step) && msg.type !== 'text') {
+    return sendText(phoneNumberId, from, 'נא להשיב בטקסט.')
   }
 
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
@@ -101,6 +208,7 @@ function processWebhookBody(body) {
       const metadata = value.metadata || {}
       const phoneNumberId = metadata.phone_number_id
       const messages = value.messages || []
+      const profileName = value.contacts?.[0]?.profile?.name
       for (const msg of messages) {
         if (!isPrivateMessage(msg)) {
           logger.info(LOG_PREFIXES.WEBHOOK, 'Skip non-private message', msg.id)
@@ -109,7 +217,7 @@ function processWebhookBody(body) {
         const from = msg.from
         logger.info(LOG_PREFIXES.WEBHOOK, 'Private message from', from)
         setImmediate(() => {
-          processOneMessage(phoneNumberId, from, msg)
+          processOneMessage(phoneNumberId, from, msg, { profileName })
             .then((result) => {
               if (result && !result.success) logger.error(LOG_PREFIXES.WEBHOOK, 'Send result', result.error)
             })

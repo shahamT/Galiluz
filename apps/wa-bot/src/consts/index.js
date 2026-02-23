@@ -39,5 +39,46 @@ export const DISCOVER_ASK_TIME = {
   ],
 }
 
-/** Publish flow: placeholder reply */
+/** Discover flow: after sending events list — one button to search again */
+export const DISCOVER_AFTER_LIST = {
+  body: 'לא מצאת מה שחיפשת?\nלצפייה בכל האירועים כנסו ל galiluz.co.il',
+  buttons: [{ id: 'discover', title: 'חפשו שוב' }],
+}
+
+/** Publish flow: placeholder when approved */
 export const PUBLISH_REPLY = 'פרסום אירוע יגיע בקרוב! עד אז אפשר להיכנס ל־https://galiluz.co.il'
+
+/** Publish flow: not registered — body + sign up / back to menu */
+export const PUBLISH_NOT_REGISTERED = {
+  body: 'היי, אני רואה שאתה לא רשום במערכת עדיין...\n\nכדי לפרסם אירועים בגלילו"ז, צריך להירשם (זה לוקח דקה).\nככה אנחנו מוודאים שרק אירועים אמיתיים ולגיטימיים עולים למערכת. ✅',
+  buttons: [
+    { id: 'publish_sign_me_up', title: 'יאללה תרשמו אותי' },
+    { id: 'back_to_menu', title: 'חזרה לתפריט' },
+  ],
+}
+
+/** Publish flow: registration steps (text prompts) */
+export const PUBLISH_ASK_FULL_NAME = 'שם מלא'
+export const PUBLISH_ASK_PUBLISHING_AS =
+  'מטעם מי אתם מפרסמים? (יוזמה פרטית / שם העסק)'
+export const PUBLISH_ASK_EVENT_TYPES =
+  'סוג האירועים שאני מתכוון/ת לפרסם בגלילו"ז? (לדוגמה: ערבי שירה בבית העם)'
+
+/** Publish flow: commitment step — body + buttons */
+export const PUBLISH_ASK_COMMITMENT = {
+  body: 'אני מתחייב/ת לפרסם אירועים בצפון בלבד ולציין פרטים מלאים ומהימנים של כל אירוע שאפרסם.',
+  buttons: [
+    { id: 'publish_commit_yes', title: 'מתחייב/ת' },
+    { id: 'publish_commit_no', title: 'לא משנה' },
+  ],
+}
+
+/** Publish flow: thank you after registration */
+export const PUBLISH_THANK_YOU = {
+  body: 'תודה שנרשמת כמפרסם/ת בגלילו"ז, אנו נעבור על הפרטים ונאשר אותך בהקדם. ברגע שתאושר/י תקבל/י מאיתנו הודעת וואטסאפ ותוכל/י לחזור לבוט ולהתחיל לפרסם אירועים!',
+  buttons: [{ id: 'back_to_main', title: 'חזרה לתפריט הראשי' }],
+}
+
+/** Publish flow: user is pending approval */
+export const PUBLISH_PENDING_MESSAGE =
+  'אנחנו בודקים את הפרטים שהעברת. תקבל/י מאיתנו הודעת וואטסאפ ברגע שאושרת. עד אז אפשר להיכנס לאתר גלילו"ז.'
