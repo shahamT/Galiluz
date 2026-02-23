@@ -141,7 +141,7 @@ export const EVENT_ADD_INITIAL =
 export const EVENT_ADD_ASK_TITLE = 'שם האירוע (חובה)'
 
 export const EVENT_ADD_ASK_DATETIME =
-  'מתי האירוע קורה? (חובה)\nדוגמאות:\n27.2, 10 בערב\n5-7 בפברואר 8:00 עד 15:00\n10.2 - 13:00, 11.2 - 14:00'
+  'מתי האירוע קורה? (חובה)\nאפשר להשתמש בטקסט חופשי\nניתן להזין תאריך בודד / טווח תאריכים / תאריכים נפרדים\nניתן להזין שעת התחלה / שעת סיום (לא חובה)\nניתן להשתמש בכל פורמאט של תאריך או שעה מקובלים _(5 בפברואר / 5.2 / 8 בערב / 20:00 וכו\'...)_'
 
 export const EVENT_ADD_CATEGORY_INTRO = 'בואו נשייך את האירוע שלכם לקטגוריה ראשית'
 export const EVENT_ADD_ASK_CATEGORY_GROUP = 'בחרו אחת מארבע הקבוצות הבאות'
@@ -177,7 +177,8 @@ export const EVENT_ADD_ASK_LINKS =
 export const EVENT_ADD_ASK_MEDIA_FIRST =
   'הוספת תמונות וסרטונים (אופציונלי)\nשלח/י תמונה/סרטון ראשי'
 
-export const EVENT_ADD_ASK_MEDIA_MORE = 'אפשר לשלוח עוד תמונה/סרטון'
+/** Used with a count line: `${count}/${max} קבצים נטענו\\n${EVENT_ADD_ASK_MEDIA_MORE}` */
+export const EVENT_ADD_ASK_MEDIA_MORE = '_ניתן לשלוח עוד תמונה/סרטון_'
 
 export const EVENT_ADD_SUCCESS = 'תודה, האירוע נשמר'
 

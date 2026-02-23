@@ -96,6 +96,10 @@ function isEventAddStep(step) {
   return EVENT_ADD_STEPS.includes(step)
 }
 
+function buildMediaMoreBody(mediaCount) {
+  return `${mediaCount}/${MAX_MEDIA} קבצים נטענו\n${EVENT_ADD_ASK_MEDIA_MORE}`
+}
+
 /** WhatsApp interactive list allows max 10 rows total. One section, 4 rows (group labels). */
 function buildCategoryGroupList() {
   return {
@@ -648,7 +652,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       }
       conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA_MORE })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_MEDIA_MORE,
+        body: buildMediaMoreBody(media.length),
         buttons: [EVENT_ADD_SKIP_BUTTON],
       })
     }
@@ -676,8 +680,9 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (!item) {
         return sendText(phoneNumberId, from, EVENT_ADD_MEDIA_UPLOAD_FAILED).then((r) => {
           if (r && !r.success) return r
+          const count = (state.eventAddMedia || []).length
           return sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_MEDIA_MORE,
+            body: buildMediaMoreBody(count),
             buttons: [EVENT_ADD_SKIP_BUTTON],
           })
         })
@@ -689,20 +694,20 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         return submitEvent(phoneNumberId, from, s, context)
       }
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_MEDIA_MORE,
+        body: buildMediaMoreBody(media.length),
         buttons: [EVENT_ADD_SKIP_BUTTON],
       })
     }
     if (msg.type === 'text') {
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MEDIA, () =>
         sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_ADD_ASK_MEDIA_MORE,
+          body: buildMediaMoreBody((state.eventAddMedia || []).length),
           buttons: [EVENT_ADD_SKIP_BUTTON],
         }),
       )
     }
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_MEDIA_MORE,
+      body: buildMediaMoreBody((state.eventAddMedia || []).length),
       buttons: [EVENT_ADD_SKIP_BUTTON],
     })
   }

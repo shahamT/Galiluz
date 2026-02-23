@@ -72,6 +72,15 @@ export default defineEventHandler(async (event) => {
     publisherId: publisherId ?? undefined,
   }
 
+  const rawEventWithAll = {
+    ...rawEvent,
+    publisher: publisherWithId,
+    publisherId: publisherId ?? undefined,
+    mainCategory,
+    categories,
+    media,
+  }
+
   try {
     const { db } = await getMongoConnection()
     const collection = db.collection(eventsCollectionName)
@@ -79,12 +88,7 @@ export default defineEventHandler(async (event) => {
       createdAt: new Date(),
       isActive: false,
       event: null,
-      ...rawEvent,
-      publisher: publisherWithId,
-      publisherId: publisherId ?? undefined,
-      mainCategory,
-      categories,
-      media,
+      rawEvent: rawEventWithAll,
     }
     const result = await collection.insertOne(doc)
     const id = result.insertedId.toString()
