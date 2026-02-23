@@ -112,3 +112,7 @@ export const PUBLISHER_APPROVED = {
 export const PUBLISHER_REJECTED_BODY =
   'הבקשה שלך לפרסום אירועים בגלילוז נדחתה. ניתן לבקש אישור מחדש במידה ורלוונטי.'
 export const PUBLISHER_REJECTED_REASON_LINE = 'סיבת הדחייה: '
+
+/** Approver: confirmation after action. Use {fullName} (fallback: מפרסם) */
+export const APPROVER_CONFIRM_APPROVED = '{fullName} אושר כמפרסם בהצלחה ✅'
+export const APPROVER_CONFIRM_REJECTED = '{fullName} לא אושר/ה כמפרסם/ת.'

@@ -27,6 +27,8 @@ import {
   PUBLISHER_APPROVED,
   PUBLISHER_REJECTED_BODY,
   PUBLISHER_REJECTED_REASON_LINE,
+  APPROVER_CONFIRM_APPROVED,
+  APPROVER_CONFIRM_REJECTED,
 } from '../consts/index.js'
 import {
   checkPublisher,
@@ -35,6 +37,29 @@ import {
   rejectPublisher,
 } from '../services/publishers.service.js'
 import { CATEGORY_GROUPS, CATEGORY_ALL_ID } from '../consts/categories.const.js'
+
+/** In-memory: approver waId -> (publisher waId -> fullName) for confirmation messages */
+const pendingPublisherNamesByApprover = new Map()
+
+function getAndRemovePublisherName(approverFrom, publisherWaId) {
+  const normalized = normalizePhone(approverFrom)
+  const byWaId = pendingPublisherNamesByApprover.get(normalized)
+  const fullName = byWaId?.get(publisherWaId)
+  if (byWaId) {
+    byWaId.delete(publisherWaId)
+    if (byWaId.size === 0) pendingPublisherNamesByApprover.delete(normalized)
+  }
+  return fullName || 'מפרסם'
+}
+
+function storePublisherNameForApprover(approverWaId, publisherWaId, fullName) {
+  let byWaId = pendingPublisherNamesByApprover.get(approverWaId)
+  if (!byWaId) {
+    byWaId = new Map()
+    pendingPublisherNamesByApprover.set(approverWaId, byWaId)
+  }
+  byWaId.set(publisherWaId, fullName || 'מפרסם')
+}
 
 /**
  * Returns true if the message is from a private chat (not a group).
@@ -137,6 +162,7 @@ async function handlePublishCommitYes(phoneNumberId, from) {
     ? normalizePhone(config.publishersApproverWaNumber)
     : ''
   if (approverWaId) {
+    storePublisherNameForApprover(approverWaId, waId, fullName)
     const body = APPROVER_REQUEST_BODY_TEMPLATE.replace('{fullName}', fullName)
       .replace('{publishingAs}', publishingAs)
       .replace('{eventTypes}', eventTypesDescription)
@@ -164,6 +190,7 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
     const id = interactive.button_reply?.id || ''
     if (id.startsWith('approve_')) {
       const waId = id.slice(8)
+      const fullName = getAndRemovePublisherName(from, waId)
       const ok = await approvePublisher(waId)
       conversationState.clear(from)
       if (ok.success) {
@@ -172,13 +199,24 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
           buttons: [PUBLISHER_APPROVED.button],
         })
       }
+      await sendText(
+        phoneNumberId,
+        from,
+        APPROVER_CONFIRM_APPROVED.replace('{fullName}', fullName),
+      )
       return
     }
     if (id.startsWith('reject_no_reason_')) {
       const waId = id.slice(17)
+      const fullName = getAndRemovePublisherName(from, waId)
       await rejectPublisher(waId)
       conversationState.clear(from)
       await sendText(phoneNumberId, waId, PUBLISHER_REJECTED_BODY)
+      await sendText(
+        phoneNumberId,
+        from,
+        APPROVER_CONFIRM_REJECTED.replace('{fullName}', fullName),
+      )
       return
     }
     if (id.startsWith('reject_')) {
@@ -199,9 +237,16 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
     }
     if (id.startsWith('no_reason_')) {
       const waId = id.slice(10)
+      const fullName = getAndRemovePublisherName(from, waId)
       await rejectPublisher(waId)
       conversationState.clear(from)
-      return sendText(phoneNumberId, waId, PUBLISHER_REJECTED_BODY)
+      await sendText(phoneNumberId, waId, PUBLISHER_REJECTED_BODY)
+      await sendText(
+        phoneNumberId,
+        from,
+        APPROVER_CONFIRM_REJECTED.replace('{fullName}', fullName),
+      )
+      return
     }
   }
 
@@ -209,12 +254,19 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
     const waId = state.publisherWaId
     const reason = String(msg.text.body).trim()
     if (waId) {
+      const fullName = getAndRemovePublisherName(from, waId)
       await rejectPublisher(waId, reason)
       conversationState.clear(from)
       const body = reason
         ? `${PUBLISHER_REJECTED_BODY}\n${PUBLISHER_REJECTED_REASON_LINE}${reason}`
         : PUBLISHER_REJECTED_BODY
-      return sendText(phoneNumberId, waId, body)
+      await sendText(phoneNumberId, waId, body)
+      await sendText(
+        phoneNumberId,
+        from,
+        APPROVER_CONFIRM_REJECTED.replace('{fullName}', fullName),
+      )
+      return
     }
   }
 
