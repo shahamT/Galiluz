@@ -145,6 +145,7 @@ export const useUrlState = (options = {}) => {
 
   /**
    * Update URL with current store state. Only runs when on the matching route.
+   * Preserves event param so shareable event links (e.g. from wa-bot) are not stripped.
    */
   const updateUrl = () => {
     if (!isInitialized.value) return
@@ -152,6 +153,9 @@ export const useUrlState = (options = {}) => {
     if (!syncMonth && route.path !== ROUTE_DAILY_VIEW) return
 
     const newQuery = buildQueryParams()
+    if (route.query.event) {
+      newQuery.event = route.query.event
+    }
     const currentQuery = route.query
     const queryChanged = JSON.stringify(currentQuery) !== JSON.stringify(newQuery)
 
