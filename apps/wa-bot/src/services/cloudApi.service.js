@@ -111,6 +111,44 @@ export async function sendInteractiveButtons(phoneNumberId, to, interactive) {
 }
 
 /**
+ * Download media (image/video) from WhatsApp Cloud API by media id.
+ * @param {string} mediaId - Media id from msg.image.id or msg.video.id
+ * @returns {Promise<{ buffer: Buffer, mimetype: string }|null>} Buffer and mimetype or null on failure
+ */
+export async function downloadMedia(mediaId) {
+  if (!mediaId) return null
+  const url = `${BASE_URL}/${mediaId}`
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${config.whatsapp.accessToken}` },
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      logger.error(LOG_PREFIXES.CLOUD_API, 'Get media URL failed', data)
+      return null
+    }
+    const mediaUrl = data.url
+    if (!mediaUrl) {
+      logger.error(LOG_PREFIXES.CLOUD_API, 'No url in media response')
+      return null
+    }
+    const mediaRes = await fetch(mediaUrl, {
+      headers: { Authorization: `Bearer ${config.whatsapp.accessToken}` },
+    })
+    if (!mediaRes.ok) {
+      logger.error(LOG_PREFIXES.CLOUD_API, 'Download media failed', mediaRes.status)
+      return null
+    }
+    const buffer = Buffer.from(await mediaRes.arrayBuffer())
+    const mimetype = data.mime_type || mediaRes.headers.get('content-type') || 'application/octet-stream'
+    return { buffer, mimetype }
+  } catch (err) {
+    logger.error(LOG_PREFIXES.CLOUD_API, 'Download media error', err)
+    return null
+  }
+}
+
+/**
  * Send a text message via WhatsApp Cloud API.
  * @param {string} phoneNumberId - Business phone number ID
  * @param {string} to - Recipient wa_id (e.g. phone number without +)

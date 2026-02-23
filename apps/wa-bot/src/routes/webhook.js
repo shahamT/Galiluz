@@ -33,6 +33,7 @@ import {
   APPROVER_CONFIRM_APPROVED,
   APPROVER_CONFIRM_REJECTED,
 } from '../consts/index.js'
+import { sendInitialMessage, handleEventAddFlow, isEventAddStep } from '../flows/eventAddFlow.js'
 import {
   checkPublisher,
   registerPublisher,
@@ -122,7 +123,8 @@ function handleDiscoverTimeChoice(phoneNumberId, from, timeChoice) {
 async function handlePublishButton(phoneNumberId, from, profileName) {
   const { status } = await checkPublisher(from)
   if (status === 'approved') {
-    return sendText(phoneNumberId, from, PUBLISH_REPLY)
+    conversationState.set(from, { step: conversationState.STEPS.EVENT_ADD_INITIAL })
+    return sendInitialMessage(phoneNumberId, from)
   }
   if (status === 'pending') {
     return sendText(phoneNumberId, from, PUBLISH_PENDING_MESSAGE)

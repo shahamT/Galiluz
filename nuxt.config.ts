@@ -39,8 +39,14 @@ export default defineNuxtConfig({
     mongodbUri: process.env.MONGODB_URI,
     mongodbDbName: process.env.MONGODB_DB_NAME,
     mongodbCollectionEvents: process.env.MONGODB_COLLECTION_EVENTS || 'events',
+    /** When set, wa-bot create API writes here instead of main events collection (for testing). */
+    mongodbCollectionEventsWaBot: process.env.MONGODB_COLLECTION_EVENTS_WA_BOT || '',
     mongodbCollectionRawMessages: process.env.MONGODB_COLLECTION_RAW_MESSAGES || 'raw_messages',
     mongodbCollectionPublishers: process.env.MONGODB_COLLECTION_PUBLISHERS || 'publishers',
+    cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+    cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
+    cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
+    cloudinaryFolder: process.env.CLOUDINARY_FOLDER || 'wa-bot-events',
     // Public keys (exposed to client-side)
     public: {
       posthogPublicKey: process.env.NUXT_PUBLIC_POSTHOG_PUBLIC_KEY || '',
