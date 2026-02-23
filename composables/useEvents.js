@@ -4,11 +4,13 @@ import { flattenEventsByOccurrence } from '~/utils/events.service'
 const LOG_PREFIX = '[EventsAPI]'
 
 export const useEvents = () => {
-  // useFetch with server: false runs only on the client, so the first paint shows the loader
-  // and the full view appears after data is fetched.
+  // Fetch on server with API key; client uses cached payload so the secret is never sent to the browser.
+  const config = useRuntimeConfig()
   const { data, pending, error, refresh } = useFetch('/api/events', {
     key: 'events',
-    server: false,
+    server: true,
+    getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] ?? nuxtApp.static.data[key],
+    headers: import.meta.server ? { 'X-API-Key': config.apiSecret || '' } : {},
   })
 
   // Log on client side only

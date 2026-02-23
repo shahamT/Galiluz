@@ -96,6 +96,10 @@ Desktop.ini
 # WhatsApp Listener (PoC)
 apps/wa-listener/.env
 apps/wa-listener/.env.*
+
+# WhatsApp Cloud API bot
+apps/wa-bot/.env
+apps/wa-bot/.env.*
 apps/wa-listener/google-vision-key.json
 apps/wa-listener/auth/
 apps/wa-listener/data/

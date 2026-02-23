@@ -97,6 +97,9 @@ export const EVENT_CATEGORIES = {
   },
 }
 
+/** Id used in filter UI and wa-bot for "all categories" */
+export const CATEGORY_ALL_ID = 'all'
+
 /**
  * Category groups for filter UI — group label and ordered category IDs
  */

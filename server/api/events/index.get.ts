@@ -1,108 +1,46 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { checkRateLimit } from '~/server/utils/rateLimit'
-
-/** Returns YYYY-MM-DD in Israel (Asia/Jerusalem) from an ISO date-time string. Used when deriving occurrence.date from startTime. */
-function getDateInIsraelFromIso(isoString: string | undefined): string | undefined {
-  if (!isoString) return undefined
-  const d = new Date(isoString)
-  if (Number.isNaN(d.getTime())) return undefined
-  const formatted = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' })
-  const parts = formatted.split('-')
-  if (parts.length !== 3) return undefined
-  return `${parts[0]}-${parts[1]}-${parts[2]}`
-}
-
-/**
- * Transforms backend event structure to frontend format
- * - Title → title
- * - occurrence (singular) → occurrences (array)
- * - location.City → location.city
- * - _id → id (string)
- * - Preserve occurrence.date when present; when missing, derive from startTime for backward compatibility
- */
-function transformEventForFrontend(doc: any) {
-  const backendEvent = doc.event
-  if (!backendEvent) {
-    return null
-  }
-
-  const eventId = doc._id?.toString() || String(doc._id)
-  const dateCreated = doc.createdAt instanceof Date ? doc.createdAt : new Date(doc.createdAt)
-
-  // occurrences is always an array from the backend
-  const rawOccurrences = Array.isArray(backendEvent.occurrences) ? backendEvent.occurrences : []
-  const occurrences = rawOccurrences.map((occ: any) => {
-    const date = occ?.date && /^\d{4}-\d{2}-\d{2}$/.test(String(occ.date).trim().slice(0, 10))
-      ? String(occ.date).trim().slice(0, 10)
-      : getDateInIsraelFromIso(occ?.startTime)
-    return { ...occ, ...(date ? { date } : {}) }
-  })
-
-  // Validate occurrence structure
-  if (occurrences.length > 0 && !occurrences[0].startTime) {
-    console.warn('[EventsAPI] Occurrence missing startTime:', occurrences[0])
-  }
-
-  return {
-    id: eventId,
-    title: backendEvent.Title || '',
-    shortDescription: backendEvent.shortDescription || '',
-    fullDescription: backendEvent.fullDescription || '',
-    categories: backendEvent.categories || [],
-    mainCategory: backendEvent.mainCategory || '',
-    price: backendEvent.price ?? null,
-    media: backendEvent.media || [],
-    urls: backendEvent.urls || [],
-    location: {
-      city: backendEvent.location?.City || '',
-      addressLine1: backendEvent.location?.addressLine1 || undefined,
-      addressLine2: backendEvent.location?.addressLine2 || undefined,
-      locationDetails: backendEvent.location?.locationDetails || undefined,
-      wazeNavLink: backendEvent.location?.wazeNavLink || undefined,
-      gmapsNavLink: backendEvent.location?.gmapsNavLink || undefined,
-    },
-    occurrences: occurrences,
-    isActive: doc.isActive !== false,
-    dateCreated: dateCreated,
-    publisherPhone: backendEvent.publisherPhone || undefined,
-    publisherName: backendEvent.publisherName || undefined,
-  }
-}
+import { requireApiSecret } from '~/server/utils/requireApiSecret'
+import { transformEventForFrontend } from '~/server/utils/eventsTransform'
+import {
+  parseDatesParam,
+  parseCategoriesParam,
+  buildEventsQuery,
+} from '~/server/utils/eventsQuery'
 
 const EVENTS_QUERY_LIMIT = 500
 
+function getCutoffDate(): Date {
+  const now = new Date()
+  const firstDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const cutoff = new Date(firstDayOfCurrentMonth)
+  cutoff.setDate(cutoff.getDate() - 5)
+  return cutoff
+}
+
 export default defineEventHandler(async (event) => {
+  requireApiSecret(event)
   await checkRateLimit(event)
   const config = useRuntimeConfig()
   const mongoUri = config.mongodbUri || process.env.MONGODB_URI
   const mongoDbName = config.mongodbDbName || process.env.MONGODB_DB_NAME
-  const collectionName = config.mongodbCollectionEvents || process.env.MONGODB_COLLECTION_EVENTS || 'events'
+  const collectionName =
+    config.mongodbCollectionEvents || process.env.MONGODB_COLLECTION_EVENTS || 'events'
 
   if (!mongoUri || !mongoDbName) {
     console.error('[EventsAPI] MongoDB not configured')
     return []
   }
 
+  const queryParams = getQuery(event)
+  const dateStrings = parseDatesParam(queryParams.dates as string | undefined)
+  const categoriesArray = parseCategoriesParam(queryParams.categories as string | undefined)
+
   try {
     const { db } = await getMongoConnection()
     const collection = db.collection(collectionName)
-
-    // Only fetch events with start date later than 5 days before the first day of current month
-    const now = new Date()
-    const firstDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const cutoff = new Date(firstDayOfCurrentMonth)
-    cutoff.setDate(cutoff.getDate() - 5)
-    const cutoffISO = cutoff.toISOString()
-
-    // occurrences is always an array; support both BSON Date and ISO string for startTime
-    const query = {
-      isActive: true,
-      event: { $ne: null },
-      $or: [
-        { 'event.occurrences.startTime': { $gt: cutoff } },
-        { 'event.occurrences.startTime': { $gt: cutoffISO } },
-      ],
-    }
+    const cutoff = getCutoffDate()
+    const query = buildEventsQuery(cutoff, dateStrings, categoriesArray)
 
     const documents = await collection.find(query).limit(EVENTS_QUERY_LIMIT).toArray()
 
@@ -111,15 +49,21 @@ export default defineEventHandler(async (event) => {
         try {
           return transformEventForFrontend(doc)
         } catch (error) {
-          console.error('[EventsAPI] Error transforming document:', error instanceof Error ? error.message : String(error))
+          console.error(
+            '[EventsAPI] Error transforming document:',
+            error instanceof Error ? error.message : String(error),
+          )
           return null
         }
       })
-      .filter((transformedEvent) => transformedEvent !== null)
+      .filter((t): t is Record<string, unknown> => t !== null)
 
     return transformedEvents
   } catch (error) {
-    console.error('[EventsAPI] Error fetching events:', error instanceof Error ? error.message : String(error))
+    console.error(
+      '[EventsAPI] Error fetching events:',
+      error instanceof Error ? error.message : String(error),
+    )
     return []
   }
 })

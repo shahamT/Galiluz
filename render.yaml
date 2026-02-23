@@ -3,6 +3,7 @@
 #
 # 1. galiluz-web    – Nuxt 3 SSR app (Web Service)
 # 2. galiluz-wa     – WhatsApp listener (Background Worker + persistent disk)
+# 3. galiluz-wa-bot – WhatsApp Cloud API webhook bot (Web Service)
 #
 # Shared env vars live in the "galiluz-shared" environment group (create once in Render dashboard).
 
@@ -46,6 +47,24 @@ services:
       - fromGroup: galiluz-shared
       - fromGroup: galiluz-wa-secrets
 
+  # ── WhatsApp Cloud API Bot ─────────────────────────────────────
+  - type: web
+    name: galiluz-wa-bot
+    runtime: node
+    branch: main
+    plan: starter
+    region: frankfurt
+    rootDir: apps/wa-bot
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - fromGroup: galiluz-wa-bot-secrets
+
 # ── Environment Groups ──────────────────────────────────────────
 # Create these in the Render dashboard and fill in the actual values.
 # The "sync: false" flag means Render will prompt you to enter the value manually.
@@ -81,4 +100,18 @@ envVarGroups:
       - key: CLOUDINARY_API_SECRET
         sync: false
       - key: CLOUDINARY_FOLDER
+        sync: false
+
+  # wa-bot (Cloud API webhook) – set in Render dashboard
+  - name: galiluz-wa-bot-secrets
+    envVars:
+      - key: WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: WA_CLOUD_ACCESS_TOKEN
+        sync: false
+      - key: WA_PHONE_NUMBER_ID
+        sync: false
+      - key: GALILUZ_APP_URL
+        value: https://galiluz.co.il
+      - key: GALILUZ_APP_API_KEY
         sync: false

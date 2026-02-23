@@ -1,4 +1,7 @@
 import { HEBREW_MONTHS, HEBREW_WEEKDAYS } from '~/consts/dates.const'
+import { getDateInIsraelFromIso, getTimeInIsraelFromIso, getDateIsrael } from './israelDate'
+
+export { getDateInIsraelFromIso, getTimeInIsraelFromIso, getDateIsrael }
 
 /**
  * Format a Date object to YYYY-MM-DD string
@@ -13,36 +16,6 @@ export function formatDateToYYYYMMDD(date) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
-}
-
-/**
- * Returns YYYY-MM-DD in Israel (Asia/Jerusalem) for an ISO UTC date-time string.
- * Use when deriving calendar date from occurrence.startTime for consistency with occurrence.date.
- * @param {string} isoString - ISO date-time string (e.g. UTC)
- * @returns {string|null} YYYY-MM-DD or null if invalid
- */
-export function getDateInIsraelFromIso(isoString) {
-  if (!isoString || typeof isoString !== 'string') return null
-  const d = new Date(isoString)
-  if (Number.isNaN(d.getTime())) return null
-  const formatted = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' })
-  const parts = formatted.split('-')
-  if (parts.length !== 3) return null
-  return `${parts[0]}-${parts[1]}-${parts[2]}`
-}
-
-/**
- * Returns time as "HH:mm" in Israel (Asia/Jerusalem) for an ISO UTC date-time string.
- * @param {string} isoString - ISO date-time string (e.g. UTC)
- * @returns {string} "HH:mm" or empty string if invalid
- */
-export function getTimeInIsraelFromIso(isoString) {
-  if (!isoString || typeof isoString !== 'string') return ''
-  const d = new Date(isoString)
-  if (Number.isNaN(d.getTime())) return ''
-  const hours = d.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false })
-  const minutes = d.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', minute: '2-digit' })
-  return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`
 }
 
 /**
