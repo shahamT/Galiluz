@@ -5,11 +5,11 @@ export const ROUTE_DAILY_VIEW = '/daily-view'
 // Calendar grid constants
 export const DAYS_PER_WEEK = 7
 
-// Calendar display constants
+// Calendar display constants (same limits for desktop and mobile: 3 slots, 3rd is "+N" when more)
 export const MAX_EVENTS_TO_DISPLAY = 3
 export const MAX_REGULAR_CHIPS = 2
-export const MAX_EVENTS_TO_DISPLAY_MOBILE = 4
-export const MAX_REGULAR_CHIPS_MOBILE = 3
+export const MAX_EVENTS_TO_DISPLAY_MOBILE = 3
+export const MAX_REGULAR_CHIPS_MOBILE = 2
 export const WEEKEND_DAYS = [5, 6] // Friday (5) and Saturday (6)
 export const MORE_EVENTS_TEXT = (count) => `עוד ${count} אירועים...`
 

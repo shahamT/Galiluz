@@ -11,7 +11,7 @@ import {
  * Gets events to display in calendar day cell with "more" chip logic
  * @param {Array} events - Array of event objects
  * @param {number} totalCount - Total number of events for the day
- * @param {boolean} [isMobile] - Whether to use mobile limits (4 events, 4th chip "x+")
+ * @param {boolean} [isMobile] - Whether to use mobile chip text format ("x+"); same slot count as desktop (3, 3rd is "+N" when more)
  * @returns {Array} Array of events to display, with optional "more" chip object
  */
 export function getDisplayEvents(events, totalCount, isMobile = false) {
@@ -91,7 +91,7 @@ export function sortCategoryIdsWithMainFirst(categoryIds, mainCategoryId) {
 
 /**
  * Gets the text for the "more" events chip
- * @param {number} additionalCount - Number of additional events (total − shown: e.g. total − 3 on mobile, total − 2 on desktop)
+ * @param {number} additionalCount - Number of additional events (total − 2 when "more" chip shown; same for desktop and mobile)
  * @param {boolean} isMobile - Whether to use mobile format ("x+" where x is additionalCount)
  * @returns {string} Formatted text for the "more" chip
  */

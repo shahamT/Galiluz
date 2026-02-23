@@ -13,7 +13,10 @@ export function formatDateDotted(dateString) {
   return `${parseInt(day, 10)}.${parseInt(month, 10)}`
 }
 
-/** Location line: addressLine1, addressLine2, city (same as event modal basicLocation). */
+/**
+ * Location line: addressLine1, addressLine2, city (same as event modal basicLocation).
+ * Empty/unknown same as frontend: "לא ידוע".
+ */
 export function formatLocation(event) {
   if (!event?.location) return UNKNOWN_LOCATION
   const loc = event.location
@@ -62,6 +65,8 @@ export function formatEventsListMessage(
   if (categoryGroupId && categoryGroupId !== 'all' && categoryGroup?.label) {
     lines.push(`*${categoryGroup.label}*`)
   }
+  lines.push('')
+  lines.push('')
 
   const take = Math.min(onDateFlatEvents.length, MAX_EVENTS_IN_MESSAGE)
   for (let i = 0; i < take; i++) {
@@ -71,8 +76,8 @@ export function formatEventsListMessage(
     const link = `${baseUrl}/daily-view?date=${dateString}&event=${flatEvent.id}`
     const location = formatLocation(flatEvent)
     lines.push(`✅ *${title}*`)
-    lines.push(location)
-    lines.push(timeText)
+    lines.push(`איפה: ${location}`)
+    lines.push(`מתי: ${timeText}`)
     lines.push(link)
     lines.push('')
   }

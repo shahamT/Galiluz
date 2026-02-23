@@ -36,6 +36,40 @@ function dateToGoogleFormat(dateStr, timeStr = '') {
 }
 
 /**
+ * Add one calendar day to a date string.
+ * @param {string} dateStr - Date string in YYYY-MM-DD format
+ * @returns {string} - Next day in YYYY-MM-DD format
+ */
+function addOneDay(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  date.setDate(date.getDate() + 1)
+  const nextY = date.getFullYear()
+  const nextM = String(date.getMonth() + 1).padStart(2, '0')
+  const nextD = String(date.getDate()).padStart(2, '0')
+  return `${nextY}-${nextM}-${nextD}`
+}
+
+/**
+ * Add one hour to start date/time; handles day rollover.
+ * @param {string} startDateStr - Start date YYYY-MM-DD
+ * @param {string} startTimeStr - Start time HH:MM
+ * @returns {{ endDate: string, endTime: string }} - End date and time in same formats
+ */
+function addOneHour(startDateStr, startTimeStr) {
+  const [y, m, d] = startDateStr.split('-').map(Number)
+  const [hour, minute] = startTimeStr.split(':').map(Number)
+  const date = new Date(y, m - 1, d, hour, minute)
+  date.setHours(date.getHours() + 1)
+  const endY = date.getFullYear()
+  const endM = String(date.getMonth() + 1).padStart(2, '0')
+  const endD = String(date.getDate()).padStart(2, '0')
+  const endDate = `${endY}-${endM}-${endD}`
+  const endTime = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  return { endDate, endTime }
+}
+
+/**
  * Generate and download ICS file for calendar event
  * @param {Object} eventData - Event data object
  * @param {string} eventData.title - Event title
@@ -54,10 +88,24 @@ export async function downloadIcsFile(eventData) {
     logger.error('[CalendarService]', 'Start date is required for calendar event')
     return false
   }
-  
+
+  const isAllDay = !startTime
+  let icsStart = dateToIcsArray(startDate, startTime)
+  let icsEnd
+
+  if (isAllDay) {
+    const endDateExclusive = addOneDay(endDate || startDate)
+    icsEnd = dateToIcsArray(endDateExclusive, '')
+  } else if (!endTime) {
+    const { endDate: computedEndDate, endTime: computedEndTime } = addOneHour(startDate, startTime)
+    icsEnd = dateToIcsArray(computedEndDate, computedEndTime)
+  } else {
+    icsEnd = dateToIcsArray(endDate || startDate, endTime)
+  }
+
   const event = {
-    start: dateToIcsArray(startDate, startTime),
-    end: dateToIcsArray(endDate || startDate, endTime),
+    start: icsStart,
+    end: icsEnd,
     title: title || 'Event',
     description: description || '',
     location: location || '',
@@ -111,10 +159,23 @@ export function getGoogleCalendarUrl(eventData) {
     logger.error('[CalendarService]', 'Start date is required for calendar event')
     return ''
   }
-  
-  const startDateTime = dateToGoogleFormat(startDate, startTime)
-  const endDateTime = dateToGoogleFormat(endDate || startDate, endTime || startTime)
-  
+
+  const isAllDay = !startTime
+  let startDateTime
+  let endDateTime
+
+  if (isAllDay) {
+    startDateTime = dateToGoogleFormat(startDate, '')
+    endDateTime = dateToGoogleFormat(addOneDay(endDate || startDate), '')
+  } else if (!endTime) {
+    const { endDate: computedEndDate, endTime: computedEndTime } = addOneHour(startDate, startTime)
+    startDateTime = dateToGoogleFormat(startDate, startTime)
+    endDateTime = dateToGoogleFormat(computedEndDate, computedEndTime)
+  } else {
+    startDateTime = dateToGoogleFormat(startDate, startTime)
+    endDateTime = dateToGoogleFormat(endDate || startDate, endTime)
+  }
+
   const params = new URLSearchParams({
     action: 'TEMPLATE',
     text: title || 'Event',
