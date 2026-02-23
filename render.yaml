@@ -70,7 +70,7 @@ services:
 # The "sync: false" flag means Render will prompt you to enter the value manually.
 
 envVarGroups:
-  # Shared between both services (Nuxt web + WA worker)
+  # Shared between galiluz-web (Nuxt) and galiluz-wa (listener): DB, API secret, OpenAI
   - name: galiluz-shared
     envVars:
       - key: MONGODB_URI
@@ -78,6 +78,10 @@ envVarGroups:
       - key: MONGODB_DB_NAME
         sync: false
       - key: API_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
         sync: false
 
   # WA worker only – secrets that the Nuxt app does not need
@@ -90,8 +94,6 @@ envVarGroups:
       - key: WHATSAPP_GROUP_IDS
         sync: false
       - key: WHATSAPP_CONFIRMATION_GROUP_IDS
-        sync: false
-      - key: OPENAI_API_KEY
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
         sync: false

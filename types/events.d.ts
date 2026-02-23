@@ -9,6 +9,8 @@
  */
 export interface EventLocation {
   city?: string
+  /** Venue or place name (e.g. from wa-bot placeName) */
+  locationName?: string
   addressLine1?: string
   addressLine2?: string
   locationDetails?: string

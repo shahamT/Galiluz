@@ -1,5 +1,10 @@
+import { randomBytes } from 'node:crypto'
+import { getCategoriesList } from '~/server/consts/events.const'
+import { formatPublisherEvent } from '~/server/services/eventFormatOpenAI'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
+
+const LOG_PREFIX = '[EventsAPI] Create'
 
 interface PublisherInfo {
   phone?: string
@@ -16,6 +21,7 @@ interface CreateBody {
 
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
+  const correlationId = randomBytes(4).toString('hex')
   const body = await readBody<CreateBody>(event)
 
   const rawEvent = body?.rawEvent
@@ -63,7 +69,8 @@ export default defineEventHandler(async (event) => {
         publisherId = pubDoc._id.toString()
       }
     } catch (err) {
-      console.error('[EventsAPI] Create: publisher lookup error', err instanceof Error ? err.message : String(err))
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(LOG_PREFIX, correlationId, 'publisher lookup error', JSON.stringify({ error: msg, waId }))
     }
   }
 
@@ -81,20 +88,53 @@ export default defineEventHandler(async (event) => {
     media,
   }
 
+  const inputSummary = {
+    titleLength: typeof rawEventWithAll.title === 'string' ? rawEventWithAll.title.trim().length : 0,
+    hasDateTimeRaw: Boolean(rawEventWithAll.dateTimeRaw && String(rawEventWithAll.dateTimeRaw).trim()),
+    mainCategory: mainCategory || '(empty)',
+    categoriesCount: categories.length,
+    mediaCount: media.length,
+  }
+  console.info(LOG_PREFIX, correlationId, 'start', JSON.stringify(inputSummary))
+
+  let formattedEvent: Record<string, unknown> | null = null
+  try {
+    const categoriesList = getCategoriesList()
+    console.info(LOG_PREFIX, correlationId, 'format start')
+    const formattedResult = await formatPublisherEvent(rawEventWithAll, categoriesList, { correlationId })
+    if (formattedResult) {
+      formattedEvent = formattedResult as unknown as Record<string, unknown>
+      const occCount = Array.isArray(formattedResult.occurrences) ? formattedResult.occurrences.length : 0
+      console.info(LOG_PREFIX, correlationId, 'format success', JSON.stringify({
+        occurrencesCount: occCount,
+        city: formattedResult.location?.City ?? '',
+        mainCategory: formattedResult.mainCategory ?? '',
+      }))
+    } else {
+      console.warn(LOG_PREFIX, correlationId, 'format returned null — see Publisher format logs above for reason')
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(LOG_PREFIX, correlationId, 'format error', JSON.stringify({ error: msg }))
+  }
+
   try {
     const { db } = await getMongoConnection()
     const collection = db.collection(eventsCollectionName)
     const doc = {
       createdAt: new Date(),
       isActive: false,
-      event: null,
+      event: formattedEvent,
       rawEvent: rawEventWithAll,
+      ...(formattedEvent === null ? { formatFailed: true } : {}),
     }
     const result = await collection.insertOne(doc)
     const id = result.insertedId.toString()
+    console.info(LOG_PREFIX, correlationId, 'inserted', JSON.stringify({ id, formatted: formattedEvent !== null }))
     return { id, success: true }
   } catch (err) {
-    console.error('[EventsAPI] Create error:', err instanceof Error ? err.message : String(err))
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(LOG_PREFIX, correlationId, 'insert error', JSON.stringify({ error: msg }))
     throw createError({
       statusCode: 500,
       statusMessage: 'Internal Server Error',
