@@ -1,6 +1,8 @@
 import { PUBLISHER_EVENT_FORMAT_SCHEMA } from '~/server/consts/publisherEventFormatSchema'
 import { getOpenAIClient } from '~/server/utils/openai'
 import { validatePublisherFormattedEvent } from '~/server/utils/eventValidation'
+import { extractNavLinksFromRaw } from '~/server/utils/navLinks'
+import { convertMessageToHtml } from '~/server/utils/whatsappFormatToHtml'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
@@ -65,6 +67,7 @@ interface AIFormatResult {
   }>
   city: string
   price: number | null
+  urls: Array<{ Title: string; Url: string }>
 }
 
 /** Backend event shape: Title, location.City, etc. (compatible with eventsTransform) */
@@ -117,13 +120,16 @@ function buildSystemPrompt(categoriesList: CategoryItem[]): string {
   const categoriesText = categoriesList.map((c) => `- ${c.id}: ${c.label}`).join('\n')
   return `You are a formatting assistant for publisher-submitted event data (Hebrew community events calendar). The input is structured data that the publisher already provided via a form — NOT a random WhatsApp message. Your job is to format and validate only; do NOT infer or add information the publisher did not provide.
 
+OUTPUT LANGUAGE: All generated text (shortDescription, urls titles, etc.) must be in Hebrew by default. Use English only when the original raw data (title, description, linksText) is clearly in English; otherwise output Hebrew.
+
 RULES:
 1. Use the full raw event object only as context. Output only the fields defined in the schema.
 2. dateTimeRaw: Parse into occurrences. All times are Israel (Asia/Jerusalem). Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (if hasTime: combine date with time in Israel then convert to UTC; if !hasTime: use Israel midnight for that date in UTC), endTime = ISO UTC or null if not given.
-3. city: The publisher already provided a city. Only fix obvious typos or normalize the name (e.g. "חיפה" stay as is). Do not change or infer a different city.
+3. city: The publisher provided a city. Fix common Israeli place name typos (e.g. "קריעת שמונה" → "קריית שמונה", ת"א → תל אביב). Do not change correct names; only normalize obvious misspellings. Do not infer a different city. Example: קריעת שמונה → קריית שמונה.
 4. price: Convert to number or null. Free / "חינם" / 0 → 0. If unclear or not a single number, use null.
-5. shortDescription: Write a brief summary (1–2 sentences) based only on the provided description. Do not add details that are not in the description.
+5. shortDescription: Write in Hebrew (1–2 sentences) unless the event description was in English. Base only on the provided description. Do not add details that are not in the description.
 6. categories: mainCategory is already provided in the raw event — it MUST be included in the categories array. Add up to 3 additional category ids ONLY from the list below when the event clearly fits (e.g. both music and party). Do not add categories the publisher did not intend. Use ONLY these ids:
+7. urls: From linksText and any URLs in the description, produce an array of {Title, Url}. Title = short Hebrew label for the link (e.g. "כרטיסים", "ניווט Waze", "הרשמה"). Url = the clean URL only (https://...). Include links that appear in the description with an appropriate title. If no links, return empty array.
 
 ${categoriesText}`
 }
@@ -175,6 +181,10 @@ function isValidAIResult(parsed: unknown): parsed is AIFormatResult {
   if (!Array.isArray(p.occurrences) || p.occurrences.length === 0) return false
   if (typeof p.city !== 'string') return false
   if (p.price !== null && (typeof p.price !== 'number' || !Number.isFinite(p.price))) return false
+  if (!Array.isArray(p.urls)) return false
+  for (const u of p.urls) {
+    if (!u || typeof u !== 'object' || typeof (u as { Title?: unknown }).Title !== 'string' || typeof (u as { Url?: unknown }).Url !== 'string') return false
+  }
   return true
 }
 
@@ -298,7 +308,12 @@ export async function formatPublisherEvent(
 
   const publisher = rawEventWithAll.publisher
   const title = typeof rawEventWithAll.title === 'string' ? rawEventWithAll.title.trim() : ''
-  const fullDescription = typeof rawEventWithAll.description === 'string' ? rawEventWithAll.description : ''
+  const descriptionRaw = typeof rawEventWithAll.description === 'string' ? rawEventWithAll.description : ''
+  const fullDescription = convertMessageToHtml(descriptionRaw)
+  const navLinks = extractNavLinksFromRaw(
+    typeof rawEventWithAll.wazeNavLink === 'string' ? rawEventWithAll.wazeNavLink : undefined,
+    typeof rawEventWithAll.gmapsNavLink === 'string' ? rawEventWithAll.gmapsNavLink : undefined,
+  )
 
   const event: FormattedPublisherEvent = {
     Title: title || 'אירוע',
@@ -312,13 +327,13 @@ export async function formatPublisherEvent(
       addressLine1: rawEventWithAll.addressLine1 ?? null,
       addressLine2: rawEventWithAll.addressLine2 ?? null,
       locationDetails: rawEventWithAll.locationNotes ?? null,
-      wazeNavLink: rawEventWithAll.wazeNavLink ?? null,
-      gmapsNavLink: rawEventWithAll.gmapsNavLink ?? null,
+      wazeNavLink: navLinks.wazeNavLink ?? null,
+      gmapsNavLink: navLinks.gmapsNavLink ?? null,
     },
     occurrences: aiResult.occurrences,
     price: aiResult.price,
     media: Array.isArray(rawEventWithAll.media) ? rawEventWithAll.media : [],
-    urls: [],
+    urls: Array.isArray(aiResult.urls) ? aiResult.urls.filter((u) => typeof u?.Title === 'string' && typeof u?.Url === 'string') : [],
     publisherPhone: typeof publisher?.phone === 'string' ? publisher.phone : undefined,
     publisherName: typeof publisher?.name === 'string' ? publisher.name : undefined,
   }

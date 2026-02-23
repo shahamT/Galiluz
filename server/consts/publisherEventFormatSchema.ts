@@ -1,6 +1,6 @@
 /**
  * OpenAI JSON schema for publisher event formatting (wa-bot flow).
- * AI returns only: shortDescription, categories, occurrences, city, price.
+ * AI returns: shortDescription, categories, occurrences, city, price, urls.
  * Occurrence shape matches wa-listener / eventsTransform for compatibility.
  */
 export const PUBLISHER_EVENT_FORMAT_SCHEMA = {
@@ -8,7 +8,7 @@ export const PUBLISHER_EVENT_FORMAT_SCHEMA = {
   strict: true,
   schema: {
     type: 'object',
-    required: ['shortDescription', 'categories', 'occurrences', 'city', 'price'],
+    required: ['shortDescription', 'categories', 'occurrences', 'city', 'price', 'urls'],
     additionalProperties: false,
     properties: {
       shortDescription: { type: 'string' },
@@ -34,6 +34,18 @@ export const PUBLISHER_EVENT_FORMAT_SCHEMA = {
       },
       city: { type: 'string' },
       price: { type: ['number', 'null'] },
+      urls: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['Title', 'Url'],
+          additionalProperties: false,
+          properties: {
+            Title: { type: 'string' },
+            Url: { type: 'string' },
+          },
+        },
+      },
     },
   },
 } as const
