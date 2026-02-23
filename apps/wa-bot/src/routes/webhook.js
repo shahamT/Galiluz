@@ -307,6 +307,10 @@ function processOneMessage(phoneNumberId, from, msg, context = {}) {
   const state = conversationState.get(from)
   const profileName = context.profileName
 
+  if (isEventAddStep(state.step)) {
+    return handleEventAddFlow(phoneNumberId, from, msg, state, { profileName })
+  }
+
   if (interactive?.type === 'button_reply') {
     const id = interactive.button_reply?.id
     if (id === 'discover') {
@@ -400,6 +404,10 @@ function processWebhookBody(body) {
           continue
         }
         const from = msg.from
+        if (!phoneNumberId || !from || typeof phoneNumberId !== 'string' || typeof from !== 'string') {
+          logger.warn(LOG_PREFIXES.WEBHOOK, 'Skip message: missing phoneNumberId or from', msg?.id)
+          continue
+        }
         logger.info(LOG_PREFIXES.WEBHOOK, 'Private message from', from)
         setImmediate(() => {
           processOneMessage(phoneNumberId, from, msg, { profileName })

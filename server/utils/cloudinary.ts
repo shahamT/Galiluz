@@ -4,6 +4,7 @@ export interface CloudinaryUploadResult {
   url: string
   secure_url: string
   public_id: string
+  resource_type?: 'image' | 'video' | 'raw'
   format?: string
   width?: number
   height?: number
@@ -65,6 +66,7 @@ export async function uploadBufferToCloudinary(
           url: result.url,
           secure_url: result.secure_url,
           public_id: result.public_id,
+          resource_type: resourceType,
           format: result.format,
           width: result.width,
           height: result.height,
@@ -73,5 +75,39 @@ export async function uploadBufferToCloudinary(
       },
     )
     uploadStream.end(buffer)
+  })
+}
+
+/**
+ * Destroy a single asset on Cloudinary by public_id.
+ * Uses runtime config for credentials.
+ */
+export async function destroyOnCloudinary(
+  publicId: string,
+  resourceType: 'image' | 'video' | 'raw' = 'image',
+  cloudName: string,
+  apiKey: string,
+  apiSecret: string,
+): Promise<boolean> {
+  if (!cloudName || !apiKey || !apiSecret || !publicId) {
+    console.error('[Cloudinary] Missing configuration or publicId')
+    return false
+  }
+
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+  })
+
+  return new Promise((resolve) => {
+    cloudinary.uploader.destroy(publicId, { resource_type: resourceType }, (error) => {
+      if (error) {
+        console.error('[Cloudinary] Destroy error:', error.message)
+        resolve(false)
+        return
+      }
+      resolve(true)
+    })
   })
 }

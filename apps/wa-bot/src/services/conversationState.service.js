@@ -5,7 +5,10 @@
  *       eventAdd* (for event-add flow): eventAddTitle, eventAddDateTime, eventAddMainCategory,
  *       eventAddExtraCategories[], eventAddPlaceName, eventAddCity, eventAddAddressLine1,
  *       eventAddAddressLine2, eventAddLocationNotes, eventAddWazeLink, eventAddGmapsLink,
- *       eventAddPrice, eventAddDescription, eventAddLinks, eventAddMedia[].
+ *       eventAddPrice, eventAddDescription, eventAddLinks, eventAddMedia[], eventAddLastActivityAt (ms).
+ *
+ * State is in-memory only and is lost on process restart or deploy. Users in the middle of a flow
+ * will see the welcome menu on their next message after a restart.
  */
 
 const stateByUser = new Map()

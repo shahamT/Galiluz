@@ -1,10 +1,14 @@
+/**
+ * Event-add flow: multi-step form for approved publishers.
+ * Handles timeout, cancel (ביטול / back), validation, media upload, and submit.
+ */
 import {
   sendText,
   sendInteractiveButtons,
   sendInteractiveList,
   downloadMedia,
 } from '../services/cloudApi.service.js'
-import { uploadMediaToApp } from '../services/eventAddMedia.service.js'
+import { uploadMediaToApp, deleteMediaOnApp } from '../services/eventAddMedia.service.js'
 import { createEvent } from '../services/eventsCreate.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { normalizePhone } from '../config.js'
@@ -29,13 +33,41 @@ import {
   EVENT_ADD_ASK_MEDIA_FIRST,
   EVENT_ADD_ASK_MEDIA_MORE,
   EVENT_ADD_SUCCESS,
+  EVENT_ADD_TITLE_MIN,
+  EVENT_ADD_TITLE_MAX,
+  EVENT_ADD_DATETIME_MAX,
+  EVENT_ADD_PLACE_NAME_MAX,
+  EVENT_ADD_CITY_MAX,
+  EVENT_ADD_ADDRESS_MAX,
+  EVENT_ADD_LOCATION_NOTES_MAX,
+  EVENT_ADD_WAZE_GMAPS_MAX,
+  EVENT_ADD_PRICE_MAX,
+  EVENT_ADD_DESCRIPTION_MAX,
+  EVENT_ADD_LINKS_MAX,
+  EVENT_ADD_VALIDATE_TITLE,
+  EVENT_ADD_VALIDATE_DATETIME,
+  EVENT_ADD_VALIDATE_MAIN_CATEGORY,
+  EVENT_ADD_VALIDATE_EXTRA_CATEGORIES,
+  EVENT_ADD_VALIDATE_PLACE_NAME,
+  EVENT_ADD_VALIDATE_CITY,
+  EVENT_ADD_VALIDATE_ADDRESS,
+  EVENT_ADD_VALIDATE_LOCATION_NOTES,
+  EVENT_ADD_VALIDATE_WAZE_GMAPS,
+  EVENT_ADD_VALIDATE_PRICE,
+  EVENT_ADD_VALIDATE_DESCRIPTION,
+  EVENT_ADD_VALIDATE_LINKS,
+  EVENT_ADD_VALIDATE_MEDIA,
+  LOG_PREFIXES,
 } from '../consts/index.js'
 import { WELCOME_INTERACTIVE } from '../consts/index.js'
 import { CATEGORY_GROUPS, EVENT_CATEGORIES } from '../consts/categories.const.js'
 
+const VALID_CATEGORY_IDS = new Set(Object.keys(EVENT_CATEGORIES))
+
 const STEPS = conversationState.STEPS
 const MAX_EXTRA_CATEGORIES = 3
 const MAX_MEDIA = 5
+const EVENT_ADD_TIMEOUT_MS = 30 * 60 * 1000
 
 const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_INITIAL,
@@ -75,6 +107,36 @@ function buildMainCategoryList() {
 }
 
 /**
+ * Transition to place-name step: set state, send location intro, then place name with skip button.
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @returns {Promise<object>}
+ */
+async function sendLocationIntroAndPlaceName(phoneNumberId, from) {
+  conversationState.set(from, { step: STEPS.EVENT_ADD_PLACE_NAME })
+  await sendText(phoneNumberId, from, EVENT_ADD_LOCATION_INTRO)
+  return sendInteractiveButtons(phoneNumberId, from, {
+    body: EVENT_ADD_ASK_PLACE_NAME,
+    buttons: [EVENT_ADD_SKIP_BUTTON],
+  })
+}
+
+/**
+ * Send validation requirements message then re-ask (two separate messages). Step does not advance.
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @param {string} requirementsMessage
+ * @param {() => Promise<object>} reaskFn - e.g. () => sendText(...) or () => sendInteractiveList(...)
+ * @returns {Promise<object>}
+ */
+function sendValidationAndReask(phoneNumberId, from, requirementsMessage, reaskFn) {
+  return sendText(phoneNumberId, from, requirementsMessage).then((r) => {
+    if (r && !r.success) return r
+    return reaskFn()
+  })
+}
+
+/**
  * Build rawEvent object for create API (publisherId is set by API).
  * @param {object} state - conversation state
  * @param {{ phone?: string, name?: string, waId?: string }} publisherInfo - from/context
@@ -101,10 +163,36 @@ function buildRawEvent(state, publisherInfo) {
 }
 
 /**
+ * Kill event-add flow: delete uploaded media from Cloudinary, clear state, send welcome.
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @param {object} state - current conversation state (must have eventAddMedia if any)
+ * @returns {Promise<object>}
+ */
+async function killEventAddFlow(phoneNumberId, from, state) {
+  logger.info(LOG_PREFIXES.EVENT_ADD, 'Flow killed', from)
+  const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
+  if (media.length > 0) {
+    const items = media
+      .filter((m) => m?.cloudinaryData?.public_id)
+      .map((m) => {
+        const rt = m.cloudinaryData.resource_type
+        const resourceType = rt === 'video' ? 'video' : rt === 'raw' ? 'raw' : 'image'
+        return { publicId: m.cloudinaryData.public_id, resourceType }
+      })
+    if (items.length > 0) {
+      await deleteMediaOnApp(items)
+    }
+  }
+  conversationState.clear(from)
+  return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+}
+
+/**
  * Send initial event-add message and ask title. Call after setting step to EVENT_ADD_INITIAL.
  */
 export function sendInitialMessage(phoneNumberId, from) {
-  conversationState.set(from, { step: STEPS.EVENT_ADD_TITLE })
+  conversationState.set(from, { step: STEPS.EVENT_ADD_TITLE, eventAddLastActivityAt: Date.now() })
   return sendText(phoneNumberId, from, EVENT_ADD_INITIAL).then((r) => {
     if (r && !r.success) return r
     return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
@@ -128,6 +216,11 @@ async function submitEvent(phoneNumberId, from, state, context) {
   const result = await createEvent({ rawEvent, media, mainCategory, categories })
   conversationState.clear(from)
 
+  if (result.success) {
+    logger.info(LOG_PREFIXES.EVENT_ADD, 'Event created', from, result.id)
+  } else {
+    logger.error(LOG_PREFIXES.EVENT_ADD, 'Event create failed', from)
+  }
   await sendText(phoneNumberId, from, EVENT_ADD_SUCCESS)
   if (!result.success) {
     await sendText(phoneNumberId, from, 'משהו השתבש בשמירה. נסה שוב מאוחר יותר.')
@@ -172,25 +265,55 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   const textBody = msg.type === 'text' && msg.text?.body ? String(msg.text.body).trim() : ''
   const mediaId = msg.image?.id || msg.video?.id || null
 
-  if (buttonId === 'back_to_main' || buttonId === 'back_to_menu') {
-    conversationState.clear(from)
-    return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+  const lastActivityAt = state.eventAddLastActivityAt
+  if (typeof lastActivityAt === 'number' && Date.now() - lastActivityAt > EVENT_ADD_TIMEOUT_MS) {
+    return killEventAddFlow(phoneNumberId, from, state)
   }
+
+  if (buttonId === 'back_to_main' || buttonId === 'back_to_menu') {
+    return killEventAddFlow(phoneNumberId, from, state)
+  }
+
+  if (textBody === 'ביטול') {
+    return killEventAddFlow(phoneNumberId, from, state)
+  }
+
+  conversationState.set(from, { eventAddLastActivityAt: Date.now() })
 
   if (step === STEPS.EVENT_ADD_TITLE) {
     if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
+    const len = textBody.length
+    if (len < EVENT_ADD_TITLE_MIN || len > EVENT_ADD_TITLE_MAX) {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_TITLE, () =>
+        sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE),
+      )
+    }
     conversationState.set(from, { eventAddTitle: textBody, step: STEPS.EVENT_ADD_DATETIME })
     return sendText(phoneNumberId, from, EVENT_ADD_ASK_DATETIME)
   }
 
   if (step === STEPS.EVENT_ADD_DATETIME) {
     if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_DATETIME)
+    if (textBody.length > EVENT_ADD_DATETIME_MAX) {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_DATETIME, () =>
+        sendText(phoneNumberId, from, EVENT_ADD_ASK_DATETIME),
+      )
+    }
     conversationState.set(from, { eventAddDateTime: textBody, step: STEPS.EVENT_ADD_MAIN_CATEGORY })
     return sendInteractiveList(phoneNumberId, from, buildMainCategoryList())
   }
 
   if (step === STEPS.EVENT_ADD_MAIN_CATEGORY) {
-    if (!listReplyId) return sendInteractiveList(phoneNumberId, from, buildMainCategoryList())
+    if (listReplyId && !VALID_CATEGORY_IDS.has(listReplyId)) {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
+        sendInteractiveList(phoneNumberId, from, buildMainCategoryList()),
+      )
+    }
+    if (!listReplyId) {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
+        sendInteractiveList(phoneNumberId, from, buildMainCategoryList()),
+      )
+    }
     conversationState.set(from, {
       eventAddMainCategory: listReplyId,
       eventAddExtraCategories: [],
@@ -204,22 +327,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_EXTRA_CATEGORIES) {
     if (buttonId === EVENT_ADD_CONTINUE_BUTTON.id) {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_PLACE_NAME })
-      await sendText(phoneNumberId, from, EVENT_ADD_LOCATION_INTRO)
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_PLACE_NAME,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
-      })
+      return sendLocationIntroAndPlaceName(phoneNumberId, from)
     }
     if (buttonId === EVENT_ADD_EXTRA_CAT_BUTTON.id) {
       const extras = state.eventAddExtraCategories || []
       if (extras.length >= MAX_EXTRA_CATEGORIES) {
-        conversationState.set(from, { step: STEPS.EVENT_ADD_PLACE_NAME })
-        await sendText(phoneNumberId, from, EVENT_ADD_LOCATION_INTRO)
-        return sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_ADD_ASK_PLACE_NAME,
-          buttons: [EVENT_ADD_SKIP_BUTTON],
-        })
+        return sendLocationIntroAndPlaceName(phoneNumberId, from)
       }
       return sendInteractiveList(phoneNumberId, from, buildMainCategoryList())
     }
@@ -230,12 +343,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         const nextExtras = [...extras, listReplyId]
         conversationState.set(from, { eventAddExtraCategories: nextExtras })
         if (nextExtras.length >= MAX_EXTRA_CATEGORIES) {
-          conversationState.set(from, { step: STEPS.EVENT_ADD_PLACE_NAME })
-          await sendText(phoneNumberId, from, EVENT_ADD_LOCATION_INTRO)
-          return sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_PLACE_NAME,
-            buttons: [EVENT_ADD_SKIP_BUTTON],
-          })
+          return sendLocationIntroAndPlaceName(phoneNumberId, from)
         }
       }
       return sendInteractiveButtons(phoneNumberId, from, {
@@ -243,10 +351,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         buttons: [EVENT_ADD_EXTRA_CAT_BUTTON, EVENT_ADD_CONTINUE_BUTTON],
       })
     }
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_EXTRA_CATEGORIES,
-      buttons: [EVENT_ADD_EXTRA_CAT_BUTTON, EVENT_ADD_CONTINUE_BUTTON],
-    })
+    return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_EXTRA_CATEGORIES, () =>
+      sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD_ASK_EXTRA_CATEGORIES,
+        buttons: [EVENT_ADD_EXTRA_CAT_BUTTON, EVENT_ADD_CONTINUE_BUTTON],
+      }),
+    )
   }
 
   if (step === STEPS.EVENT_ADD_PLACE_NAME) {
@@ -255,6 +365,14 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return sendText(phoneNumberId, from, EVENT_ADD_ASK_CITY)
     }
     if (textBody) {
+      if (textBody.length > EVENT_ADD_PLACE_NAME_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_PLACE_NAME, () =>
+          sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD_ASK_PLACE_NAME,
+            buttons: [EVENT_ADD_SKIP_BUTTON],
+          }),
+        )
+      }
       conversationState.set(from, { eventAddPlaceName: textBody, step: STEPS.EVENT_ADD_CITY })
       return sendText(phoneNumberId, from, EVENT_ADD_ASK_CITY)
     }
@@ -266,10 +384,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_CITY) {
     if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_CITY)
-    conversationState.set(from, { eventAddCity: textBody, step: STEPS.EVENT_ADD_ADDRESS })
+    if (textBody.length > EVENT_ADD_CITY_MAX) {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_CITY, () =>
+        sendText(phoneNumberId, from, EVENT_ADD_ASK_CITY),
+      )
+    }
     const placeName = (state.eventAddPlaceName ?? '').trim()
+    const nextStep = placeName ? STEPS.EVENT_ADD_LOCATION_NOTES : STEPS.EVENT_ADD_ADDRESS
+    conversationState.set(from, { eventAddCity: textBody, step: nextStep })
     if (placeName) {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_LOCATION_NOTES })
       return sendInteractiveButtons(phoneNumberId, from, {
         body: EVENT_ADD_ASK_LOCATION_NOTES,
         buttons: [EVENT_ADD_SKIP_BUTTON],
@@ -281,6 +404,17 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_ADDRESS) {
     if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS)
     const lines = textBody.split(/\n/).map((s) => s.trim()).filter(Boolean)
+    const firstLine = (lines[0] ?? '').trim()
+    if (lines.length === 0 || firstLine === '') {
+      return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS)
+    }
+    const line1TooLong = (lines[0]?.length ?? 0) > EVENT_ADD_ADDRESS_MAX
+    const line2TooLong = (lines[1]?.length ?? 0) > EVENT_ADD_ADDRESS_MAX
+    if (line1TooLong || line2TooLong) {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_ADDRESS, () =>
+        sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS),
+      )
+    }
     conversationState.set(from, {
       eventAddAddressLine1: lines[0] ?? '',
       eventAddAddressLine2: lines[1] ?? '',
@@ -300,9 +434,17 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         buttons: [EVENT_ADD_SKIP_BUTTON],
       })
     }
-    if (textBody || buttonId) {
+    if (textBody) {
+      if (textBody.length > EVENT_ADD_LOCATION_NOTES_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_LOCATION_NOTES, () =>
+          sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD_ASK_LOCATION_NOTES,
+            buttons: [EVENT_ADD_SKIP_BUTTON],
+          }),
+        )
+      }
       conversationState.set(from, {
-        eventAddLocationNotes: textBody || '',
+        eventAddLocationNotes: textBody,
         step: STEPS.EVENT_ADD_WAZE_GMAPS,
       })
       return sendInteractiveButtons(phoneNumberId, from, {
@@ -324,10 +466,18 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         buttons: [EVENT_ADD_SKIP_BUTTON],
       })
     }
-    if (textBody || buttonId) {
+    if (textBody) {
+      if (textBody.length > EVENT_ADD_WAZE_GMAPS_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_WAZE_GMAPS, () =>
+          sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD_ASK_WAZE_GMAPS,
+            buttons: [EVENT_ADD_SKIP_BUTTON],
+          }),
+        )
+      }
       conversationState.set(from, {
-        eventAddWazeLink: textBody || '',
-        eventAddGmapsLink: textBody || '',
+        eventAddWazeLink: textBody,
+        eventAddGmapsLink: textBody,
         step: STEPS.EVENT_ADD_PRICE,
       })
       return sendInteractiveButtons(phoneNumberId, from, {
@@ -346,8 +496,16 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       conversationState.set(from, { eventAddPrice: '', step: STEPS.EVENT_ADD_DESCRIPTION })
       return sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION)
     }
-    if (textBody || buttonId) {
-      conversationState.set(from, { eventAddPrice: textBody || '', step: STEPS.EVENT_ADD_DESCRIPTION })
+    if (textBody) {
+      if (textBody.length > EVENT_ADD_PRICE_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_PRICE, () =>
+          sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD_ASK_PRICE,
+            buttons: [EVENT_ADD_SKIP_BUTTON],
+          }),
+        )
+      }
+      conversationState.set(from, { eventAddPrice: textBody, step: STEPS.EVENT_ADD_DESCRIPTION })
       return sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION)
     }
     return sendInteractiveButtons(phoneNumberId, from, {
@@ -358,6 +516,11 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_DESCRIPTION) {
     if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION)
+    if (textBody.length > EVENT_ADD_DESCRIPTION_MAX) {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_DESCRIPTION, () =>
+        sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION),
+      )
+    }
     conversationState.set(from, { eventAddDescription: textBody, step: STEPS.EVENT_ADD_LINKS })
     return sendInteractiveButtons(phoneNumberId, from, {
       body: EVENT_ADD_ASK_LINKS,
@@ -373,8 +536,16 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         buttons: [EVENT_ADD_SKIP_BUTTON],
       })
     }
-    if (textBody || buttonId) {
-      conversationState.set(from, { eventAddLinks: textBody || '', step: STEPS.EVENT_ADD_MEDIA })
+    if (textBody) {
+      if (textBody.length > EVENT_ADD_LINKS_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_LINKS, () =>
+          sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD_ASK_LINKS,
+            buttons: [EVENT_ADD_SKIP_BUTTON],
+          }),
+        )
+      }
+      conversationState.set(from, { eventAddLinks: textBody, step: STEPS.EVENT_ADD_MEDIA })
       return sendInteractiveButtons(phoneNumberId, from, {
         body: EVENT_ADD_ASK_MEDIA_FIRST,
         buttons: [EVENT_ADD_SKIP_BUTTON],
@@ -409,6 +580,14 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         buttons: [EVENT_ADD_SKIP_BUTTON],
       })
     }
+    if (msg.type === 'text') {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MEDIA, () =>
+        sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD_ASK_MEDIA_FIRST,
+          buttons: [EVENT_ADD_SKIP_BUTTON],
+        }),
+      )
+    }
     return sendInteractiveButtons(phoneNumberId, from, {
       body: EVENT_ADD_ASK_MEDIA_FIRST,
       buttons: [EVENT_ADD_SKIP_BUTTON],
@@ -434,12 +613,21 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         buttons: [EVENT_ADD_SKIP_BUTTON],
       })
     }
+    if (msg.type === 'text') {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MEDIA, () =>
+        sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD_ASK_MEDIA_MORE,
+          buttons: [EVENT_ADD_SKIP_BUTTON],
+        }),
+      )
+    }
     return sendInteractiveButtons(phoneNumberId, from, {
       body: EVENT_ADD_ASK_MEDIA_MORE,
       buttons: [EVENT_ADD_SKIP_BUTTON],
     })
   }
 
+  // Fallback when step is unknown or unexpected (e.g. EVENT_ADD_INITIAL or corrupted state)
   return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
 }
 

@@ -39,3 +39,34 @@ export async function uploadMediaToApp(buffer, mimetype, filename) {
     return null
   }
 }
+
+/**
+ * Delete media from Cloudinary via Nuxt delete-media API.
+ * @param {Array<{ publicId: string, resourceType?: 'image'|'video'|'raw' }>} items
+ * @returns {Promise<boolean>}
+ */
+export async function deleteMediaOnApp(items) {
+  if (!Array.isArray(items) || items.length === 0) return true
+  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const url = `${baseUrl}/api/internal/delete-media`
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
+  if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ items }),
+    })
+    if (!res.ok) {
+      const errBody = await res.text()
+      logger.error(LOG_PREFIXES.CLOUD_API, 'Delete media failed', res.status, errBody)
+      return false
+    }
+    const data = await res.json()
+    return data?.success === true
+  } catch (err) {
+    logger.error(LOG_PREFIXES.CLOUD_API, 'Delete media error', err)
+    return false
+  }
+}

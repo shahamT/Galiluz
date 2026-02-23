@@ -6,6 +6,7 @@ export const LOG_PREFIXES = {
   CONFIG: '[Config]',
   WEBHOOK: '[Webhook]',
   CLOUD_API: '[CloudAPI]',
+  EVENT_ADD: '[EventAdd]',
   SHUTDOWN: '[Shutdown]',
   FATAL: '[Fatal]',
 }
@@ -135,7 +136,7 @@ export const APPROVER_CONFIRM_REJECTED = '*{fullName}* לא אושר/ה כמפר
 // --- Event add flow (publisher adds new event) ---
 
 export const EVENT_ADD_INITIAL =
-  'בואו נפרסם אירוע חדש.\nלא ניתן לדלג על שדות חובה.'
+  'בואו נפרסם אירוע חדש.\nבכל שלב ניתן לשלוח *ביטול* על מנת לחזור לתפריט הראשי\nלא ניתן לדלג על שדות חובה.'
 
 export const EVENT_ADD_ASK_TITLE = 'שם האירוע (חובה)'
 
@@ -177,3 +178,31 @@ export const EVENT_ADD_ASK_MEDIA_FIRST =
 export const EVENT_ADD_ASK_MEDIA_MORE = 'אפשר לשלוח עוד תמונה/סרטון'
 
 export const EVENT_ADD_SUCCESS = 'תודה, האירוע נשמר'
+
+// --- Event add validation (limits and error messages) ---
+
+export const EVENT_ADD_TITLE_MIN = 6
+export const EVENT_ADD_TITLE_MAX = 80
+export const EVENT_ADD_DATETIME_MAX = 200
+export const EVENT_ADD_PLACE_NAME_MAX = 40
+export const EVENT_ADD_CITY_MAX = 40
+export const EVENT_ADD_ADDRESS_MAX = 100
+export const EVENT_ADD_LOCATION_NOTES_MAX = 100
+export const EVENT_ADD_WAZE_GMAPS_MAX = 3000
+export const EVENT_ADD_PRICE_MAX = 50
+export const EVENT_ADD_DESCRIPTION_MAX = 3000
+export const EVENT_ADD_LINKS_MAX = 3000
+
+export const EVENT_ADD_VALIDATE_TITLE = 'שם האירוע חייב להכיל בין 6 ל־80 תווים.'
+export const EVENT_ADD_VALIDATE_DATETIME = 'תשובה חייבת להיות עד 200 תווים.'
+export const EVENT_ADD_VALIDATE_MAIN_CATEGORY = 'נא לבחור קטגוריה מהרשימה.'
+export const EVENT_ADD_VALIDATE_EXTRA_CATEGORIES = 'נא לבחור מהרשימה או להמשיך.'
+export const EVENT_ADD_VALIDATE_PLACE_NAME = 'שם המקום עד 40 תווים.'
+export const EVENT_ADD_VALIDATE_CITY = 'עיר עד 40 תווים.'
+export const EVENT_ADD_VALIDATE_ADDRESS = 'כתובת עד 100 תווים בשורה.'
+export const EVENT_ADD_VALIDATE_LOCATION_NOTES = 'הערות מיקום עד 100 תווים.'
+export const EVENT_ADD_VALIDATE_WAZE_GMAPS = 'קישורים עד 3000 תווים.'
+export const EVENT_ADD_VALIDATE_PRICE = 'מחיר עד 50 תווים.'
+export const EVENT_ADD_VALIDATE_DESCRIPTION = 'תיאור עד 3000 תווים.'
+export const EVENT_ADD_VALIDATE_LINKS = 'לינקים עד 3000 תווים.'
+export const EVENT_ADD_VALIDATE_MEDIA = 'נא לשלוח תמונה או סרטון, או ללחוץ דלג.'
