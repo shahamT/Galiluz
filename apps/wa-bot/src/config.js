@@ -42,8 +42,18 @@ function loadConfig() {
     },
     galiluzAppUrl: process.env.GALILUZ_APP_URL || 'https://galiluz.co.il',
     galiluzAppApiKey: process.env.GALILUZ_APP_API_KEY || process.env.API_SECRET || '',
+    publishersApproverWaNumber: process.env.PUBLISHERS_APPROVER_WA_NUMBER || '',
     logLevel: process.env.LOG_LEVEL || 'info',
   }
+}
+
+/**
+ * Normalize phone/waId to digits only for comparison.
+ * @param {string} value
+ * @returns {string}
+ */
+export function normalizePhone(value) {
+  return String(value || '').replace(/\D/g, '')
 }
 
 export const config = loadConfig()

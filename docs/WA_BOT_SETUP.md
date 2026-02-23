@@ -31,6 +31,7 @@ wa-bot is a small web service that receives WhatsApp Cloud API webhooks and can 
    - `WA_CLOUD_ACCESS_TOKEN` (use a permanent token for production).
    - `WA_PHONE_NUMBER_ID`.
    - `GALILUZ_APP_API_KEY` (same value as `API_SECRET` on galiluz-web, so wa-bot can call the events API).
+   - **Optional:** `PUBLISHERS_APPROVER_WA_NUMBER` – WhatsApp number (digits only, e.g. `972507153850`) of the person who approves new publishers; when set, they receive approval requests with Approve/Reject buttons.
 3. Webhook URL in Meta: `https://<galiluz-wa-bot>.onrender.com/webhook` (replace with your actual Render service URL).
 4. Verify token in Meta must match `WEBHOOK_VERIFY_TOKEN`.
 

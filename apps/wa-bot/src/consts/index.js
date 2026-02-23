@@ -82,3 +82,33 @@ export const PUBLISH_THANK_YOU = {
 /** Publish flow: user is pending approval */
 export const PUBLISH_PENDING_MESSAGE =
   'אנחנו בודקים את הפרטים שהעברת. תקבל/י מאיתנו הודעת וואטסאפ ברגע שאושרת. עד אז אפשר להיכנס לאתר גלילו"ז.'
+
+// --- Publisher approver flow (button titles max 20 chars) ---
+
+/** Approver: body template for new publisher request. Use: name, publishingAs, eventTypes, waId */
+export const APPROVER_REQUEST_BODY_TEMPLATE =
+  'בקשת הרשמה כמפרסם/ת:\nשם מלא: {fullName}\nמטעם: {publishingAs}\nסוג אירועים: {eventTypes}\nמזהה וואטסאפ: {waId}'
+
+/** Approver: button ids are approve_<waId>, reject_<waId>, reject_no_reason_<waId> */
+export const APPROVER_BUTTONS = {
+  approve: { idPrefix: 'approve_', title: 'לאשר מפרסם ✅' },
+  reject: { idPrefix: 'reject_', title: 'לא לאשר מפרסם ❌' },
+  rejectNoReason: { idPrefix: 'reject_no_reason_', title: 'דחה ללא סיבה' },
+}
+
+/** Approver: ask reason for rejection */
+export const APPROVER_ASK_REASON = {
+  body: 'מה סיבת הדחייה?',
+  noReasonButton: { idPrefix: 'no_reason_', title: 'ללא סיבה' },
+}
+
+/** To publisher: approved */
+export const PUBLISHER_APPROVED = {
+  body: 'אושרת כמפרסם/ת בגלילוז! כעת ניתן לפרסם אירועים. לחצו להלן לפרסום האירוע הראשון.',
+  button: { id: 'publish', title: 'לפרסם אירוע ראשון' },
+}
+
+/** To publisher: rejected (append reason line when present) */
+export const PUBLISHER_REJECTED_BODY =
+  'הבקשה שלך לפרסום אירועים בגלילוז נדחתה. ניתן לבקש אישור מחדש במידה ורלוונטי.'
+export const PUBLISHER_REJECTED_REASON_LINE = 'סיבת הדחייה: '

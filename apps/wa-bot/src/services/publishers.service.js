@@ -58,3 +58,60 @@ export async function registerPublisher(payload) {
     return { success: false }
   }
 }
+
+/**
+ * Approve a publisher (set status to approved).
+ * @param {string} waId - WhatsApp user id
+ * @returns {Promise<{ success: boolean }>}
+ */
+export async function approvePublisher(waId) {
+  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const url = `${baseUrl}/api/publishers/approve`
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
+  if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ waId }),
+    })
+    if (!res.ok) {
+      logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers approve failed', res.status)
+      return { success: false }
+    }
+    return { success: true }
+  } catch (err) {
+    logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers approve error', err)
+    return { success: false }
+  }
+}
+
+/**
+ * Reject (delete) a publisher. Reason is used only for the message to the publisher.
+ * @param {string} waId - WhatsApp user id
+ * @param {string} [reason] - Optional rejection reason
+ * @returns {Promise<{ success: boolean }>}
+ */
+export async function rejectPublisher(waId, reason) {
+  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const url = `${baseUrl}/api/publishers/reject`
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
+  if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ waId, reason: reason || undefined }),
+    })
+    if (!res.ok) {
+      logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers reject failed', res.status)
+      return { success: false }
+    }
+    return { success: true }
+  } catch (err) {
+    logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers reject error', err)
+    return { success: false }
+  }
+}

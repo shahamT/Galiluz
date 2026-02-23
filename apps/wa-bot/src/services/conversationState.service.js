@@ -14,6 +14,7 @@ const STEPS = {
   PUBLISH_ASK_PUBLISHING_AS: 'publish_ask_publishing_as',
   PUBLISH_ASK_EVENT_TYPES: 'publish_ask_event_types',
   PUBLISH_ASK_COMMITMENT: 'publish_ask_commitment',
+  APPROVER_WAITING_REASON: 'approver_waiting_reason',
 }
 
 function get(waId) {

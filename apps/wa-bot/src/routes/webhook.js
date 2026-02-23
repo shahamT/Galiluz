@@ -1,4 +1,4 @@
-import { config } from '../config.js'
+import { config, normalizePhone } from '../config.js'
 import {
   sendText,
   sendInteractiveButtons,
@@ -21,8 +21,19 @@ import {
   PUBLISH_ASK_COMMITMENT,
   PUBLISH_THANK_YOU,
   PUBLISH_PENDING_MESSAGE,
+  APPROVER_REQUEST_BODY_TEMPLATE,
+  APPROVER_BUTTONS,
+  APPROVER_ASK_REASON,
+  PUBLISHER_APPROVED,
+  PUBLISHER_REJECTED_BODY,
+  PUBLISHER_REJECTED_REASON_LINE,
 } from '../consts/index.js'
-import { checkPublisher, registerPublisher } from '../services/publishers.service.js'
+import {
+  checkPublisher,
+  registerPublisher,
+  approvePublisher,
+  rejectPublisher,
+} from '../services/publishers.service.js'
 import { CATEGORY_GROUPS, CATEGORY_ALL_ID } from '../consts/categories.const.js'
 
 /**
@@ -121,10 +132,103 @@ async function handlePublishCommitYes(phoneNumberId, from) {
   if (!result.success) {
     return sendText(phoneNumberId, from, 'משהו השתבש. נסה שוב מאוחר יותר.')
   }
-  return sendInteractiveButtons(phoneNumberId, from, PUBLISH_THANK_YOU)
+  const thankYouPromise = sendInteractiveButtons(phoneNumberId, from, PUBLISH_THANK_YOU)
+  const approverWaId = config.publishersApproverWaNumber
+    ? normalizePhone(config.publishersApproverWaNumber)
+    : ''
+  if (approverWaId) {
+    const body = APPROVER_REQUEST_BODY_TEMPLATE.replace('{fullName}', fullName)
+      .replace('{publishingAs}', publishingAs)
+      .replace('{eventTypes}', eventTypesDescription)
+      .replace('{waId}', waId)
+    const buttons = [
+      { id: APPROVER_BUTTONS.approve.idPrefix + waId, title: APPROVER_BUTTONS.approve.title },
+      { id: APPROVER_BUTTONS.reject.idPrefix + waId, title: APPROVER_BUTTONS.reject.title },
+      {
+        id: APPROVER_BUTTONS.rejectNoReason.idPrefix + waId,
+        title: APPROVER_BUTTONS.rejectNoReason.title,
+      },
+    ]
+    sendInteractiveButtons(phoneNumberId, approverWaId, { body, buttons }).catch((err) =>
+      logger.error(LOG_PREFIXES.WEBHOOK, 'Notify approver failed', err),
+    )
+  }
+  return thankYouPromise
+}
+
+async function handleApproverFlow(phoneNumberId, from, msg) {
+  const state = conversationState.get(from)
+  const interactive = msg.interactive
+
+  if (interactive?.type === 'button_reply') {
+    const id = interactive.button_reply?.id || ''
+    if (id.startsWith('approve_')) {
+      const waId = id.slice(8)
+      const ok = await approvePublisher(waId)
+      conversationState.clear(from)
+      if (ok.success) {
+        await sendInteractiveButtons(phoneNumberId, waId, {
+          body: PUBLISHER_APPROVED.body,
+          buttons: [PUBLISHER_APPROVED.button],
+        })
+      }
+      return
+    }
+    if (id.startsWith('reject_no_reason_')) {
+      const waId = id.slice(17)
+      await rejectPublisher(waId)
+      conversationState.clear(from)
+      await sendText(phoneNumberId, waId, PUBLISHER_REJECTED_BODY)
+      return
+    }
+    if (id.startsWith('reject_')) {
+      const waId = id.slice(7)
+      conversationState.set(from, {
+        step: conversationState.STEPS.APPROVER_WAITING_REASON,
+        publisherWaId: waId,
+      })
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: APPROVER_ASK_REASON.body,
+        buttons: [
+          {
+            id: APPROVER_ASK_REASON.noReasonButton.idPrefix + waId,
+            title: APPROVER_ASK_REASON.noReasonButton.title,
+          },
+        ],
+      })
+    }
+    if (id.startsWith('no_reason_')) {
+      const waId = id.slice(10)
+      await rejectPublisher(waId)
+      conversationState.clear(from)
+      return sendText(phoneNumberId, waId, PUBLISHER_REJECTED_BODY)
+    }
+  }
+
+  if (msg.type === 'text' && msg.text?.body && state.step === conversationState.STEPS.APPROVER_WAITING_REASON) {
+    const waId = state.publisherWaId
+    const reason = String(msg.text.body).trim()
+    if (waId) {
+      await rejectPublisher(waId, reason)
+      conversationState.clear(from)
+      const body = reason
+        ? `${PUBLISHER_REJECTED_BODY}\n${PUBLISHER_REJECTED_REASON_LINE}${reason}`
+        : PUBLISHER_REJECTED_BODY
+      return sendText(phoneNumberId, waId, body)
+    }
+  }
+
+  return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }
 
 function processOneMessage(phoneNumberId, from, msg, context = {}) {
+  const approverWaId = config.publishersApproverWaNumber
+    ? normalizePhone(config.publishersApproverWaNumber)
+    : ''
+  if (approverWaId && normalizePhone(from) === approverWaId) {
+    return handleApproverFlow(phoneNumberId, from, msg)
+  }
+
   const interactive = msg.interactive
   const state = conversationState.get(from)
   const profileName = context.profileName

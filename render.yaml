@@ -115,3 +115,5 @@ envVarGroups:
         value: https://galiluz.co.il
       - key: GALILUZ_APP_API_KEY
         sync: false
+      - key: PUBLISHERS_APPROVER_WA_NUMBER
+        sync: false
