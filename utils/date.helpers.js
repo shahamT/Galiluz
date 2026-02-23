@@ -1,7 +1,4 @@
 import { HEBREW_MONTHS, HEBREW_WEEKDAYS } from '~/consts/dates.const'
-import { getDateInIsraelFromIso, getTimeInIsraelFromIso, getDateIsrael } from './israelDate'
-
-export { getDateInIsraelFromIso, getTimeInIsraelFromIso, getDateIsrael }
 
 /**
  * Format a Date object to YYYY-MM-DD string

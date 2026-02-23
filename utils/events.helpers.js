@@ -3,7 +3,7 @@
  * Note: formatDateToYYYYMMDD and parseDateString live in date.helpers.js - import from there
  */
 
-import { getTimeInIsraelFromIso } from '~/utils/date.helpers'
+import { getTimeInIsraelFromIso } from '~/utils/israelDate'
 
 const ALL_DAY_TEXT = 'כל היום'
 const FREE_TEXT = 'חינם'

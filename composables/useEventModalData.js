@@ -1,5 +1,6 @@
 import { formatEventTime, formatEventPrice } from '~/utils/events.helpers'
-import { getDateInIsraelFromIso, formatEventDateAndDay } from '~/utils/date.helpers'
+import { getDateInIsraelFromIso } from '~/utils/israelDate'
+import { formatEventDateAndDay } from '~/utils/date.helpers'
 import { isVideoUrl, getCloudinaryVideoThumbnailUrl } from '~/utils/media.helpers'
 import { MODAL_TEXT } from '~/consts/ui.const'
 
