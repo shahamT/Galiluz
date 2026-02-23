@@ -27,6 +27,8 @@ import {
   PUBLISHER_APPROVED,
   PUBLISHER_REJECTED_BODY,
   PUBLISHER_REJECTED_REASON_LINE,
+  PUBLISHER_REJECTED_FOOTER,
+  PUBLISHER_REJECTED_BUTTON,
   APPROVER_CONFIRM_APPROVED,
   APPROVER_CONFIRM_REJECTED,
 } from '../consts/index.js'
@@ -97,15 +99,21 @@ function handleDiscoverListReply(phoneNumberId, from, listReplyId) {
   return sendInteractiveButtons(phoneNumberId, from, DISCOVER_ASK_TIME)
 }
 
-function handleDiscoverTimeButton(phoneNumberId, from, timeChoice) {
+function handleDiscoverTimeChoice(phoneNumberId, from, timeChoice) {
   const state = conversationState.get(from)
   const categoryGroupId = state.categoryGroupId || CATEGORY_ALL_ID
-  conversationState.clear(from)
   const dateString = getDateIsrael(timeChoice)
   return getEventsMessageForDateAndCategory(dateString, categoryGroupId, timeChoice)
     .then((messageBody) => sendText(phoneNumberId, from, messageBody))
     .then((result) => {
-      if (result?.success) return sendInteractiveButtons(phoneNumberId, from, DISCOVER_AFTER_LIST)
+      if (result?.success) {
+        conversationState.set(from, {
+          step: conversationState.STEPS.DISCOVER_AFTER_LIST,
+          categoryGroupId,
+          timeChoice,
+        })
+        return sendInteractiveButtons(phoneNumberId, from, DISCOVER_AFTER_LIST)
+      }
       return result
     })
 }
@@ -196,7 +204,7 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       if (ok.success) {
         await sendInteractiveButtons(phoneNumberId, waId, {
           body: PUBLISHER_APPROVED.body,
-          buttons: [PUBLISHER_APPROVED.button],
+          buttons: PUBLISHER_APPROVED.buttons,
         })
       }
       await sendText(
@@ -211,7 +219,11 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       const fullName = getAndRemovePublisherName(from, waId)
       await rejectPublisher(waId)
       conversationState.clear(from)
-      await sendText(phoneNumberId, waId, PUBLISHER_REJECTED_BODY)
+      const rejectedBody = `${PUBLISHER_REJECTED_BODY}\n\n${PUBLISHER_REJECTED_FOOTER}`
+      await sendInteractiveButtons(phoneNumberId, waId, {
+        body: rejectedBody,
+        buttons: [PUBLISHER_REJECTED_BUTTON],
+      })
       await sendText(
         phoneNumberId,
         from,
@@ -240,7 +252,11 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       const fullName = getAndRemovePublisherName(from, waId)
       await rejectPublisher(waId)
       conversationState.clear(from)
-      await sendText(phoneNumberId, waId, PUBLISHER_REJECTED_BODY)
+      const rejectedBody = `${PUBLISHER_REJECTED_BODY}\n\n${PUBLISHER_REJECTED_FOOTER}`
+      await sendInteractiveButtons(phoneNumberId, waId, {
+        body: rejectedBody,
+        buttons: [PUBLISHER_REJECTED_BUTTON],
+      })
       await sendText(
         phoneNumberId,
         from,
@@ -258,9 +274,12 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       await rejectPublisher(waId, reason)
       conversationState.clear(from)
       const body = reason
-        ? `${PUBLISHER_REJECTED_BODY}\n${PUBLISHER_REJECTED_REASON_LINE}${reason}`
-        : PUBLISHER_REJECTED_BODY
-      await sendText(phoneNumberId, waId, body)
+        ? `${PUBLISHER_REJECTED_BODY}\n${PUBLISHER_REJECTED_REASON_LINE}${reason}\n\n${PUBLISHER_REJECTED_FOOTER}`
+        : `${PUBLISHER_REJECTED_BODY}\n\n${PUBLISHER_REJECTED_FOOTER}`
+      await sendInteractiveButtons(phoneNumberId, waId, {
+        body,
+        buttons: [PUBLISHER_REJECTED_BUTTON],
+      })
       await sendText(
         phoneNumberId,
         from,
@@ -305,8 +324,12 @@ function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if (id === 'publish_commit_yes' && state.step === conversationState.STEPS.PUBLISH_ASK_COMMITMENT) {
       return handlePublishCommitYes(phoneNumberId, from)
     }
-    if ((id === 'today' || id === 'tomorrow') && state.step === conversationState.STEPS.DISCOVER_TIME) {
-      return handleDiscoverTimeButton(phoneNumberId, from, id)
+    if (
+      (id === 'today' || id === 'tomorrow') &&
+      (state.step === conversationState.STEPS.DISCOVER_TIME ||
+        state.step === conversationState.STEPS.DISCOVER_AFTER_LIST)
+    ) {
+      return handleDiscoverTimeChoice(phoneNumberId, from, id)
     }
   }
 
