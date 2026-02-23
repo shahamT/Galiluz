@@ -2,7 +2,8 @@
  * In-memory conversation state per user (wa_id).
  * Keys: step (welcome | discover_* | publish_* | event_add_*), categoryGroupId?, timeChoice?,
  *       fullName?, publishingAs?, eventTypesDescription?, profileName? (for publish flow).
- *       eventAdd* (for event-add flow): eventAddTitle, eventAddDateTime, eventAddMainCategory,
+ *       eventAdd* (for event-add flow): eventAddTitle, eventAddDateTime, eventAddMainCategoryGroupId?,
+ *       eventAddMainCategory,
  *       eventAddExtraCategories[], eventAddPlaceName, eventAddCity, eventAddAddressLine1,
  *       eventAddAddressLine2, eventAddLocationNotes, eventAddWazeLink, eventAddGmapsLink,
  *       eventAddPrice, eventAddDescription, eventAddLinks, eventAddMedia[], eventAddLastActivityAt (ms).
@@ -26,6 +27,7 @@ const STEPS = {
   EVENT_ADD_INITIAL: 'event_add_initial',
   EVENT_ADD_TITLE: 'event_add_title',
   EVENT_ADD_DATETIME: 'event_add_datetime',
+  EVENT_ADD_MAIN_CATEGORY_GROUP: 'event_add_main_category_group',
   EVENT_ADD_MAIN_CATEGORY: 'event_add_main_category',
   EVENT_ADD_EXTRA_CATEGORIES: 'event_add_extra_categories',
   EVENT_ADD_LOCATION_INTRO: 'event_add_location_intro',

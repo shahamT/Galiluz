@@ -143,6 +143,7 @@ export const EVENT_ADD_ASK_TITLE = 'שם האירוע (חובה)'
 export const EVENT_ADD_ASK_DATETIME =
   'מתי האירוע קורה? (חובה)\nניתן להזין בפורמטים הבאים:\nתאריך, שעת התחלה (חובה) - שעת סיום (אופציונלי) או "כל היום"\nטווח תאריכים עם שעות קבועות.\nמספר תאריכים שלכל אחד שעות משלו.'
 
+export const EVENT_ADD_ASK_CATEGORY_GROUP = 'בחר קבוצת קטגוריות'
 export const EVENT_ADD_ASK_MAIN_CATEGORY = 'קטגוריה ראשית (חובה)'
 
 export const EVENT_ADD_ASK_EXTRA_CATEGORIES = 'קטגוריות נוספות?'
@@ -195,6 +196,7 @@ export const EVENT_ADD_LINKS_MAX = 3000
 
 export const EVENT_ADD_VALIDATE_TITLE = 'שם האירוע חייב להכיל בין 6 ל־80 תווים.'
 export const EVENT_ADD_VALIDATE_DATETIME = 'תשובה חייבת להיות עד 200 תווים.'
+export const EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP = 'נא לבחור קבוצה מהרשימה.'
 export const EVENT_ADD_VALIDATE_MAIN_CATEGORY = 'נא לבחור קטגוריה מהרשימה.'
 export const EVENT_ADD_VALIDATE_EXTRA_CATEGORIES = 'נא לבחור מהרשימה או להמשיך.'
 export const EVENT_ADD_VALIDATE_PLACE_NAME = 'שם המקום עד 40 תווים.'

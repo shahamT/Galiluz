@@ -12,10 +12,12 @@ import { uploadMediaToApp, deleteMediaOnApp } from '../services/eventAddMedia.se
 import { createEvent } from '../services/eventsCreate.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { normalizePhone } from '../config.js'
+import { logger } from '../utils/logger.js'
 import {
   EVENT_ADD_INITIAL,
   EVENT_ADD_ASK_TITLE,
   EVENT_ADD_ASK_DATETIME,
+  EVENT_ADD_ASK_CATEGORY_GROUP,
   EVENT_ADD_ASK_MAIN_CATEGORY,
   EVENT_ADD_ASK_EXTRA_CATEGORIES,
   EVENT_ADD_EXTRA_CAT_BUTTON,
@@ -46,6 +48,7 @@ import {
   EVENT_ADD_LINKS_MAX,
   EVENT_ADD_VALIDATE_TITLE,
   EVENT_ADD_VALIDATE_DATETIME,
+  EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP,
   EVENT_ADD_VALIDATE_MAIN_CATEGORY,
   EVENT_ADD_VALIDATE_EXTRA_CATEGORIES,
   EVENT_ADD_VALIDATE_PLACE_NAME,
@@ -63,6 +66,7 @@ import { WELCOME_INTERACTIVE } from '../consts/index.js'
 import { CATEGORY_GROUPS, EVENT_CATEGORIES } from '../consts/categories.const.js'
 
 const VALID_CATEGORY_IDS = new Set(Object.keys(EVENT_CATEGORIES))
+const VALID_GROUP_IDS = new Set(CATEGORY_GROUPS.map((g) => g.id))
 
 const STEPS = conversationState.STEPS
 const MAX_EXTRA_CATEGORIES = 3
@@ -73,6 +77,7 @@ const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_INITIAL,
   STEPS.EVENT_ADD_TITLE,
   STEPS.EVENT_ADD_DATETIME,
+  STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP,
   STEPS.EVENT_ADD_MAIN_CATEGORY,
   STEPS.EVENT_ADD_EXTRA_CATEGORIES,
   STEPS.EVENT_ADD_PLACE_NAME,
@@ -91,18 +96,36 @@ function isEventAddStep(step) {
   return EVENT_ADD_STEPS.includes(step)
 }
 
-function buildMainCategoryList() {
-  const sections = CATEGORY_GROUPS.map((group) => ({
-    title: group.label,
-    rows: group.categoryIds.map((id) => ({
-      id,
-      title: EVENT_CATEGORIES[id]?.label || id,
-    })),
-  }))
+/** WhatsApp interactive list allows max 10 rows total. One section, 4 rows (group labels). */
+function buildCategoryGroupList() {
+  return {
+    body: EVENT_ADD_ASK_CATEGORY_GROUP,
+    button: 'בחר קבוצה',
+    sections: [
+      {
+        title: 'קבוצות',
+        rows: CATEGORY_GROUPS.map((g) => ({ id: g.id, title: g.label })),
+      },
+    ],
+  }
+}
+
+/**
+ * Categories in one group only (max 7 rows). Optionally exclude already-selected ids.
+ * @param {string} groupId - CATEGORY_GROUPS[].id
+ * @param {{ excludeIds?: string[] }} [opts]
+ */
+function buildCategoryListForGroup(groupId, opts = {}) {
+  const group = CATEGORY_GROUPS.find((g) => g.id === groupId)
+  if (!group) return { body: EVENT_ADD_ASK_MAIN_CATEGORY, button: 'בחר קטגוריה', sections: [{ title: '', rows: [] }] }
+  const excludeIds = opts.excludeIds || []
+  const rows = group.categoryIds
+    .filter((id) => !excludeIds.includes(id))
+    .map((id) => ({ id, title: EVENT_CATEGORIES[id]?.label || id }))
   return {
     body: EVENT_ADD_ASK_MAIN_CATEGORY,
     button: 'בחר קטגוריה',
-    sections,
+    sections: [{ title: group.label, rows }],
   }
 }
 
@@ -299,19 +322,39 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         sendText(phoneNumberId, from, EVENT_ADD_ASK_DATETIME),
       )
     }
-    conversationState.set(from, { eventAddDateTime: textBody, step: STEPS.EVENT_ADD_MAIN_CATEGORY })
-    return sendInteractiveList(phoneNumberId, from, buildMainCategoryList())
+    conversationState.set(from, { eventAddDateTime: textBody, step: STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP })
+    return sendInteractiveList(phoneNumberId, from, buildCategoryGroupList())
+  }
+
+  if (step === STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP) {
+    if (listReplyId && !VALID_GROUP_IDS.has(listReplyId)) {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP, () =>
+        sendInteractiveList(phoneNumberId, from, buildCategoryGroupList()),
+      )
+    }
+    if (!listReplyId) {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP, () =>
+        sendInteractiveList(phoneNumberId, from, buildCategoryGroupList()),
+      )
+    }
+    conversationState.set(from, {
+      eventAddMainCategoryGroupId: listReplyId,
+      step: STEPS.EVENT_ADD_MAIN_CATEGORY,
+    })
+    return sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(listReplyId))
   }
 
   if (step === STEPS.EVENT_ADD_MAIN_CATEGORY) {
     if (listReplyId && !VALID_CATEGORY_IDS.has(listReplyId)) {
+      const groupId = state.eventAddMainCategoryGroupId
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
-        sendInteractiveList(phoneNumberId, from, buildMainCategoryList()),
+        sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(groupId)),
       )
     }
     if (!listReplyId) {
+      const groupId = state.eventAddMainCategoryGroupId
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
-        sendInteractiveList(phoneNumberId, from, buildMainCategoryList()),
+        sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(groupId)),
       )
     }
     conversationState.set(from, {
@@ -334,7 +377,21 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (extras.length >= MAX_EXTRA_CATEGORIES) {
         return sendLocationIntroAndPlaceName(phoneNumberId, from)
       }
-      return sendInteractiveList(phoneNumberId, from, buildMainCategoryList())
+      const groupId = state.eventAddMainCategoryGroupId
+      const mainId = state.eventAddMainCategory
+      const listPayload = buildCategoryListForGroup(groupId, {
+        excludeIds: [mainId, ...extras],
+      })
+      if (listPayload.sections[0].rows.length === 0) {
+        return sendText(phoneNumberId, from, 'כל הקטגוריות בקבוצה זו כבר נבחרו.').then((r) => {
+          if (r && !r.success) return r
+          return sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD_ASK_EXTRA_CATEGORIES,
+            buttons: [EVENT_ADD_EXTRA_CAT_BUTTON, EVENT_ADD_CONTINUE_BUTTON],
+          })
+        })
+      }
+      return sendInteractiveList(phoneNumberId, from, listPayload)
     }
     if (listReplyId) {
       const mainId = state.eventAddMainCategory
