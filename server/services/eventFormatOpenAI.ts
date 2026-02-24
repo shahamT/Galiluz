@@ -290,26 +290,32 @@ async function callOpenAIForPublisherFormat(
   return null
 }
 
+export type FormatPublisherEventResult =
+  | { formattedEvent: FormattedPublisherEvent; errorReason?: undefined }
+  | { formattedEvent: null; errorReason: string }
+
 /**
  * Format a publisher raw event (wa-bot flow) into a full event object using OpenAI.
  * Pass-through fields are copied from rawEventWithAll; AI returns shortDescription, categories, occurrences, city, price.
- * Returns the formatted event (backend shape) or null on failure.
+ * Returns { formattedEvent } on success or { formattedEvent: null, errorReason } on failure.
  */
 export async function formatPublisherEvent(
   rawEventWithAll: RawEventWithAll,
   categoriesList: CategoryItem[],
   options?: FormatPublisherEventOptions,
-): Promise<FormattedPublisherEvent | null> {
+): Promise<FormatPublisherEventResult> {
   const correlationId = options?.correlationId
 
   if (!categoriesList.length) {
     log(correlationId, 'error', 'skipped: categories list is empty', { reason: 'empty_categories_list' })
-    return null
+    return { formattedEvent: null, errorReason: 'empty_categories_list' }
   }
 
   const dateContext = getIsraelDateContext()
   const aiResult = await callOpenAIForPublisherFormat(rawEventWithAll, categoriesList, dateContext, correlationId)
-  if (!aiResult) return null
+  if (!aiResult) {
+    return { formattedEvent: null, errorReason: 'OpenAI format failed (no result)' }
+  }
 
   const publisher = rawEventWithAll.publisher
   const title = typeof rawEventWithAll.rawTitle === 'string' ? rawEventWithAll.rawTitle.trim() : ''
@@ -363,7 +369,7 @@ export async function formatPublisherEvent(
   const validation = validatePublisherFormattedEvent(event)
   if (!validation.valid) {
     log(correlationId, 'error', 'validation failed', { reason: validation.reason, title: event.Title?.slice(0, 50), occurrencesCount: event.occurrences?.length })
-    return null
+    return { formattedEvent: null, errorReason: `validation failed: ${validation.reason}` }
   }
 
   log(correlationId, 'info', 'format complete', {
@@ -372,5 +378,5 @@ export async function formatPublisherEvent(
     mainCategory: event.mainCategory,
     price: event.price,
   })
-  return event
+  return { formattedEvent: event }
 }

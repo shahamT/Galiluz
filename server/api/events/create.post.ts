@@ -103,6 +103,7 @@ export default defineEventHandler(async (event) => {
   console.info(LOG_PREFIX, correlationId, 'start', JSON.stringify(inputSummary))
 
   let formattedEvent: Record<string, unknown> | null = null
+  let formatFailureReason: string | undefined
   const suppliedFormatted = body?.formattedEvent && typeof body.formattedEvent === 'object' ? body.formattedEvent as Record<string, unknown> : null
   const isValidSuppliedEvent =
     suppliedFormatted &&
@@ -120,19 +121,22 @@ export default defineEventHandler(async (event) => {
       const categoriesList = getCategoriesList()
       console.info(LOG_PREFIX, correlationId, 'format start')
       const formattedResult = await formatPublisherEvent(rawEventWithAll, categoriesList, { correlationId })
-      if (formattedResult) {
-        formattedEvent = formattedResult as unknown as Record<string, unknown>
-        const occCount = Array.isArray(formattedResult.occurrences) ? formattedResult.occurrences.length : 0
+      if (formattedResult.formattedEvent) {
+        formattedEvent = formattedResult.formattedEvent as unknown as Record<string, unknown>
+        const ev = formattedResult.formattedEvent
+        const occCount = Array.isArray(ev.occurrences) ? ev.occurrences.length : 0
         console.info(LOG_PREFIX, correlationId, 'format success', JSON.stringify({
           occurrencesCount: occCount,
-          city: formattedResult.location?.City ?? '',
-          mainCategory: formattedResult.mainCategory ?? '',
+          city: ev.location?.City ?? '',
+          mainCategory: ev.mainCategory ?? '',
         }))
       } else {
-        console.warn(LOG_PREFIX, correlationId, 'format returned null — see Publisher format logs above for reason')
+        formatFailureReason = formattedResult.errorReason ?? 'format returned null'
+        console.warn(LOG_PREFIX, correlationId, 'format failed', JSON.stringify({ reason: formatFailureReason }))
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      formatFailureReason = msg
       console.error(LOG_PREFIX, correlationId, 'format error', JSON.stringify({ error: msg }))
     }
   }
@@ -142,7 +146,7 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 422,
       statusMessage: 'Unprocessable Entity',
-      message: 'Event format failed or missing; cannot create',
+      message: formatFailureReason ?? 'Event format failed or missing; cannot create',
     })
   }
 
