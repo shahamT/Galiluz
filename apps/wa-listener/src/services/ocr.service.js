@@ -49,14 +49,24 @@ async function runOcrOpenAiVision(imageUrl, buffer) {
   }
 
   const model = config.ocr?.openAiVisionModel || config.openai?.model || 'gpt-4o'
-  const response = await openai.chat.completions.create({
-    model,
-    messages: [{ role: 'user', content }],
-    max_tokens: 2000,
-  })
-  await incrementOpenAICalls()
-  const text = response.choices?.[0]?.message?.content?.trim() ?? ''
-  return text || null
+  try {
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content }],
+      max_tokens: 2000,
+    })
+    await incrementOpenAICalls()
+    const text = response.choices?.[0]?.message?.content?.trim() ?? ''
+    return text || null
+  } catch (error) {
+    const errLog = {
+      ...(error?.status != null && { status: error.status }),
+      ...(error?.code != null && { code: error.code }),
+      message: error instanceof Error ? error.message : String(error),
+    }
+    logger.error(LOG_PREFIXES.EVENT_SERVICE, `${OCR_PREFIX} OpenAI Vision error`, errLog)
+    return null
+  }
 }
 
 /**
@@ -163,7 +173,8 @@ export async function runOcr(imageUrl, imageBuffer = null) {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      logger.error(LOG_PREFIXES.EVENT_SERVICE, `${OCR_PREFIX} OpenAI Vision fallback failed: ${msg}`)
+      const errLog = { message: msg, ...(err?.status != null && { status: err.status }), ...(err?.code != null && { code: err.code }) }
+      logger.error(LOG_PREFIXES.EVENT_SERVICE, `${OCR_PREFIX} OpenAI Vision fallback failed`, errLog)
     }
   }
 

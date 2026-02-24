@@ -108,6 +108,71 @@ function buildMediaMoreBody(mediaCount) {
   return `${EVENT_ADD_ASK_MEDIA_MORE}\n_${mediaCount}/${MAX_MEDIA} קבצים נטענו_`
 }
 
+// DEV: test mode – remove when no longer needed
+const EVENT_ADD_TEST_MODE_STATE = {
+  eventAddTitle: 'סדנה איטלקית - מסע בדרום איטליה',
+  eventAddDateTime: '5 עד ה6 במרץ משמונה עד 10 בערב',
+  eventAddPlaceName: 'המטבח',
+  eventAddCity: 'יסוד המאלה',
+  eventAddAddressLine1: 'רודבסקי יוסף 26',
+  eventAddAddressLine2: 'בניין 3',
+  eventAddLocationNotes: 'בסוף המדשאה שמאלה',
+  eventAddNavLinks:
+    'https://maps.app.goo.gl/RSEG3NXabkaPv4hL6\n\nUse Waze to drive to קפה פילוסופ- קיבוץ הגושרים: https://waze.com/ul/hsvcm48jbn',
+  eventAddPrice: '50 שח לפיצה אבל הכניסה בחינם',
+  eventAddMainCategory: 'food',
+  eventAddMainCategoryGroupId: 'food_art_shopping',
+  eventAddExtraCategories: [],
+  eventAddDescription: `איטליה
+סדנה
+המטבח יסוד המעלה
+יום רביעי, 25.2
+כל היום
+מחיר לא ידוע
+סדנה איטלקית - מסע בדרום איטליה
+סדנה איטלקית - מסע בדרום איטליה
+
+מה נכין בסדנה?
+
+בצק לפסטה
+פטוציני
+רביולי מלא בריקוטה פרסקה
+פוקצ'ות מעולות
+סלטים מיוחדים
+ולסיום ארוחה מדהימה בלווי יין.
+
+ניפגש ביום רביעי 25.02 בשעה 18.30
+
+להרשמה 0545712343
+
+המטבח יסוד המעלה
+
+כשר
+
+ניתן להירשם דרך תוכנית עמית.`,
+  eventAddLinks: 'להרשמה 0545712343\nלפרטים נוספים link.co.il',
+}
+
+/**
+ * DEV: Apply test-mode state (fixed raw event) and send media step. Remove when no longer needed.
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @returns {Promise<object>}
+ */
+function applyEventAddTestModeAndGoToMedia(phoneNumberId, from) {
+  conversationState.set(from, {
+    ...EVENT_ADD_TEST_MODE_STATE,
+    step: STEPS.EVENT_ADD_MEDIA,
+    eventAddMedia: [],
+    eventAddLastActivityAt: Date.now(),
+  })
+  logger.info(LOG_PREFIXES.EVENT_ADD, 'Test mode: skip to media', from)
+  return sendInteractiveButtons(phoneNumberId, from, {
+    body: EVENT_ADD_ASK_MEDIA_FIRST,
+    buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+  })
+}
+
 const WHATSAPP_MESSAGE_MAX = 4096
 
 /**
@@ -491,6 +556,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_TITLE) {
+    if (textBody === 'טסט') return applyEventAddTestModeAndGoToMedia(phoneNumberId, from)
     if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
     const len = textBody.length
     if (len < EVENT_ADD_TITLE_MIN || len > EVENT_ADD_TITLE_MAX) {

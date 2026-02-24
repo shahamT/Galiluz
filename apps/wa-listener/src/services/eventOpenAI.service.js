@@ -28,6 +28,20 @@ function isRetryableOpenAIError(error) {
 }
 
 /**
+ * Extract status, code, message from OpenAI API error for consistent logging.
+ * @param {*} error
+ * @returns {{ status?: number, code?: string, message: string }}
+ */
+function formatOpenAIErrorForLog(error) {
+  const message = error instanceof Error ? error.message : String(error ?? 'unknown')
+  return {
+    ...(error?.status != null && { status: error.status }),
+    ...(error?.code != null && { code: error.code }),
+    message,
+  }
+}
+
+/**
  * @param {*} error - OpenAI API error (may have status and message)
  * @param {number} attemptIndex - 0 before first retry, 1 before second retry
  * @returns {number} delay in ms
@@ -138,7 +152,14 @@ Message with only "ימי ראשון ... ימי שני" (Sundays ... Mondays) an
       const content = response.choices[0]?.message?.content
       if (!content) return null
 
-      const result = JSON.parse(content)
+      let result
+      try {
+        result = JSON.parse(content)
+      } catch (parseErr) {
+        const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+        logger.error(LOG_PREFIXES.EVENT_SERVICE, 'Classification invalid JSON response', { message: parseMsg, contentLength: content.length })
+        return null
+      }
       await incrementOpenAICalls()
       return {
         isEvent: result.isEvent,
@@ -146,17 +167,19 @@ Message with only "ימי ראשון ... ימי שני" (Sundays ... Mondays) an
         reason: result.reason || null,
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Classification API error (attempt ${attempt}/${maxAttempts}): ${errorMsg}`)
+      const errLog = formatOpenAIErrorForLog(error)
+      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Classification API error (attempt ${attempt}/${maxAttempts})`, errLog)
       if (attempt < maxAttempts && isRetryableOpenAIError(error)) {
         const delay = getRetryDelayMs(error, attempt - 1)
-        logger.info(LOG_PREFIXES.EVENT_SERVICE, `OpenAI ${error?.status || 'error'}, retrying in ${delay}ms (attempt ${attempt + 1}/${maxAttempts})`)
+        logger.info(LOG_PREFIXES.EVENT_SERVICE, `OpenAI retrying in ${delay}ms (attempt ${attempt + 1}/${maxAttempts})`, errLog)
         await sleep(delay)
       } else {
+        logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Classification failed after max attempts', { attempts: maxAttempts, ...errLog })
         return null
       }
     }
   }
+  logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Classification failed after all retries', { attempts: maxAttempts })
   return null
 }
 
@@ -282,21 +305,30 @@ Message: "🎶 ערב מוזיקה אתיופית - 25/02 בשעה 20:00\nמתח
       const content = response.choices[0]?.message?.content
       if (!content) return null
 
-      const parsed = JSON.parse(content)
+      let parsed
+      try {
+        parsed = JSON.parse(content)
+      } catch (parseErr) {
+        const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+        logger.error(LOG_PREFIXES.EVENT_SERVICE, 'Extraction invalid JSON response', { message: parseMsg, contentLength: content.length })
+        return null
+      }
       await incrementOpenAICalls()
       return parsed
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Extraction API error (attempt ${attempt}/${maxAttempts}): ${errorMsg}`)
+      const errLog = formatOpenAIErrorForLog(error)
+      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Extraction API error (attempt ${attempt}/${maxAttempts})`, errLog)
       if (attempt < maxAttempts && isRetryableOpenAIError(error)) {
         const delay = getRetryDelayMs(error, attempt - 1)
-        logger.info(LOG_PREFIXES.EVENT_SERVICE, `OpenAI ${error?.status || 'error'}, retrying in ${delay}ms (attempt ${attempt + 1}/${maxAttempts})`)
+        logger.info(LOG_PREFIXES.EVENT_SERVICE, `OpenAI retrying in ${delay}ms (attempt ${attempt + 1}/${maxAttempts})`, errLog)
         await sleep(delay)
       } else {
+        logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Extraction failed after max attempts', { attempts: maxAttempts, ...errLog })
         return null
       }
     }
   }
+  logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Extraction failed after all retries', { attempts: maxAttempts })
   return null
 }
 
@@ -359,21 +391,30 @@ Decide: new_event, existing_event, or updated_event?`
       const content = response.choices[0]?.message?.content
       if (!content) return null
 
-      const parsed = JSON.parse(content)
+      let parsed
+      try {
+        parsed = JSON.parse(content)
+      } catch (parseErr) {
+        const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+        logger.error(LOG_PREFIXES.EVENT_SERVICE, 'Comparison invalid JSON response', { message: parseMsg, contentLength: content.length })
+        return null
+      }
       await incrementOpenAICalls()
       return parsed
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Comparison API error (attempt ${attempt}/${maxAttempts}): ${errorMsg}`)
+      const errLog = formatOpenAIErrorForLog(error)
+      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Comparison API error (attempt ${attempt}/${maxAttempts})`, errLog)
       if (attempt < maxAttempts && isRetryableOpenAIError(error)) {
         const delay = getRetryDelayMs(error, attempt - 1)
-        logger.info(LOG_PREFIXES.EVENT_SERVICE, `OpenAI ${error?.status || 'error'}, retrying in ${delay}ms (attempt ${attempt + 1}/${maxAttempts})`)
+        logger.info(LOG_PREFIXES.EVENT_SERVICE, `OpenAI retrying in ${delay}ms (attempt ${attempt + 1}/${maxAttempts})`, errLog)
         await sleep(delay)
       } else {
+        logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Comparison failed after max attempts', { attempts: maxAttempts, ...errLog })
         return null
       }
     }
   }
+  logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Comparison failed after all retries', { attempts: maxAttempts })
   return null
 }
 
@@ -409,20 +450,33 @@ Return evidenceCandidates with arrays: date, timeOfDay, location, price. Each it
       })
       const content = response.choices[0]?.message?.content
       if (!content) return null
-      const parsed = JSON.parse(content)
+      let parsed
+      try {
+        parsed = JSON.parse(content)
+      } catch (parseErr) {
+        const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+        logger.error(LOG_PREFIXES.EVENT_SERVICE, 'Evidence locator invalid JSON response', { message: parseMsg, contentLength: content.length })
+        return null
+      }
       if (parsed?.evidenceCandidates) {
         await incrementOpenAICalls()
         return parsed
       }
       return null
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Evidence locator API error (attempt ${attempt}): ${errorMsg}`)
+      const errLog = formatOpenAIErrorForLog(error)
+      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Evidence locator API error (attempt ${attempt}/${OPENAI.MAX_ATTEMPTS})`, errLog)
       if (attempt < OPENAI.MAX_ATTEMPTS && isRetryableOpenAIError(error)) {
-        await sleep(getRetryDelayMs(error, attempt - 1))
-      } else return null
+        const delay = getRetryDelayMs(error, attempt - 1)
+        logger.info(LOG_PREFIXES.EVENT_SERVICE, `OpenAI retrying in ${delay}ms (attempt ${attempt + 1}/${OPENAI.MAX_ATTEMPTS})`, errLog)
+        await sleep(delay)
+      } else {
+        logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Evidence locator failed after max attempts', { attempts: OPENAI.MAX_ATTEMPTS, ...errLog })
+        return null
+      }
     }
   }
+  logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Evidence locator failed after all retries', { attempts: OPENAI.MAX_ATTEMPTS })
   return null
 }
 
@@ -462,16 +516,30 @@ ${categoriesText}`
       })
       const content = response.choices[0]?.message?.content
       if (!content) return null
-      const parsed = JSON.parse(content)
+      let parsed
+      try {
+        parsed = JSON.parse(content)
+      } catch (parseErr) {
+        const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+        logger.error(LOG_PREFIXES.EVENT_SERVICE, 'Description builder invalid JSON response', { message: parseMsg, contentLength: content.length })
+        return null
+      }
       await incrementOpenAICalls()
       return parsed
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Description builder API error (attempt ${attempt}): ${errorMsg}`)
-      if (attempt < OPENAI.MAX_ATTEMPTS && isRetryableOpenAIError(error)) await sleep(getRetryDelayMs(error, attempt - 1))
-      else return null
+      const errLog = formatOpenAIErrorForLog(error)
+      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Description builder API error (attempt ${attempt}/${OPENAI.MAX_ATTEMPTS})`, errLog)
+      if (attempt < OPENAI.MAX_ATTEMPTS && isRetryableOpenAIError(error)) {
+        const delay = getRetryDelayMs(error, attempt - 1)
+        logger.info(LOG_PREFIXES.EVENT_SERVICE, `OpenAI retrying in ${delay}ms (attempt ${attempt + 1}/${OPENAI.MAX_ATTEMPTS})`, errLog)
+        await sleep(delay)
+      } else {
+        logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Description builder failed after max attempts', { attempts: OPENAI.MAX_ATTEMPTS, ...errLog })
+        return null
+      }
     }
   }
+  logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Description builder failed after all retries', { attempts: OPENAI.MAX_ATTEMPTS })
   return null
 }
 
@@ -495,15 +563,29 @@ export async function callOpenAIForFieldVerification(verifiedEvent, evidenceQuot
       })
       const content = response.choices[0]?.message?.content
       if (!content) return null
-      const parsed = JSON.parse(content)
+      let parsed
+      try {
+        parsed = JSON.parse(content)
+      } catch (parseErr) {
+        const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+        logger.error(LOG_PREFIXES.EVENT_SERVICE, 'Field verification invalid JSON response', { message: parseMsg, contentLength: content.length })
+        return null
+      }
       await incrementOpenAICalls()
       return parsed
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Field verification API error (attempt ${attempt}): ${errorMsg}`)
-      if (attempt < OPENAI.MAX_ATTEMPTS && isRetryableOpenAIError(error)) await sleep(getRetryDelayMs(error, attempt - 1))
-      else return null
+      const errLog = formatOpenAIErrorForLog(error)
+      logger.error(LOG_PREFIXES.EVENT_SERVICE, `Field verification API error (attempt ${attempt}/${OPENAI.MAX_ATTEMPTS})`, errLog)
+      if (attempt < OPENAI.MAX_ATTEMPTS && isRetryableOpenAIError(error)) {
+        const delay = getRetryDelayMs(error, attempt - 1)
+        logger.info(LOG_PREFIXES.EVENT_SERVICE, `OpenAI retrying in ${delay}ms (attempt ${attempt + 1}/${OPENAI.MAX_ATTEMPTS})`, errLog)
+        await sleep(delay)
+      } else {
+        logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Field verification failed after max attempts', { attempts: OPENAI.MAX_ATTEMPTS, ...errLog })
+        return null
+      }
     }
   }
+  logger.warn(LOG_PREFIXES.EVENT_SERVICE, 'Field verification failed after all retries', { attempts: OPENAI.MAX_ATTEMPTS })
   return null
 }
