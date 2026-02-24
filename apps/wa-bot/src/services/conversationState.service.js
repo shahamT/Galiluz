@@ -5,8 +5,9 @@
  *       eventAdd* (for event-add flow): eventAddTitle, eventAddDateTime, eventAddMainCategoryGroupId?,
  *       eventAddMainCategory, eventAddExtraCategories[] (no longer collected in flow; kept for API, always []),
  *       eventAddPlaceName, eventAddCity, eventAddAddressLine1,
- *       eventAddAddressLine2, eventAddLocationNotes, eventAddWazeLink, eventAddGmapsLink,
+ *       eventAddAddressLine2, eventAddLocationNotes, eventAddNavLinks,
  *       eventAddPrice, eventAddDescription, eventAddLinks, eventAddMedia[], eventAddLastActivityAt (ms).
+ *       eventAddFormattedPreview (temporary: formatted event from format API for confirm step).
  *
  * State is in-memory only and is lost on process restart or deploy. Users in the middle of a flow
  * will see the welcome menu on their next message after a restart.
@@ -41,6 +42,7 @@ const STEPS = {
   EVENT_ADD_LINKS: 'event_add_links',
   EVENT_ADD_MEDIA: 'event_add_media',
   EVENT_ADD_MEDIA_MORE: 'event_add_media_more',
+  EVENT_ADD_CONFIRM: 'event_add_confirm',
 }
 
 function get(waId) {

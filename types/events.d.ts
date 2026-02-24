@@ -5,11 +5,33 @@
  */
 
 /**
+ * Raw event payload from wa-bot (publisher add-event flow).
+ * Keys mirror event fields with raw prefix; formatted event is built from these.
+ */
+export interface PublisherRawEvent {
+  rawTitle?: string
+  rawOccurrences?: string
+  rawLocationName?: string
+  rawCity?: string
+  rawAddressLine1?: string
+  rawAddressLine2?: string
+  rawLocationDetails?: string
+  rawNavLinks?: string
+  rawPrice?: string
+  rawFullDescription?: string
+  rawUrls?: string
+  rawMainCategory?: string
+  rawCategories?: string[]
+  rawMedia?: unknown[]
+  publisher?: { phone?: string; name?: string; waId?: string }
+}
+
+/**
  * Event location details
  */
 export interface EventLocation {
   city?: string
-  /** Venue or place name (e.g. from wa-bot placeName) */
+  /** Venue or place name (from rawLocationName) */
   locationName?: string
   addressLine1?: string
   addressLine2?: string

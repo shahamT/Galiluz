@@ -1,9 +1,12 @@
 import { PUBLISHER_EVENT_FORMAT_SCHEMA } from '~/server/consts/publisherEventFormatSchema'
 import { getOpenAIClient } from '~/server/utils/openai'
-import { validatePublisherFormattedEvent } from '~/server/utils/eventValidation'
+import { validatePublisherFormattedEvent, normalizePublisherFormattedEvent } from '~/server/utils/eventValidation'
 import { extractNavLinksFromRaw } from '~/server/utils/navLinks'
 import { convertMessageToHtml } from '~/server/utils/whatsappFormatToHtml'
+import { sanitizeRawEventForPrompt } from '~/server/utils/promptSanitize'
+import { getCurrentIsraelUtcOffset } from '~/utils/israelDate'
 
+/** Publisher event formatting (wa-bot flow): OpenAI parses raw* fields into schema; we merge with pass-through and normalize. */
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
 /** Cap total user message length to avoid token limits and slow requests. */
@@ -32,22 +35,23 @@ interface PublisherInfo {
   waId: string
 }
 
+/** Raw event keys mirror event fields with raw prefix. Stored and sent from wa-bot with this convention. */
 interface RawEventWithAll {
-  title?: string
-  description?: string
-  placeName?: string
-  city?: string
-  addressLine1?: string
-  addressLine2?: string
-  locationNotes?: string
-  wazeNavLink?: string
-  gmapsNavLink?: string
-  dateTimeRaw?: string
-  price?: string
+  rawTitle?: string
+  rawFullDescription?: string
+  rawLocationName?: string
+  rawCity?: string
+  rawAddressLine1?: string
+  rawAddressLine2?: string
+  rawLocationDetails?: string
+  rawNavLinks?: string
+  rawOccurrences?: string
+  rawPrice?: string
+  rawUrls?: string
+  rawMainCategory?: string
+  rawCategories?: string[]
+  rawMedia?: unknown[]
   publisher?: PublisherInfo
-  mainCategory?: string
-  categories?: string[]
-  media?: unknown[]
   [key: string]: unknown
 }
 
@@ -113,28 +117,30 @@ function getIsraelDateContext(): string {
   const year = parts.find((p) => p.type === 'year')?.value ?? ''
   const month = parts.find((p) => p.type === 'month')?.value ?? ''
   const day = parts.find((p) => p.type === 'day')?.value ?? ''
-  return `Current date (Israel, Asia/Jerusalem): ${year}-${month}-${day}. Use this to resolve relative dates in dateTimeRaw.`
+  const offset = getCurrentIsraelUtcOffset()
+  return `Current date (Israel, Asia/Jerusalem): ${year}-${month}-${day}. Use this to resolve relative dates in rawOccurrences.
+Current Israel UTC offset: UTC+${offset}. Convert Israel times to UTC by subtracting this offset (e.g. 10:00 Israel → ${10 - offset}:00 UTC, 15:00 Israel → ${15 - offset}:00 UTC). Use the offset that applies to each occurrence date (Israel is UTC+2 in winter, UTC+3 in summer/DST).`
 }
 
 function buildSystemPrompt(categoriesList: CategoryItem[]): string {
   const categoriesText = categoriesList.map((c) => `- ${c.id}: ${c.label}`).join('\n')
   return `You are a formatting assistant for publisher-submitted event data (Hebrew community events calendar). The input is structured data that the publisher already provided via a form — NOT a random WhatsApp message. Your job is to format and validate only; do NOT infer or add information the publisher did not provide.
 
-OUTPUT LANGUAGE: All generated text (shortDescription, urls titles, etc.) must be in Hebrew by default. Use English only when the original raw data (title, description, linksText) is clearly in English; otherwise output Hebrew.
+OUTPUT LANGUAGE: All generated text (shortDescription, urls titles, etc.) must be in Hebrew by default. Use English only when the original raw data (rawTitle, rawFullDescription, rawUrls) is clearly in English; otherwise output Hebrew.
 
 RULES:
-1. Use the full raw event object only as context. Output only the fields defined in the schema.
-2. dateTimeRaw: Parse into occurrences. All times are Israel (Asia/Jerusalem). Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (if hasTime: combine date with time in Israel then convert to UTC; if !hasTime: use Israel midnight for that date in UTC), endTime = ISO UTC or null if not given.
+1. Use the full raw event object only as context (keys: rawTitle, rawOccurrences, rawCity, rawLocationName, rawAddressLine1, rawAddressLine2, rawLocationDetails, rawNavLinks, rawPrice, rawFullDescription, rawUrls, rawMainCategory, rawCategories, rawMedia). Output only the fields defined in the schema.
+2. rawOccurrences: Parse into occurrences. All times are Israel (Asia/Jerusalem). Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, "3 בצהריים" = 15:00, "4 בצהריים" = 16:00, etc. Convert Israel time to UTC (Israel is UTC+2 in winter, UTC+3 in summer/DST — use the offset that applies to the occurrence date). Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (if hasTime: combine date with time in Israel then convert to UTC; if !hasTime: use Israel midnight for that date in UTC), endTime = ISO UTC or null if not given.
 3. city: The publisher provided a city. Fix common Israeli place name typos (e.g. "קריעת שמונה" → "קריית שמונה", ת"א → תל אביב). Do not change correct names; only normalize obvious misspellings. Do not infer a different city. Example: קריעת שמונה → קריית שמונה.
-4. price: Convert to number or null. Free / "חינם" / 0 → 0. If unclear or not a single number, use null.
+4. price: Convert to number or null. Free entry (e.g. חינם, בחינם, free, כניסה חופשית, ללא תשלום, אין תשלום) → 0. Ignore a number only when it is clearly not the event price (e.g. merchandise, food at event). If unclear or not a single number, use null.
 5. shortDescription: Write in Hebrew (1–2 sentences) unless the event description was in English. Base only on the provided description. Do not add details that are not in the description.
 6. categories: mainCategory is already provided in the raw event — it MUST be included in the categories array. Add up to 3 additional category ids ONLY from the list below when the event clearly fits (e.g. both music and party). Do not add categories the publisher did not intend. Use ONLY these ids:
-7. urls: From linksText and any URLs in the description, produce an array of {Title, Url}. Title = short Hebrew label for the link (e.g. "כרטיסים", "ניווט Waze", "הרשמה"). Url = the clean URL only (https://...). Include links that appear in the description with an appropriate title. If no links, return empty array.
+7. urls: From rawUrls and any URLs in rawFullDescription, produce an array of {Title, Url}. Title = short Hebrew label for the link (e.g. "כרטיסים", "ניווט Waze", "הרשמה"). Url = the clean URL only (https://...). Include links that appear in the description with an appropriate title. If no links, return empty array.
 
 ${categoriesText}`
 }
 
-/** Build a lean payload for OpenAI: strip large media payloads to avoid token limits. */
+/** Build a lean payload for OpenAI: strip large media payloads and sanitize string fields. */
 function buildLeanPayloadForPrompt(raw: RawEventWithAll): Record<string, unknown> {
   const media = Array.isArray(raw.media)
     ? raw.media.map((m: unknown) => {
@@ -145,10 +151,8 @@ function buildLeanPayloadForPrompt(raw: RawEventWithAll): Record<string, unknown
         }
       })
     : []
-  return {
-    ...raw,
-    media,
-  }
+  const lean = { ...raw, media }
+  return sanitizeRawEventForPrompt(lean as Record<string, unknown>)
 }
 
 function isRetryableOpenAIError(err: unknown): boolean {
@@ -207,10 +211,10 @@ async function callOpenAIForPublisherFormat(
   const config = useRuntimeConfig()
   const model = (config.openaiModel as string) || DEFAULT_MODEL
   const inputSummary = {
-    titleLength: typeof rawEventWithAll.title === 'string' ? rawEventWithAll.title.trim().length : 0,
-    dateTimeRawLength: typeof rawEventWithAll.dateTimeRaw === 'string' ? rawEventWithAll.dateTimeRaw.trim().length : 0,
-    mainCategory: rawEventWithAll.mainCategory ?? '(empty)',
-    cityFromRaw: typeof rawEventWithAll.city === 'string' ? rawEventWithAll.city : '(empty)',
+    rawTitleLength: typeof rawEventWithAll.rawTitle === 'string' ? rawEventWithAll.rawTitle.trim().length : 0,
+    rawOccurrencesLength: typeof rawEventWithAll.rawOccurrences === 'string' ? rawEventWithAll.rawOccurrences.trim().length : 0,
+    rawMainCategory: rawEventWithAll.rawMainCategory ?? '(empty)',
+    rawCity: typeof rawEventWithAll.rawCity === 'string' ? rawEventWithAll.rawCity : '(empty)',
   }
 
   const systemPrompt = buildSystemPrompt(categoriesList)
@@ -307,40 +311,49 @@ export async function formatPublisherEvent(
   if (!aiResult) return null
 
   const publisher = rawEventWithAll.publisher
-  const title = typeof rawEventWithAll.title === 'string' ? rawEventWithAll.title.trim() : ''
-  const descriptionRaw = typeof rawEventWithAll.description === 'string' ? rawEventWithAll.description : ''
+  const title = typeof rawEventWithAll.rawTitle === 'string' ? rawEventWithAll.rawTitle.trim() : ''
+  const descriptionRaw = typeof rawEventWithAll.rawFullDescription === 'string' ? rawEventWithAll.rawFullDescription : ''
   const fullDescription = convertMessageToHtml(descriptionRaw)
-  const navLinks = extractNavLinksFromRaw(
-    typeof rawEventWithAll.wazeNavLink === 'string' ? rawEventWithAll.wazeNavLink : undefined,
-    typeof rawEventWithAll.gmapsNavLink === 'string' ? rawEventWithAll.gmapsNavLink : undefined,
-  )
+  const navLinksRaw =
+    typeof rawEventWithAll.rawNavLinks === 'string' && rawEventWithAll.rawNavLinks.trim()
+      ? rawEventWithAll.rawNavLinks.trim()
+      : undefined
+  const navLinks = extractNavLinksFromRaw(navLinksRaw, navLinksRaw)
 
   const event: FormattedPublisherEvent = {
     Title: title || 'אירוע',
     shortDescription: typeof aiResult.shortDescription === 'string' ? aiResult.shortDescription : '',
     fullDescription,
-    mainCategory: rawEventWithAll.mainCategory || aiResult.categories[0] || 'community_meetup',
-    categories: Array.isArray(aiResult.categories) && aiResult.categories.length > 0 ? aiResult.categories : [rawEventWithAll.mainCategory || 'community_meetup'],
+    mainCategory: rawEventWithAll.rawMainCategory || aiResult.categories[0] || 'community_meetup',
+    categories: Array.isArray(aiResult.categories) && aiResult.categories.length > 0 ? aiResult.categories : [rawEventWithAll.rawMainCategory || 'community_meetup'],
     location: {
-      City: aiResult.city ?? rawEventWithAll.city ?? '',
-      locationName: typeof rawEventWithAll.placeName === 'string' && rawEventWithAll.placeName.trim() ? rawEventWithAll.placeName.trim() : undefined,
-      addressLine1: rawEventWithAll.addressLine1 ?? null,
-      addressLine2: rawEventWithAll.addressLine2 ?? null,
-      locationDetails: rawEventWithAll.locationNotes ?? null,
+      City: aiResult.city ?? rawEventWithAll.rawCity ?? '',
+      locationName: typeof rawEventWithAll.rawLocationName === 'string' && rawEventWithAll.rawLocationName.trim() ? rawEventWithAll.rawLocationName.trim() : undefined,
+      addressLine1: rawEventWithAll.rawAddressLine1 ?? null,
+      addressLine2: rawEventWithAll.rawAddressLine2 ?? null,
+      locationDetails: rawEventWithAll.rawLocationDetails ?? null,
       wazeNavLink: navLinks.wazeNavLink ?? null,
       gmapsNavLink: navLinks.gmapsNavLink ?? null,
     },
     occurrences: aiResult.occurrences,
     price: aiResult.price,
-    media: Array.isArray(rawEventWithAll.media) ? rawEventWithAll.media : [],
+    media: Array.isArray(rawEventWithAll.rawMedia) ? rawEventWithAll.rawMedia : [],
     urls: Array.isArray(aiResult.urls) ? aiResult.urls.filter((u) => typeof u?.Title === 'string' && typeof u?.Url === 'string') : [],
     publisherPhone: typeof publisher?.phone === 'string' ? publisher.phone : undefined,
     publisherName: typeof publisher?.name === 'string' ? publisher.name : undefined,
   }
 
-  if (!event.categories.includes(event.mainCategory)) {
-    event.categories = [event.mainCategory, ...event.categories.filter((c) => c !== event.mainCategory)]
+  const validCategoryIds = categoriesList.map((c) => c.id)
+  event.categories = event.categories.filter((c) => validCategoryIds.includes(c))
+  if (event.categories.length === 0) {
+    event.categories = [rawEventWithAll.rawMainCategory || 'community_meetup'].filter((c) => validCategoryIds.includes(c))
+    if (event.categories.length === 0) event.categories = ['community_meetup']
   }
+  if (!event.categories.includes(event.mainCategory)) {
+    event.mainCategory = event.categories[0]
+  }
+
+  normalizePublisherFormattedEvent(event as unknown as Record<string, unknown>, validCategoryIds)
 
   const validation = validatePublisherFormattedEvent(event)
   if (!validation.valid) {

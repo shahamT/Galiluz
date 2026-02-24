@@ -190,6 +190,21 @@ export const EVENT_ADD_MEDIA_MAX_REACHED = 'נשמרו 6 קבצים. ממשיכ�
 
 export const EVENT_ADD_SUCCESS = 'תודה, האירוע נשמר'
 
+/** Confirm step: intro before formatted preview. */
+export const EVENT_ADD_CONFIRM_INTRO = 'עיבדנו את פרטי האירוע שהזנת\nהאם כל הפרטים נכונים?'
+
+/** Confirm step: approve and save button. */
+export const EVENT_ADD_CONFIRM_SAVE_BUTTON = { id: 'event_confirm_save', title: 'אישור ושמירה' }
+
+/** Confirm step: edit details (restart form) button. */
+export const EVENT_ADD_CONFIRM_EDIT_BUTTON = { id: 'event_confirm_edit', title: 'עריכת פרטים' }
+
+/** When user chooses edit: restart from title. */
+export const EVENT_ADD_CONFIRM_EDIT_RESTART = 'מתחילים מחדש. הזן את פרטי האירוע.'
+
+/** Format API failed; ask to try again. */
+export const EVENT_ADD_FORMAT_FAILED = 'לא הצלחנו לעבד את הפרטים. נסה שוב.'
+
 // --- Event add validation (limits and error messages) ---
 
 export const EVENT_ADD_TITLE_MIN = 6

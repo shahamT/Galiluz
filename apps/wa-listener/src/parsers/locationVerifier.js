@@ -5,7 +5,7 @@
  */
 
 const WAZE_URL_PATTERN = /https?:\/\/(?:www\.)?(?:waze\.com|ul\.waze\.com)\/[^\s]+/i
-const GMAPS_URL_PATTERN = /https?:\/\/(?:www\.)?(?:google\.com\/maps|maps\.google|goo\.gl\/maps)[^\s]*/i
+const GMAPS_URL_PATTERN = /https?:\/\/(?:www\.)?(?:google\.com\/maps|maps\.google|goo\.gl\/maps|maps\.app\.goo\.gl)[^\s]*/i
 
 /**
  * Extract Waze and Google Maps URLs from a list of URLs.

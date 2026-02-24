@@ -9,7 +9,7 @@ import {
   downloadMedia,
 } from '../services/cloudApi.service.js'
 import { uploadMediaToApp, deleteMediaOnApp } from '../services/eventAddMedia.service.js'
-import { createEvent } from '../services/eventsCreate.service.js'
+import { createEvent, formatEvent } from '../services/eventsCreate.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { normalizePhone } from '../config.js'
 import { logger } from '../utils/logger.js'
@@ -92,6 +92,7 @@ const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_LINKS,
   STEPS.EVENT_ADD_MEDIA,
   STEPS.EVENT_ADD_MEDIA_MORE,
+  STEPS.EVENT_ADD_CONFIRM,
 ]
 
 function isEventAddStep(step) {
@@ -100,6 +101,150 @@ function isEventAddStep(step) {
 
 function buildMediaMoreBody(mediaCount) {
   return `${EVENT_ADD_ASK_MEDIA_MORE}\n_${mediaCount}/${MAX_MEDIA} קבצים נטענו_`
+}
+
+const WHATSAPP_MESSAGE_MAX = 4096
+
+/**
+ * Format YYYY-MM-DD as DD.MM.YYYY for display.
+ * @param {string|null} yyyyMmDd
+ * @returns {string}
+ */
+function formatDateDisplay(yyyyMmDd) {
+  if (!yyyyMmDd || typeof yyyyMmDd !== 'string') return '-'
+  const parts = yyyyMmDd.trim().slice(0, 10).split('-')
+  if (parts.length !== 3) return yyyyMmDd
+  return `${parts[2]}.${parts[1]}.${parts[0]}`
+}
+
+/**
+ * Build formatted event preview string(s) for WhatsApp. Uses *bold* for labels.
+ * Returns one or more strings; each is at most WHATSAPP_MESSAGE_MAX (4096). If total exceeds limit, splits after location (part1 / part2), then further chunks any part that still exceeds limit.
+ * @param {Record<string, unknown>} formattedEvent - from format API
+ * @param {Record<string, { label: string }>} eventCategories - id → { label }
+ * @returns {string[]}
+ */
+function buildEventPreviewMessage(formattedEvent, eventCategories) {
+  const catLabel = (id) => (eventCategories[id]?.label ?? id)
+  const title = typeof formattedEvent.Title === 'string' ? formattedEvent.Title : '-'
+  const shortDesc = typeof formattedEvent.shortDescription === 'string' ? formattedEvent.shortDescription : '-'
+  const mainCatId = formattedEvent.mainCategory
+  const mainCatLabel = mainCatId ? catLabel(mainCatId) : '-'
+  const categoriesArr = Array.isArray(formattedEvent.categories) ? formattedEvent.categories : []
+  const otherCategories = categoriesArr.filter((c) => c !== mainCatId).map(catLabel)
+  const loc = formattedEvent.location && typeof formattedEvent.location === 'object' ? formattedEvent.location : {}
+  const locLines = []
+  if (loc.locationName) locLines.push(String(loc.locationName))
+  if (loc.City) locLines.push(String(loc.City))
+  if (loc.addressLine1) locLines.push(String(loc.addressLine1))
+  if (loc.addressLine2) locLines.push(String(loc.addressLine2))
+  if (loc.locationDetails) locLines.push(String(loc.locationDetails))
+  if (loc.wazeNavLink) locLines.push(`ניווט בוויז - ${loc.wazeNavLink}`)
+  if (loc.gmapsNavLink) locLines.push(`ניווט בגוגל מפות - ${loc.gmapsNavLink}`)
+  const locationBlock = locLines.length ? locLines.join('\n') : '-'
+
+  const occurrences = Array.isArray(formattedEvent.occurrences) ? formattedEvent.occurrences : []
+  const occLines = occurrences.map((occ) => {
+    const startIso = occ.startTime ?? occ.date
+    const dateStr = occ.date ? formatDateDisplay(occ.date) : (startIso ? formatDateDisplay(getDateInIsraelFromIso(startIso)) : '-')
+    if (!occ.hasTime || !startIso) return `${dateStr} – כל היום`
+    const startTime = getTimeInIsraelFromIso(startIso)
+    const endTime = occ.endTime ? getTimeInIsraelFromIso(occ.endTime) : ''
+    return endTime ? `${dateStr} ${startTime} – ${endTime}` : `${dateStr} ${startTime}`
+  })
+  const datesBlock = occLines.length ? occLines.join('\n') : '-'
+
+  const priceNum = typeof formattedEvent.price === 'number' ? formattedEvent.price : NaN
+  const priceStr = Number.isNaN(priceNum) ? '-' : priceNum === 0 ? 'חינם' : `${priceNum} ₪`
+
+  const urls = Array.isArray(formattedEvent.urls) ? formattedEvent.urls : []
+  const linkLines = urls
+    .filter((u) => u && typeof u.Title === 'string' && typeof u.Url === 'string')
+    .map((u) => `${u.Title} - ${u.Url}`)
+  const linksBlock = linkLines.length ? linkLines.join('\n') : '-'
+
+  const part1 = [
+    `*שם האירוע:*`,
+    title,
+    '',
+    `*תיאור קצר:*`,
+    shortDesc,
+    '',
+    `*קטגוריה ראשית:*`,
+    mainCatLabel,
+    '',
+    `*קטגוריות נוספות:*`,
+    otherCategories.length ? otherCategories.join(', ') : '-',
+    '',
+    `*מיקום האירוע:*`,
+    locationBlock,
+  ].join('\n')
+
+  const part2 = [
+    `*תאריכים ושעות:*`,
+    datesBlock,
+    '',
+    `*מחיר:*`,
+    priceStr,
+    '',
+    `*לינקים:*`,
+    linksBlock,
+  ].join('\n')
+
+  const full = part1 + '\n\n' + part2
+  if (full.length <= WHATSAPP_MESSAGE_MAX) return [full]
+  // Ensure no single part exceeds limit (e.g. very long description or many links)
+  const chunks = []
+  for (const part of [part1, part2]) {
+    if (part.length <= WHATSAPP_MESSAGE_MAX) {
+      chunks.push(part)
+    } else {
+      for (let i = 0; i < part.length; i += WHATSAPP_MESSAGE_MAX) {
+        chunks.push(part.slice(i, i + WHATSAPP_MESSAGE_MAX))
+      }
+    }
+  }
+  return chunks
+}
+
+/**
+ * After user finishes media (skip or max): call format API, then either show confirm step or error and re-show media.
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @param {object} state - current conversation state
+ * @param {{ profileName?: string }} context
+ * @param {{ isMaxMedia?: boolean }} opts - when true, we came from max media (EVENT_ADD_MEDIA_MORE or EVENT_ADD_MEDIA)
+ * @returns {Promise<object>}
+ */
+async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts = {}) {
+  const publisherInfo = { phone: from, name: context?.profileName ?? '', waId: from }
+  const rawEvent = buildRawEvent(state, publisherInfo)
+  const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
+  const mainCategory = (state.eventAddMainCategory ?? '').trim()
+  const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
+  const formatResult = await formatEvent({ rawEvent, media, mainCategory, categories })
+  if (!formatResult.success || !formatResult.formattedEvent) {
+    await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
+    const count = (state.eventAddMedia || []).length
+    const body = count === 0 ? EVENT_ADD_ASK_MEDIA_FIRST : buildMediaMoreBody(count)
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body,
+      buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+    })
+  }
+  conversationState.set(from, {
+    eventAddFormattedPreview: formatResult.formattedEvent,
+    step: STEPS.EVENT_ADD_CONFIRM,
+  })
+  await sendText(phoneNumberId, from, EVENT_ADD_CONFIRM_INTRO)
+  const previewParts = buildEventPreviewMessage(formatResult.formattedEvent, EVENT_CATEGORIES)
+  for (const part of previewParts) {
+    await sendText(phoneNumberId, from, part)
+  }
+  return sendInteractiveButtons(phoneNumberId, from, {
+    body: 'בחר/י:',
+    buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
+  })
 }
 
 /** WhatsApp interactive list allows max 10 rows total. One section, 4 rows (group labels). */
@@ -167,7 +312,8 @@ function sendValidationAndReask(phoneNumberId, from, requirementsMessage, reaskF
 }
 
 /**
- * Build rawEvent object for create API (publisherId is set by API).
+ * Build rawEvent for create API. Keys follow raw* convention (rawTitle, rawCity, rawOccurrences, etc.).
+ * publisherId is set by the API.
  * @param {object} state - conversation state
  * @param {{ phone?: string, name?: string, waId?: string }} publisherInfo - from/context
  */
@@ -176,18 +322,17 @@ function buildRawEvent(state, publisherInfo) {
   const name = (publisherInfo?.name ?? '').trim()
   const waId = String(publisherInfo?.waId ?? '')
   return {
-    title: (state.eventAddTitle ?? '').trim(),
-    dateTimeRaw: (state.eventAddDateTime ?? '').trim(),
-    placeName: (state.eventAddPlaceName ?? '').trim() || undefined,
-    city: (state.eventAddCity ?? '').trim(),
-    addressLine1: (state.eventAddAddressLine1 ?? '').trim() || undefined,
-    addressLine2: (state.eventAddAddressLine2 ?? '').trim() || undefined,
-    locationNotes: (state.eventAddLocationNotes ?? '').trim() || undefined,
-    wazeNavLink: (state.eventAddWazeLink ?? '').trim() || undefined,
-    gmapsNavLink: (state.eventAddGmapsLink ?? '').trim() || undefined,
-    price: (state.eventAddPrice ?? '').trim() || undefined,
-    description: (state.eventAddDescription ?? '').trim(),
-    linksText: (state.eventAddLinks ?? '').trim() || undefined,
+    rawTitle: (state.eventAddTitle ?? '').trim(),
+    rawOccurrences: (state.eventAddDateTime ?? '').trim(),
+    rawLocationName: (state.eventAddPlaceName ?? '').trim() || undefined,
+    rawCity: (state.eventAddCity ?? '').trim(),
+    rawAddressLine1: (state.eventAddAddressLine1 ?? '').trim() || undefined,
+    rawAddressLine2: (state.eventAddAddressLine2 ?? '').trim() || undefined,
+    rawLocationDetails: (state.eventAddLocationNotes ?? '').trim() || undefined,
+    rawNavLinks: (state.eventAddNavLinks ?? '').trim() || undefined,
+    rawPrice: (state.eventAddPrice ?? '').trim() || undefined,
+    rawFullDescription: (state.eventAddDescription ?? '').trim(),
+    rawUrls: (state.eventAddLinks ?? '').trim() || undefined,
     publisher: { phone, name, waId },
   }
 }
@@ -231,7 +376,7 @@ export function sendInitialMessage(phoneNumberId, from) {
 
 /**
  * Submit event: call create API, clear state (unless keepStateForMaxMedia), send success and welcome.
- * @param {{ keepStateForMaxMedia?: boolean }} [opts] - when true, do not clear so next message can show "max reached"
+ * @param {{ keepStateForMaxMedia?: boolean, formattedEvent?: object }} [opts] - keepStateForMaxMedia: do not clear so next message can show "max reached"; formattedEvent: use when user confirmed preview (skips server format)
  */
 async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
   const publisherInfo = {
@@ -243,19 +388,21 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
   const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
   const mainCategory = (state.eventAddMainCategory ?? '').trim()
   const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
+  const body = { rawEvent, media, mainCategory, categories }
+  if (opts.formattedEvent && typeof opts.formattedEvent === 'object') {
+    body.formattedEvent = opts.formattedEvent
+  }
 
-  const result = await createEvent({ rawEvent, media, mainCategory, categories })
+  const result = await createEvent(body)
   if (!opts.keepStateForMaxMedia) {
     conversationState.clear(from)
   }
 
   if (result.success) {
     logger.info(LOG_PREFIXES.EVENT_ADD, 'Event created', from, result.id)
+    await sendText(phoneNumberId, from, EVENT_ADD_SUCCESS)
   } else {
     logger.error(LOG_PREFIXES.EVENT_ADD, 'Event create failed', from)
-  }
-  await sendText(phoneNumberId, from, EVENT_ADD_SUCCESS)
-  if (!result.success) {
     await sendText(phoneNumberId, from, 'משהו השתבש בשמירה. נסה שוב מאוחר יותר.')
   }
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
@@ -312,6 +459,29 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   conversationState.set(from, { eventAddLastActivityAt: Date.now() })
+
+  if (step === STEPS.EVENT_ADD_CONFIRM) {
+    if (buttonId === EVENT_ADD_CONFIRM_SAVE_BUTTON.id) {
+      const preview = state.eventAddFormattedPreview
+      if (preview && typeof preview === 'object') {
+        return submitEvent(phoneNumberId, from, state, context, { formattedEvent: preview })
+      }
+      logger.error(LOG_PREFIXES.EVENT_ADD, 'Confirm save but no formatted preview', from)
+      conversationState.clear(from)
+      await sendText(phoneNumberId, from, 'משהו השתבש. נסה להתחיל מחדש.')
+      return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+    }
+    if (buttonId === EVENT_ADD_CONFIRM_EDIT_BUTTON.id) {
+      conversationState.clear(from)
+      conversationState.set(from, { step: STEPS.EVENT_ADD_TITLE, eventAddLastActivityAt: Date.now() })
+      await sendText(phoneNumberId, from, EVENT_ADD_CONFIRM_EDIT_RESTART)
+      return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
+    }
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: 'בחר/י:',
+      buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
+    })
+  }
 
   if (step === STEPS.EVENT_ADD_TITLE) {
     if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
@@ -535,7 +705,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_WAZE_GMAPS) {
     if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
-      conversationState.set(from, { eventAddWazeLink: '', eventAddGmapsLink: '', step: STEPS.EVENT_ADD_PRICE })
+      conversationState.set(from, { eventAddNavLinks: '', step: STEPS.EVENT_ADD_PRICE })
       return sendInteractiveButtons(phoneNumberId, from, {
         body: EVENT_ADD_ASK_PRICE,
         buttons: [EVENT_ADD_SKIP_BUTTON],
@@ -551,8 +721,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         )
       }
       conversationState.set(from, {
-        eventAddWazeLink: textBody,
-        eventAddGmapsLink: textBody,
+        eventAddNavLinks: textBody,
         step: STEPS.EVENT_ADD_PRICE,
       })
       return sendInteractiveButtons(phoneNumberId, from, {
@@ -633,17 +802,17 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_MEDIA) {
-    if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
+    if (buttonId === EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON.id) {
       conversationState.set(from, { eventAddMedia: [] })
       const s = conversationState.get(from)
-      return submitEvent(phoneNumberId, from, s, context)
+      return goToConfirmOrRetryMedia(phoneNumberId, from, s, context)
     }
     if (mediaId) {
       const currentCount = (state.eventAddMedia || []).length
       if (currentCount >= MAX_MEDIA) {
         await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_MAX_REACHED)
-        conversationState.clear(from)
-        return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+        const s = conversationState.get(from)
+        return goToConfirmOrRetryMedia(phoneNumberId, from, s, context, { isMaxMedia: true })
       }
       const item = await processIncomingMedia(mediaId, state)
       if (!item) {
@@ -658,8 +827,9 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       const media = [...(state.eventAddMedia || []), item]
       conversationState.set(from, { eventAddMedia: media })
       if (media.length >= MAX_MEDIA) {
+        await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_MAX_REACHED)
         const s = conversationState.get(from)
-        return submitEvent(phoneNumberId, from, s, context, { keepStateForMaxMedia: true })
+        return goToConfirmOrRetryMedia(phoneNumberId, from, s, context, { isMaxMedia: true })
       }
       conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA_MORE })
       return sendInteractiveButtons(phoneNumberId, from, {
@@ -682,16 +852,16 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_MEDIA_MORE) {
-    if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
+    if (buttonId === EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON.id) {
       const s = conversationState.get(from)
-      return submitEvent(phoneNumberId, from, s, context)
+      return goToConfirmOrRetryMedia(phoneNumberId, from, s, context)
     }
     if (mediaId) {
       const currentCount = (state.eventAddMedia || []).length
       if (currentCount >= MAX_MEDIA) {
         await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_MAX_REACHED)
-        conversationState.clear(from)
-        return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+        const s = conversationState.get(from)
+        return goToConfirmOrRetryMedia(phoneNumberId, from, s, context, { isMaxMedia: true })
       }
       const item = await processIncomingMedia(mediaId, state)
       if (!item) {
@@ -707,8 +877,9 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       const media = [...(state.eventAddMedia || []), item]
       conversationState.set(from, { eventAddMedia: media })
       if (media.length >= MAX_MEDIA) {
+        await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_MAX_REACHED)
         const s = conversationState.get(from)
-        return submitEvent(phoneNumberId, from, s, context, { keepStateForMaxMedia: true })
+        return goToConfirmOrRetryMedia(phoneNumberId, from, s, context, { isMaxMedia: true })
       }
       return sendInteractiveButtons(phoneNumberId, from, {
         body: buildMediaMoreBody(media.length),
