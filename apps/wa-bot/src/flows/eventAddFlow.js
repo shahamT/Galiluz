@@ -315,7 +315,7 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
   }
   const processResult = await processDraft(draftId)
   if (!processResult.success || !processResult.formattedEvent) {
-    logger.info(LOG_PREFIXES.EVENT_ADD, 'Process failed', from, { draftId: draftResult.id, reason: processResult.reason || 'no formattedEvent' })
+    logger.info(LOG_PREFIXES.EVENT_ADD, 'Process failed', from, { draftId, reason: processResult.reason || 'no formattedEvent' })
     conversationState.set(from, { eventAddConfirmPending: undefined })
     await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
     return sendInteractiveButtons(phoneNumberId, from, {
