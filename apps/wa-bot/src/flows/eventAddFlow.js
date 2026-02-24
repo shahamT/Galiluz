@@ -26,6 +26,7 @@ import {
   EVENT_ADD_LOCATION_INTRO,
   EVENT_ADD_ASK_PLACE_NAME,
   EVENT_ADD_SKIP_BUTTON,
+  EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON,
   EVENT_ADD_ASK_CITY,
   EVENT_ADD_ASK_ADDRESS,
   EVENT_ADD_ASK_LOCATION_NOTES,
@@ -62,6 +63,7 @@ import {
   EVENT_ADD_VALIDATE_LINKS,
   EVENT_ADD_VALIDATE_MEDIA,
   EVENT_ADD_MEDIA_UPLOAD_FAILED,
+  EVENT_ADD_MEDIA_MAX_REACHED,
   LOG_PREFIXES,
 } from '../consts/index.js'
 import { WELCOME_INTERACTIVE } from '../consts/index.js'
@@ -71,7 +73,7 @@ const VALID_CATEGORY_IDS = new Set(Object.keys(EVENT_CATEGORIES))
 const VALID_GROUP_IDS = new Set(CATEGORY_GROUPS.map((g) => g.id))
 
 const STEPS = conversationState.STEPS
-const MAX_MEDIA = 5
+const MAX_MEDIA = 6
 const EVENT_ADD_TIMEOUT_MS = 30 * 60 * 1000
 
 const EVENT_ADD_STEPS = [
@@ -97,7 +99,7 @@ function isEventAddStep(step) {
 }
 
 function buildMediaMoreBody(mediaCount) {
-  return `${mediaCount}/${MAX_MEDIA} קבצים נטענו\n${EVENT_ADD_ASK_MEDIA_MORE}`
+  return `${EVENT_ADD_ASK_MEDIA_MORE}\n_${mediaCount}/${MAX_MEDIA} קבצים נטענו_`
 }
 
 /** WhatsApp interactive list allows max 10 rows total. One section, 4 rows (group labels). */
@@ -228,9 +230,10 @@ export function sendInitialMessage(phoneNumberId, from) {
 }
 
 /**
- * Submit event: call create API, clear state, send success and welcome.
+ * Submit event: call create API, clear state (unless keepStateForMaxMedia), send success and welcome.
+ * @param {{ keepStateForMaxMedia?: boolean }} [opts] - when true, do not clear so next message can show "max reached"
  */
-async function submitEvent(phoneNumberId, from, state, context) {
+async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
   const publisherInfo = {
     phone: from,
     name: context?.profileName ?? '',
@@ -242,7 +245,9 @@ async function submitEvent(phoneNumberId, from, state, context) {
   const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
 
   const result = await createEvent({ rawEvent, media, mainCategory, categories })
-  conversationState.clear(from)
+  if (!opts.keepStateForMaxMedia) {
+    conversationState.clear(from)
+  }
 
   if (result.success) {
     logger.info(LOG_PREFIXES.EVENT_ADD, 'Event created', from, result.id)
@@ -634,13 +639,19 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return submitEvent(phoneNumberId, from, s, context)
     }
     if (mediaId) {
+      const currentCount = (state.eventAddMedia || []).length
+      if (currentCount >= MAX_MEDIA) {
+        await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_MAX_REACHED)
+        conversationState.clear(from)
+        return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+      }
       const item = await processIncomingMedia(mediaId, state)
       if (!item) {
         return sendText(phoneNumberId, from, EVENT_ADD_MEDIA_UPLOAD_FAILED).then((r) => {
           if (r && !r.success) return r
           return sendInteractiveButtons(phoneNumberId, from, {
             body: EVENT_ADD_ASK_MEDIA_FIRST,
-            buttons: [EVENT_ADD_SKIP_BUTTON],
+            buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
           })
         })
       }
@@ -648,25 +659,25 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       conversationState.set(from, { eventAddMedia: media })
       if (media.length >= MAX_MEDIA) {
         const s = conversationState.get(from)
-        return submitEvent(phoneNumberId, from, s, context)
+        return submitEvent(phoneNumberId, from, s, context, { keepStateForMaxMedia: true })
       }
       conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA_MORE })
       return sendInteractiveButtons(phoneNumberId, from, {
         body: buildMediaMoreBody(media.length),
-        buttons: [EVENT_ADD_SKIP_BUTTON],
+        buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
       })
     }
     if (msg.type === 'text') {
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MEDIA, () =>
         sendInteractiveButtons(phoneNumberId, from, {
           body: EVENT_ADD_ASK_MEDIA_FIRST,
-          buttons: [EVENT_ADD_SKIP_BUTTON],
+          buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
         }),
       )
     }
     return sendInteractiveButtons(phoneNumberId, from, {
       body: EVENT_ADD_ASK_MEDIA_FIRST,
-      buttons: [EVENT_ADD_SKIP_BUTTON],
+      buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
     })
   }
 
@@ -676,6 +687,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return submitEvent(phoneNumberId, from, s, context)
     }
     if (mediaId) {
+      const currentCount = (state.eventAddMedia || []).length
+      if (currentCount >= MAX_MEDIA) {
+        await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_MAX_REACHED)
+        conversationState.clear(from)
+        return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+      }
       const item = await processIncomingMedia(mediaId, state)
       if (!item) {
         return sendText(phoneNumberId, from, EVENT_ADD_MEDIA_UPLOAD_FAILED).then((r) => {
@@ -683,7 +700,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
           const count = (state.eventAddMedia || []).length
           return sendInteractiveButtons(phoneNumberId, from, {
             body: buildMediaMoreBody(count),
-            buttons: [EVENT_ADD_SKIP_BUTTON],
+            buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
           })
         })
       }
@@ -691,24 +708,24 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       conversationState.set(from, { eventAddMedia: media })
       if (media.length >= MAX_MEDIA) {
         const s = conversationState.get(from)
-        return submitEvent(phoneNumberId, from, s, context)
+        return submitEvent(phoneNumberId, from, s, context, { keepStateForMaxMedia: true })
       }
       return sendInteractiveButtons(phoneNumberId, from, {
         body: buildMediaMoreBody(media.length),
-        buttons: [EVENT_ADD_SKIP_BUTTON],
+        buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
       })
     }
     if (msg.type === 'text') {
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MEDIA, () =>
         sendInteractiveButtons(phoneNumberId, from, {
           body: buildMediaMoreBody((state.eventAddMedia || []).length),
-          buttons: [EVENT_ADD_SKIP_BUTTON],
+          buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
         }),
       )
     }
     return sendInteractiveButtons(phoneNumberId, from, {
       body: buildMediaMoreBody((state.eventAddMedia || []).length),
-      buttons: [EVENT_ADD_SKIP_BUTTON],
+      buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
     })
   }
 

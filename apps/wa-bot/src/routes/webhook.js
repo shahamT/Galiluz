@@ -383,8 +383,42 @@ function processOneMessage(phoneNumberId, from, msg, context = {}) {
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }
 
+/** Per-user message queue: process one message at a time per user so state updates correctly (e.g. bulk media). */
+const userMessageQueues = new Map()
+
+function enqueueAndProcessUser(phoneNumberId, from, msg, context) {
+  const key = normalizePhone(from)
+  let entry = userMessageQueues.get(key)
+  if (!entry) {
+    entry = { queue: [], processing: false }
+    userMessageQueues.set(key, entry)
+  }
+  entry.queue.push({ phoneNumberId, from, msg, context })
+
+  if (entry.processing) return
+  entry.processing = true
+  setImmediate(async () => {
+    while (entry.queue.length > 0) {
+      const item = entry.queue.shift()
+      try {
+        const result = await processOneMessage(
+          item.phoneNumberId,
+          item.from,
+          item.msg,
+          item.context,
+        )
+        if (result && !result.success) logger.error(LOG_PREFIXES.WEBHOOK, 'Send result', result.error)
+      } catch (err) {
+        logger.error(LOG_PREFIXES.WEBHOOK, 'Failed to send reply', err)
+      }
+    }
+    entry.processing = false
+  })
+}
+
 /**
  * Parse webhook body and process incoming messages. Route by interactive type and conversation state.
+ * Messages for the same user are processed sequentially so bulk uploads update state correctly.
  */
 function processWebhookBody(body) {
   if (body.object !== 'whatsapp_business_account') return
@@ -409,15 +443,7 @@ function processWebhookBody(body) {
           continue
         }
         logger.info(LOG_PREFIXES.WEBHOOK, 'Private message from', from)
-        setImmediate(() => {
-          processOneMessage(phoneNumberId, from, msg, { profileName })
-            .then((result) => {
-              if (result && !result.success) logger.error(LOG_PREFIXES.WEBHOOK, 'Send result', result.error)
-            })
-            .catch((err) => {
-              logger.error(LOG_PREFIXES.WEBHOOK, 'Failed to send reply', err)
-            })
-        })
+        enqueueAndProcessUser(phoneNumberId, from, msg, { profileName })
       }
     }
   }
