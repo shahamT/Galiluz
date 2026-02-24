@@ -8,6 +8,7 @@
  *       eventAddAddressLine2, eventAddLocationNotes, eventAddNavLinks,
  *       eventAddPrice, eventAddDescription, eventAddLinks, eventAddMedia[], eventAddLastActivityAt (ms).
  *       eventAddFormattedPreview (temporary: formatted event from format API for confirm step).
+ *       eventAddConfirmPending (temporary: true while handling max media, to avoid duplicate "נשמרו 6 קבצים" and multiple goToConfirm calls).
  *
  * State is in-memory only and is lost on process restart or deploy. Users in the middle of a flow
  * will see the welcome menu on their next message after a restart.

@@ -160,7 +160,7 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
   const urls = Array.isArray(formattedEvent.urls) ? formattedEvent.urls : []
   const linkLines = urls
     .filter((u) => u && typeof u.Title === 'string' && typeof u.Url === 'string')
-    .map((u) => `${u.Title} - ${u.Url}`)
+    .map((u) => (u.type === 'phone' ? `${u.Title} (טלפון) - ${u.Url}` : `${u.Title} - ${u.Url}`))
   const linksBlock = linkLines.length ? linkLines.join('\n') : '-'
 
   const part1 = [
@@ -224,6 +224,7 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
   const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
   const formatResult = await formatEvent({ rawEvent, media, mainCategory, categories })
   if (!formatResult.success || !formatResult.formattedEvent) {
+    conversationState.set(from, { eventAddConfirmPending: undefined })
     await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
     const count = (state.eventAddMedia || []).length
     const body = count === 0 ? EVENT_ADD_ASK_MEDIA_FIRST : buildMediaMoreBody(count)
@@ -235,6 +236,7 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
   conversationState.set(from, {
     eventAddFormattedPreview: formatResult.formattedEvent,
     step: STEPS.EVENT_ADD_CONFIRM,
+    eventAddConfirmPending: undefined,
   })
   await sendText(phoneNumberId, from, EVENT_ADD_CONFIRM_INTRO)
   const previewParts = buildEventPreviewMessage(formatResult.formattedEvent, EVENT_CATEGORIES)
@@ -648,21 +650,26 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       }
       return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS)
     }
-    const line1TooLong = (lines[0]?.length ?? 0) > EVENT_ADD_ADDRESS_MAX
-    const line2TooLong = (lines[1]?.length ?? 0) > EVENT_ADD_ADDRESS_MAX
+    const reaskAddress = () =>
+      addressCanSkip
+        ? sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD_ASK_ADDRESS,
+            buttons: [EVENT_ADD_SKIP_BUTTON],
+          })
+        : sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS)
+    if (lines.length > 2) {
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_ADDRESS, reaskAddress)
+    }
+    const line1 = (lines[0] ?? '').trim()
+    const line2 = (lines[1] ?? '').trim()
+    const line1TooLong = line1.length > EVENT_ADD_ADDRESS_MAX
+    const line2TooLong = line2.length > EVENT_ADD_ADDRESS_MAX
     if (line1TooLong || line2TooLong) {
-      const reask = () =>
-        addressCanSkip
-          ? sendInteractiveButtons(phoneNumberId, from, {
-              body: EVENT_ADD_ASK_ADDRESS,
-              buttons: [EVENT_ADD_SKIP_BUTTON],
-            })
-          : sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS)
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_ADDRESS, reask)
+      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_ADDRESS, reaskAddress)
     }
     conversationState.set(from, {
-      eventAddAddressLine1: lines[0] ?? '',
-      eventAddAddressLine2: lines[1] ?? '',
+      eventAddAddressLine1: line1,
+      eventAddAddressLine2: line2,
       step: STEPS.EVENT_ADD_LOCATION_NOTES,
     })
     return sendInteractiveButtons(phoneNumberId, from, {
@@ -810,6 +817,8 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     if (mediaId) {
       const currentCount = (state.eventAddMedia || []).length
       if (currentCount >= MAX_MEDIA) {
+        if (state.eventAddConfirmPending) return Promise.resolve()
+        conversationState.set(from, { eventAddConfirmPending: true })
         await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_MAX_REACHED)
         const s = conversationState.get(from)
         return goToConfirmOrRetryMedia(phoneNumberId, from, s, context, { isMaxMedia: true })
@@ -827,6 +836,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       const media = [...(state.eventAddMedia || []), item]
       conversationState.set(from, { eventAddMedia: media })
       if (media.length >= MAX_MEDIA) {
+        conversationState.set(from, { eventAddConfirmPending: true })
         await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_MAX_REACHED)
         const s = conversationState.get(from)
         return goToConfirmOrRetryMedia(phoneNumberId, from, s, context, { isMaxMedia: true })
@@ -845,10 +855,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         }),
       )
     }
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_MEDIA_FIRST,
-      buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
-    })
+    return Promise.resolve()
   }
 
   if (step === STEPS.EVENT_ADD_MEDIA_MORE) {
@@ -859,6 +866,8 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     if (mediaId) {
       const currentCount = (state.eventAddMedia || []).length
       if (currentCount >= MAX_MEDIA) {
+        if (state.eventAddConfirmPending) return Promise.resolve()
+        conversationState.set(from, { eventAddConfirmPending: true })
         await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_MAX_REACHED)
         const s = conversationState.get(from)
         return goToConfirmOrRetryMedia(phoneNumberId, from, s, context, { isMaxMedia: true })
@@ -877,6 +886,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       const media = [...(state.eventAddMedia || []), item]
       conversationState.set(from, { eventAddMedia: media })
       if (media.length >= MAX_MEDIA) {
+        conversationState.set(from, { eventAddConfirmPending: true })
         await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_MAX_REACHED)
         const s = conversationState.get(from)
         return goToConfirmOrRetryMedia(phoneNumberId, from, s, context, { isMaxMedia: true })
@@ -894,10 +904,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         }),
       )
     }
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: buildMediaMoreBody((state.eventAddMedia || []).length),
-      buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
-    })
+    return Promise.resolve()
   }
 
   // Fallback when step is unknown or unexpected (e.g. EVENT_ADD_INITIAL or corrupted state)

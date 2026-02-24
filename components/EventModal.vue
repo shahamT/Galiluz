@@ -76,9 +76,9 @@
               <a
                 v-for="(link, index) in selectedEvent.urls"
                 :key="index"
-                :href="link.Url"
-                target="_blank"
-                rel="noopener noreferrer"
+                :href="link.type === 'phone' ? `tel:${link.Url}` : link.Url"
+                :target="link.type === 'phone' ? undefined : '_blank'"
+                :rel="link.type === 'phone' ? undefined : 'noopener noreferrer'"
                 class="EventModal-linkButton"
               >
                 {{ link.Title }}

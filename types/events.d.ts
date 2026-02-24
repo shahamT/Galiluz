@@ -72,7 +72,7 @@ export interface Event {
   isActive: boolean
   createdAt?: string
   updatedAt?: string
-  urls?: Array<{ Title: string; Url: string }> // Array of URL objects with Title and Url
+  urls?: Array<{ Title: string; Url: string; type?: 'link' | 'phone' }> // link = web URL, phone = phone number
   media?: any[] // Media attachments (images, videos)
   publisherPhone?: string // WhatsApp contact number
   publisherName?: string // Sender display name (push name) from WhatsApp

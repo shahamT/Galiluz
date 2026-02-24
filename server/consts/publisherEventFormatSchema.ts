@@ -43,6 +43,7 @@ export const PUBLISHER_EVENT_FORMAT_SCHEMA = {
           properties: {
             Title: { type: 'string' },
             Url: { type: 'string' },
+            type: { type: 'string', enum: ['link', 'phone'] },
           },
         },
       },

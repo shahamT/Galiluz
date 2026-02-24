@@ -71,7 +71,7 @@ interface AIFormatResult {
   }>
   city: string
   price: number | null
-  urls: Array<{ Title: string; Url: string }>
+  urls: Array<{ Title: string; Url: string; type?: 'link' | 'phone' }>
 }
 
 /** Backend event shape: Title, location.City, etc. (compatible with eventsTransform) */
@@ -98,7 +98,7 @@ export interface FormattedPublisherEvent {
   }>
   price: number | null
   media: unknown[]
-  urls: Array<{ Title: string; Url: string }>
+  urls: Array<{ Title: string; Url: string; type?: 'link' | 'phone' }>
   publisherPhone?: string
   publisherName?: string
 }
@@ -135,7 +135,7 @@ RULES:
 4. price: Convert to number or null. Free entry (e.g. חינם, בחינם, free, כניסה חופשית, ללא תשלום, אין תשלום) → 0. Ignore a number only when it is clearly not the event price (e.g. merchandise, food at event). If unclear or not a single number, use null.
 5. shortDescription: Write in Hebrew (1–2 sentences) unless the event description was in English. Base only on the provided description. Do not add details that are not in the description.
 6. categories: mainCategory is already provided in the raw event — it MUST be included in the categories array. Add up to 3 additional category ids ONLY from the list below when the event clearly fits (e.g. both music and party). Do not add categories the publisher did not intend. Use ONLY these ids:
-7. urls: From rawUrls and any URLs in rawFullDescription, produce an array of {Title, Url}. Title = short Hebrew label for the link (e.g. "כרטיסים", "ניווט Waze", "הרשמה"). Url = the clean URL only (https://...). Include links that appear in the description with an appropriate title. If no links, return empty array.
+7. urls: From rawUrls and any URLs or phone numbers in rawFullDescription, produce an array of {Title, Url, type}. type = "link" for web URLs (https://...), type = "phone" for phone numbers. Title = short Hebrew label (e.g. "כרטיסים", "ניווט Waze", "טלפון להרשמה"). Url = the clean URL or the phone number (digits, optional formatting). Include both links and phone numbers that appear in the text with an appropriate title. If none, return empty array.
 
 ${categoriesText}`
 }
@@ -188,6 +188,8 @@ function isValidAIResult(parsed: unknown): parsed is AIFormatResult {
   if (!Array.isArray(p.urls)) return false
   for (const u of p.urls) {
     if (!u || typeof u !== 'object' || typeof (u as { Title?: unknown }).Title !== 'string' || typeof (u as { Url?: unknown }).Url !== 'string') return false
+    const linkType = (u as { type?: unknown }).type
+    if (linkType !== undefined && linkType !== 'link' && linkType !== 'phone') return false
   }
   return true
 }
@@ -338,7 +340,11 @@ export async function formatPublisherEvent(
     occurrences: aiResult.occurrences,
     price: aiResult.price,
     media: Array.isArray(rawEventWithAll.rawMedia) ? rawEventWithAll.rawMedia : [],
-    urls: Array.isArray(aiResult.urls) ? aiResult.urls.filter((u) => typeof u?.Title === 'string' && typeof u?.Url === 'string') : [],
+    urls: Array.isArray(aiResult.urls)
+      ? aiResult.urls
+          .filter((u) => typeof u?.Title === 'string' && typeof u?.Url === 'string')
+          .map((u) => ({ Title: u.Title, Url: u.Url, type: u.type === 'phone' ? 'phone' : 'link' }))
+      : [],
     publisherPhone: typeof publisher?.phone === 'string' ? publisher.phone : undefined,
     publisherName: typeof publisher?.name === 'string' ? publisher.name : undefined,
   }
