@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "nuxt dev",
     "dev:web": "nuxt dev",
-    "dev:wa": "echo [wa-listener disabled]",
+    "dev:wa": "npm --prefix apps/wa-listener run dev",
     "dev:wa-bot": "npm --prefix apps/wa-bot run dev",
-    "list-groups:wa": "echo [wa-listener disabled]",
+    "list-groups:wa": "npm --prefix apps/wa-listener run list-groups",
     "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",

@@ -69,6 +69,7 @@ import {
   EVENT_ADD_CONFIRM_EDIT_BUTTON,
   EVENT_ADD_CONFIRM_EDIT_RESTART,
   EVENT_ADD_FORMAT_FAILED,
+  EVENT_ADD_FORMAT_FAILED_RETRY_BODY,
   LOG_PREFIXES,
 } from '../consts/index.js'
 import { WELCOME_INTERACTIVE } from '../consts/index.js'
@@ -297,12 +298,10 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
   const formatResult = await formatEvent({ rawEvent, media, mainCategory, categories })
   if (!formatResult.success || !formatResult.formattedEvent) {
     logger.info(LOG_PREFIXES.EVENT_ADD, 'Format failed', from, { ...payloadSummary, reason: formatResult.reason || 'no formattedEvent' })
-    if (!opts.isMaxMedia) conversationState.set(from, { eventAddConfirmPending: undefined })
+    conversationState.set(from, { eventAddConfirmPending: undefined })
     await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
-    const count = (state.eventAddMedia || []).length
-    const body = count === 0 ? EVENT_ADD_ASK_MEDIA_FIRST : buildMediaMoreBody(count)
     return sendInteractiveButtons(phoneNumberId, from, {
-      body,
+      body: EVENT_ADD_FORMAT_FAILED_RETRY_BODY,
       buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
     })
   }
@@ -881,6 +880,8 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_MEDIA) {
     if (msg.type === 'interactive' && buttonId === EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON.id) {
+      if (state.eventAddConfirmPending) return Promise.resolve()
+      conversationState.set(from, { eventAddConfirmPending: true })
       conversationState.set(from, { eventAddMedia: [] })
       const s = conversationState.get(from)
       return goToConfirmOrRetryMedia(phoneNumberId, from, s, context)
@@ -931,6 +932,8 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_MEDIA_MORE) {
     if (msg.type === 'interactive' && buttonId === EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON.id) {
+      if (state.eventAddConfirmPending) return Promise.resolve()
+      conversationState.set(from, { eventAddConfirmPending: true })
       const s = conversationState.get(from)
       return goToConfirmOrRetryMedia(phoneNumberId, from, s, context)
     }

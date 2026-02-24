@@ -205,6 +205,9 @@ export const EVENT_ADD_CONFIRM_EDIT_RESTART = 'מתחילים מחדש. הזן �
 /** Format API failed; ask to try again. */
 export const EVENT_ADD_FORMAT_FAILED = 'לא הצלחנו לעבד את הפרטים. נסה שוב.'
 
+/** After format failed: body for retry button (do not repeat upload status). */
+export const EVENT_ADD_FORMAT_FAILED_RETRY_BODY = 'לחץ למטה כדי לנסות שוב לעבד'
+
 // --- Event add validation (limits and error messages) ---
 
 export const EVENT_ADD_TITLE_MIN = 6
