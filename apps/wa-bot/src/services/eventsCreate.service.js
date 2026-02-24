@@ -28,8 +28,13 @@ export async function formatEvent(body) {
     }
     const data = await res.json()
     if (data.error || data.formattedEvent == null) {
-      logger.info(LOG_PREFIXES.CLOUD_API, 'Events format returned no event', data.error ? 'error: true' : 'formattedEvent null')
-      return { success: false, reason: data.error ? 'server error' : 'no formattedEvent' }
+      const reason = data.errorMessage && typeof data.errorMessage === 'string'
+        ? data.errorMessage
+        : data.error
+          ? 'server error'
+          : 'no formattedEvent'
+      logger.info(LOG_PREFIXES.CLOUD_API, 'Events format returned no event', { reason, serverError: data.errorMessage })
+      return { success: false, reason }
     }
     return { success: true, formattedEvent: data.formattedEvent }
   } catch (err) {

@@ -142,16 +142,15 @@ ${categoriesText}`
 
 /** Build a lean payload for OpenAI: strip large media payloads and sanitize string fields. */
 function buildLeanPayloadForPrompt(raw: RawEventWithAll): Record<string, unknown> {
-  const media = Array.isArray(raw.media)
-    ? raw.media.map((m: unknown) => {
-        const item = m as Record<string, unknown>
-        return {
-          cloudinaryURL: item?.cloudinaryURL ?? '',
-          isMain: item?.isMain ?? false,
-        }
-      })
-    : []
-  const lean = { ...raw, media }
+  const rawMedia = Array.isArray(raw.rawMedia) ? raw.rawMedia : []
+  const leanMedia = rawMedia.map((m: unknown) => {
+    const item = m as Record<string, unknown>
+    return {
+      cloudinaryURL: item?.cloudinaryURL ?? '',
+      isMain: item?.isMain ?? false,
+    }
+  })
+  const lean = { ...raw, rawMedia: leanMedia }
   return sanitizeRawEventForPrompt(lean as Record<string, unknown>)
 }
 

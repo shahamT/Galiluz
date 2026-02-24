@@ -80,6 +80,7 @@ export default defineEventHandler(async (event) => {
   }
 
   let formattedEvent: Record<string, unknown> | null = null
+  let errorMessage: string | undefined
   try {
     const categoriesList = getCategoriesList()
     const formattedResult = await formatPublisherEvent(rawEventWithAll, categoriesList, { correlationId })
@@ -90,14 +91,16 @@ export default defineEventHandler(async (event) => {
       }))
     } else {
       console.warn(LOG_PREFIX, correlationId, 'format returned null')
+      errorMessage = 'format returned null'
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
+    errorMessage = msg
     console.error(LOG_PREFIX, correlationId, 'format error', JSON.stringify({ error: msg }))
   }
 
   if (formattedEvent) {
     return { formattedEvent }
   }
-  return { formattedEvent: null, error: true }
+  return { formattedEvent: null, error: true, ...(errorMessage && { errorMessage }) }
 })

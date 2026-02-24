@@ -137,6 +137,15 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  if (formattedEvent === null) {
+    console.warn(LOG_PREFIX, correlationId, 'abort: no formatted event (format failed or missing)')
+    throw createError({
+      statusCode: 422,
+      statusMessage: 'Unprocessable Entity',
+      message: 'Event format failed or missing; cannot create',
+    })
+  }
+
   try {
     const { db } = await getMongoConnection()
     const collection = db.collection(eventsCollectionName)
@@ -145,11 +154,10 @@ export default defineEventHandler(async (event) => {
       isActive: false,
       event: formattedEvent,
       rawEvent: rawEventWithAll,
-      ...(formattedEvent === null ? { formatFailed: true } : {}),
     }
     const result = await collection.insertOne(doc)
     const id = result.insertedId.toString()
-    console.info(LOG_PREFIX, correlationId, 'inserted', JSON.stringify({ id, formatted: formattedEvent !== null }))
+    console.info(LOG_PREFIX, correlationId, 'inserted', JSON.stringify({ id }))
     return { id, success: true }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
