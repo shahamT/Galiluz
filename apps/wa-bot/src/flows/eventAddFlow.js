@@ -230,7 +230,7 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
   const formatResult = await formatEvent({ rawEvent, media, mainCategory, categories })
   if (!formatResult.success || !formatResult.formattedEvent) {
     logger.info(LOG_PREFIXES.EVENT_ADD, 'Format failed', from, formatResult.reason || 'no formattedEvent')
-    conversationState.set(from, { eventAddConfirmPending: undefined })
+    if (!opts.isMaxMedia) conversationState.set(from, { eventAddConfirmPending: undefined })
     await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
     const count = (state.eventAddMedia || []).length
     const body = count === 0 ? EVENT_ADD_ASK_MEDIA_FIRST : buildMediaMoreBody(count)

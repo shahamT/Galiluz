@@ -431,6 +431,7 @@ function processWebhookBody(body) {
       const metadata = value.metadata || {}
       const phoneNumberId = metadata.phone_number_id
       const messages = value.messages || []
+      if (messages.length === 0) continue
       const profileName = value.contacts?.[0]?.profile?.name
       for (const msg of messages) {
         if (!isPrivateMessage(msg)) {
