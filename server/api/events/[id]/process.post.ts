@@ -51,6 +51,34 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'draft missing rawEvent' })
   }
 
+  const rawTitle = typeof rawEventWithAll.rawTitle === 'string' ? rawEventWithAll.rawTitle.trim() : ''
+  const rawOccurrences = typeof rawEventWithAll.rawOccurrences === 'string' ? rawEventWithAll.rawOccurrences.trim() : ''
+  const payloadSummary = {
+    id,
+    rawTitleLength: rawTitle.length,
+    rawOccurrencesLength: rawOccurrences.length,
+    rawMainCategory: rawEventWithAll.rawMainCategory ?? '(empty)',
+    rawMediaCount: Array.isArray(rawEventWithAll.rawMedia) ? (rawEventWithAll.rawMedia as unknown[]).length : 0,
+  }
+  console.info(LOG_PREFIX, correlationId, 'payload', JSON.stringify(payloadSummary))
+
+  if (!rawTitle) {
+    console.warn(LOG_PREFIX, correlationId, 'abort: rawTitle is empty', JSON.stringify({ id }))
+    throw createError({
+      statusCode: 422,
+      statusMessage: 'Unprocessable Entity',
+      message: 'rawTitle is required for format',
+    })
+  }
+  if (!rawOccurrences) {
+    console.warn(LOG_PREFIX, correlationId, 'abort: rawOccurrences (date/time) is empty', JSON.stringify({ id }))
+    throw createError({
+      statusCode: 422,
+      statusMessage: 'Unprocessable Entity',
+      message: 'rawOccurrences (date/time) is required for format',
+    })
+  }
+
   let formattedEvent: Record<string, unknown> | null = null
   let errorMessage: string | undefined
   try {
@@ -66,7 +94,7 @@ export default defineEventHandler(async (event) => {
         city: result.location?.City ?? '',
       }))
     } else {
-      console.warn(LOG_PREFIX, correlationId, 'format returned null', JSON.stringify({ id }))
+      console.warn(LOG_PREFIX, correlationId, 'format returned null', JSON.stringify({ id, ...payloadSummary }))
       errorMessage = 'format returned null'
     }
   } catch (err) {

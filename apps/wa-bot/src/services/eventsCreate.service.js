@@ -43,7 +43,21 @@ export async function processDraft(draftId) {
     const res = await fetch(url, { method: 'POST', headers })
     if (!res.ok) {
       const errBody = await res.text()
-      const reason = errBody.length > 0 ? errBody.slice(0, 300) : `HTTP ${res.status}`
+      let reason = `HTTP ${res.status}`
+      if (errBody.length > 0) {
+        try {
+          const data = JSON.parse(errBody)
+          if (typeof data.message === 'string' && data.message.trim()) {
+            reason = data.message.trim()
+          } else if (typeof data.errorMessage === 'string' && data.errorMessage.trim()) {
+            reason = data.errorMessage.trim()
+          } else {
+            reason = errBody.slice(0, 300)
+          }
+        } catch {
+          reason = errBody.slice(0, 300)
+        }
+      }
       logger.error(LOG_PREFIXES.CLOUD_API, 'Events process failed', res.status, reason)
       return { success: false, reason }
     }
