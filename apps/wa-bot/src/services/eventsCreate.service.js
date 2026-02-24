@@ -24,14 +24,17 @@ export async function formatEvent(body) {
     if (!res.ok) {
       const errBody = await res.text()
       logger.error(LOG_PREFIXES.CLOUD_API, 'Events format failed', res.status, errBody)
-      return { success: false }
+      return { success: false, reason: `HTTP ${res.status}: ${errBody.slice(0, 200)}` }
     }
     const data = await res.json()
-    if (data.error || data.formattedEvent == null) return { success: false }
+    if (data.error || data.formattedEvent == null) {
+      logger.info(LOG_PREFIXES.CLOUD_API, 'Events format returned no event', data.error ? 'error: true' : 'formattedEvent null')
+      return { success: false, reason: data.error ? 'server error' : 'no formattedEvent' }
+    }
     return { success: true, formattedEvent: data.formattedEvent }
   } catch (err) {
     logger.error(LOG_PREFIXES.CLOUD_API, 'Events format error', err)
-    return { success: false }
+    return { success: false, reason: err instanceof Error ? err.message : String(err) }
   }
 }
 

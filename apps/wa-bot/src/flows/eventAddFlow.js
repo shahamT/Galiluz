@@ -229,6 +229,7 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
   const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
   const formatResult = await formatEvent({ rawEvent, media, mainCategory, categories })
   if (!formatResult.success || !formatResult.formattedEvent) {
+    logger.info(LOG_PREFIXES.EVENT_ADD, 'Format failed', from, formatResult.reason || 'no formattedEvent')
     conversationState.set(from, { eventAddConfirmPending: undefined })
     await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
     const count = (state.eventAddMedia || []).length
@@ -484,10 +485,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       await sendText(phoneNumberId, from, EVENT_ADD_CONFIRM_EDIT_RESTART)
       return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
     }
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: 'בחר/י:',
-      buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-    })
+    return Promise.resolve()
   }
 
   if (step === STEPS.EVENT_ADD_TITLE) {
