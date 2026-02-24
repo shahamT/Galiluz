@@ -193,20 +193,24 @@ function isValidAIResult(parsed: unknown): parsed is AIFormatResult {
   return true
 }
 
+type OpenAIFormatCallResult =
+  | { result: AIFormatResult; errorReason?: undefined }
+  | { result: null; errorReason: string }
+
 /**
  * Call OpenAI to format publisher raw event into the schema fields only.
- * Returns parsed AI result or null on failure.
+ * Returns { result } on success or { result: null, errorReason } on failure.
  */
 async function callOpenAIForPublisherFormat(
   rawEventWithAll: RawEventWithAll,
   categoriesList: CategoryItem[],
   dateContext: string,
   correlationId?: string,
-): Promise<AIFormatResult | null> {
+): Promise<OpenAIFormatCallResult> {
   const openai = getOpenAIClient()
   if (!openai) {
     log(correlationId, 'warn', 'skipped: no OpenAI API key', { reason: 'no_openai_key' })
-    return null
+    return { result: null, errorReason: 'no_openai_key' }
   }
 
   const config = useRuntimeConfig()
@@ -246,7 +250,7 @@ async function callOpenAIForPublisherFormat(
       const content = response.choices[0]?.message?.content
       if (!content) {
         log(correlationId, 'warn', 'OpenAI returned empty content', { attempt })
-        return null
+        return { result: null, errorReason: 'openai_empty_content' }
       }
 
       let parsed: unknown
@@ -254,7 +258,7 @@ async function callOpenAIForPublisherFormat(
         parsed = JSON.parse(content)
       } catch {
         log(correlationId, 'error', 'invalid JSON in response', { attempt, contentLength: content.length })
-        return null
+        return { result: null, errorReason: 'openai_invalid_json' }
       }
       if (isValidAIResult(parsed)) {
         log(correlationId, 'info', 'OpenAI response valid', {
@@ -263,7 +267,7 @@ async function callOpenAIForPublisherFormat(
           price: parsed.price,
           categoriesCount: parsed.categories.length,
         })
-        return parsed
+        return { result: parsed }
       }
       log(correlationId, 'error', 'response shape invalid', {
         attempt,
@@ -273,7 +277,7 @@ async function callOpenAIForPublisherFormat(
         hasCity: typeof (parsed as Record<string, unknown>).city === 'string',
         priceType: typeof (parsed as Record<string, unknown>).price,
       })
-      return null
+      return { result: null, errorReason: 'openai_response_shape_invalid' }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       const status = (err as { status?: number })?.status
@@ -283,11 +287,11 @@ async function callOpenAIForPublisherFormat(
         log(correlationId, 'info', `retrying in ${delay}ms`, { attempt, nextAttempt: attempt + 1 })
         await new Promise((r) => setTimeout(r, delay))
       } else {
-        return null
+        return { result: null, errorReason: `openai_request_failed: ${msg}` }
       }
     }
   }
-  return null
+  return { result: null, errorReason: 'openai_no_result_after_retries' }
 }
 
 export type FormatPublisherEventResult =
@@ -312,10 +316,11 @@ export async function formatPublisherEvent(
   }
 
   const dateContext = getIsraelDateContext()
-  const aiResult = await callOpenAIForPublisherFormat(rawEventWithAll, categoriesList, dateContext, correlationId)
-  if (!aiResult) {
-    return { formattedEvent: null, errorReason: 'OpenAI format failed (no result)' }
+  const aiCall = await callOpenAIForPublisherFormat(rawEventWithAll, categoriesList, dateContext, correlationId)
+  if (!aiCall.result) {
+    return { formattedEvent: null, errorReason: `OpenAI format failed (${aiCall.errorReason})` }
   }
+  const aiResult = aiCall.result
 
   const publisher = rawEventWithAll.publisher
   const title = typeof rawEventWithAll.rawTitle === 'string' ? rawEventWithAll.rawTitle.trim() : ''
