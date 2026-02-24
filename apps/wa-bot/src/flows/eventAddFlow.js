@@ -9,7 +9,8 @@ import {
   downloadMedia,
 } from '../services/cloudApi.service.js'
 import { uploadMediaToApp, deleteMediaOnApp } from '../services/eventAddMedia.service.js'
-import { createEvent, formatEvent } from '../services/eventsCreate.service.js'
+import { createDraft, processDraft, activateEvent } from '../services/eventsCreate.service.js'
+import { createEvent } from '../services/eventsCreate.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { normalizePhone } from '../config.js'
 import { logger } from '../utils/logger.js'
@@ -295,9 +296,26 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
   const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
   const payloadSummary = { mediaCount: media.length, hasRawTitle: !!rawEvent.rawTitle }
   logger.info(LOG_PREFIXES.EVENT_ADD, 'goToConfirmOrRetryMedia', from, payloadSummary)
-  const formatResult = await formatEvent({ rawEvent, media, mainCategory, categories })
-  if (!formatResult.success || !formatResult.formattedEvent) {
-    logger.info(LOG_PREFIXES.EVENT_ADD, 'Format failed', from, { ...payloadSummary, reason: formatResult.reason || 'no formattedEvent' })
+
+  let draftId = state.eventAddDraftId
+  if (!draftId) {
+    const body = { rawEvent, media, mainCategory, categories }
+    const draftResult = await createDraft(body)
+    if (!draftResult.success || !draftResult.id) {
+      logger.error(LOG_PREFIXES.EVENT_ADD, 'Draft create failed', from)
+      conversationState.set(from, { eventAddConfirmPending: undefined })
+      await sendText(phoneNumberId, from, 'לא הצלחנו ליצור את האירוע. נסה שוב.')
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD_FORMAT_FAILED_RETRY_BODY,
+        buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+      })
+    }
+    draftId = draftResult.id
+    conversationState.set(from, { eventAddDraftId: draftId })
+  }
+  const processResult = await processDraft(draftId)
+  if (!processResult.success || !processResult.formattedEvent) {
+    logger.info(LOG_PREFIXES.EVENT_ADD, 'Process failed', from, { draftId: draftResult.id, reason: processResult.reason || 'no formattedEvent' })
     conversationState.set(from, { eventAddConfirmPending: undefined })
     await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
     return sendInteractiveButtons(phoneNumberId, from, {
@@ -306,12 +324,12 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
     })
   }
   conversationState.set(from, {
-    eventAddFormattedPreview: formatResult.formattedEvent,
+    eventAddFormattedPreview: processResult.formattedEvent,
     step: STEPS.EVENT_ADD_CONFIRM,
     eventAddConfirmPending: undefined,
   })
   await sendText(phoneNumberId, from, EVENT_ADD_CONFIRM_INTRO)
-  const previewParts = buildEventPreviewMessage(formatResult.formattedEvent, EVENT_CATEGORIES)
+  const previewParts = buildEventPreviewMessage(processResult.formattedEvent, EVENT_CATEGORIES)
   for (const part of previewParts) {
     await sendText(phoneNumberId, from, part)
   }
@@ -449,34 +467,34 @@ export function sendInitialMessage(phoneNumberId, from) {
 }
 
 /**
- * Submit event: call create API, clear state (unless keepStateForMaxMedia), send success and welcome.
- * @param {{ keepStateForMaxMedia?: boolean, formattedEvent?: object }} [opts] - keepStateForMaxMedia: do not clear so next message can show "max reached"; formattedEvent: use when user confirmed preview (skips server format)
+ * Submit event: activate existing draft (when we have eventAddDraftId) or fallback to create API. Clear state, send success and welcome.
+ * @param {{ keepStateForMaxMedia?: boolean, formattedEvent?: object }} [opts] - keepStateForMaxMedia: do not clear; formattedEvent: used only when no draftId (fallback create path)
  */
 async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
-  const publisherInfo = {
-    phone: from,
-    name: context?.profileName ?? '',
-    waId: from,
+  let result
+  if (state.eventAddDraftId) {
+    result = await activateEvent(state.eventAddDraftId)
+    if (result.success) result.id = state.eventAddDraftId
+  } else {
+    const publisherInfo = { phone: from, name: context?.profileName ?? '', waId: from }
+    const rawEvent = buildRawEvent(state, publisherInfo)
+    const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
+    const mainCategory = (state.eventAddMainCategory ?? '').trim()
+    const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
+    const body = { rawEvent, media, mainCategory, categories }
+    if (opts.formattedEvent && typeof opts.formattedEvent === 'object') {
+      body.formattedEvent = opts.formattedEvent
+    }
+    result = await createEvent(body)
   }
-  const rawEvent = buildRawEvent(state, publisherInfo)
-  const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
-  const mainCategory = (state.eventAddMainCategory ?? '').trim()
-  const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
-  const body = { rawEvent, media, mainCategory, categories }
-  if (opts.formattedEvent && typeof opts.formattedEvent === 'object') {
-    body.formattedEvent = opts.formattedEvent
-  }
-
-  const result = await createEvent(body)
   if (!opts.keepStateForMaxMedia) {
     conversationState.clear(from)
   }
-
   if (result.success) {
     logger.info(LOG_PREFIXES.EVENT_ADD, 'Event created', from, result.id)
     await sendText(phoneNumberId, from, EVENT_ADD_SUCCESS)
   } else {
-    logger.error(LOG_PREFIXES.EVENT_ADD, 'Event create failed', from)
+    logger.error(LOG_PREFIXES.EVENT_ADD, 'Event create/activate failed', from)
     await sendText(phoneNumberId, from, 'משהו השתבש בשמירה. נסה שוב מאוחר יותר.')
   }
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)

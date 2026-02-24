@@ -7,7 +7,8 @@
  *       eventAddPlaceName, eventAddCity, eventAddAddressLine1,
  *       eventAddAddressLine2, eventAddLocationNotes, eventAddNavLinks,
  *       eventAddPrice, eventAddDescription, eventAddLinks, eventAddMedia[], eventAddLastActivityAt (ms).
- *       eventAddFormattedPreview (temporary: formatted event from format API for confirm step).
+ *       eventAddFormattedPreview (temporary: formatted event from process API for confirm step).
+ *       eventAddDraftId (draft record id in MongoDB; set after createDraft, used for process and activate).
  *       eventAddConfirmPending (temporary: true while handling max media, to avoid duplicate "נשמרו 6 קבצים" and multiple goToConfirm calls).
  *
  * State is in-memory only and is lost on process restart or deploy. Users in the middle of a flow
