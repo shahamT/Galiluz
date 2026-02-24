@@ -227,9 +227,11 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
   const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
   const mainCategory = (state.eventAddMainCategory ?? '').trim()
   const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
+  const payloadSummary = { mediaCount: media.length, hasRawTitle: !!rawEvent.rawTitle }
+  logger.info(LOG_PREFIXES.EVENT_ADD, 'goToConfirmOrRetryMedia', from, payloadSummary)
   const formatResult = await formatEvent({ rawEvent, media, mainCategory, categories })
   if (!formatResult.success || !formatResult.formattedEvent) {
-    logger.info(LOG_PREFIXES.EVENT_ADD, 'Format failed', from, formatResult.reason || 'no formattedEvent')
+    logger.info(LOG_PREFIXES.EVENT_ADD, 'Format failed', from, { ...payloadSummary, reason: formatResult.reason || 'no formattedEvent' })
     if (!opts.isMaxMedia) conversationState.set(from, { eventAddConfirmPending: undefined })
     await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
     const count = (state.eventAddMedia || []).length
@@ -812,12 +814,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_MEDIA) {
-    if (buttonId === EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON.id) {
+    if (msg.type === 'interactive' && buttonId === EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON.id) {
       conversationState.set(from, { eventAddMedia: [] })
       const s = conversationState.get(from)
       return goToConfirmOrRetryMedia(phoneNumberId, from, s, context)
     }
-    if (mediaId) {
+    if ((msg.type === 'image' || msg.type === 'video') && mediaId) {
       const currentCount = (state.eventAddMedia || []).length
       if (currentCount >= MAX_MEDIA) {
         if (state.eventAddConfirmPending) return Promise.resolve()
@@ -862,11 +864,11 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_MEDIA_MORE) {
-    if (buttonId === EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON.id) {
+    if (msg.type === 'interactive' && buttonId === EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON.id) {
       const s = conversationState.get(from)
       return goToConfirmOrRetryMedia(phoneNumberId, from, s, context)
     }
-    if (mediaId) {
+    if ((msg.type === 'image' || msg.type === 'video') && mediaId) {
       const currentCount = (state.eventAddMedia || []).length
       if (currentCount >= MAX_MEDIA) {
         if (state.eventAddConfirmPending) return Promise.resolve()
