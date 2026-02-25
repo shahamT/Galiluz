@@ -51,7 +51,12 @@ function loadConfig() {
     whatsappTestPhoneNumberId: (process.env.WHATSAPP_TEST_PHONE_NUMBER_ID || '').trim(),
     whatsappProdPhoneNumberId: (process.env.WHATSAPP_PROD_PHONE_NUMBER_ID || '').trim(),
     whatsappDevForwardEnabled: process.env.WHATSAPP_DEV_FORWARD_ENABLED === 'true',
-    whatsappDevForwardUrl: (process.env.WHATSAPP_DEV_FORWARD_URL || '').trim(),
+    whatsappDevForwardUrl: (() => {
+      const raw = (process.env.WHATSAPP_DEV_FORWARD_URL || '').trim()
+      const prefix = 'WHATSAPP_DEV_FORWARD_URL='
+      if (raw.startsWith(prefix)) return raw.slice(prefix.length).trim()
+      return raw
+    })(),
     whatsappDevForwardPath: (process.env.WHATSAPP_DEV_FORWARD_PATH || '/webhook').trim() || '/webhook',
   }
 }

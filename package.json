@@ -8,7 +8,6 @@
     "dev:web": "nuxt dev",
     "dev:wa": "npm --prefix apps/wa-listener run dev",
     "dev:wa-bot": "npm --prefix apps/wa-bot run dev",
-    "dev:wa-bot:ngrok": "concurrently -n wa-bot,ngrok -c blue,yellow \"npm --prefix apps/wa-bot run dev\" \"ngrok http 3001\"",
     "list-groups:wa": "npm --prefix apps/wa-listener run list-groups",
     "build": "nuxt build",
     "generate": "nuxt generate",
@@ -31,7 +30,6 @@
     "swiper": "^11.1.14"
   },
   "devDependencies": {
-    "concurrently": "^9.0.0",
     "sass": "^1.77.0"
   }
 }
