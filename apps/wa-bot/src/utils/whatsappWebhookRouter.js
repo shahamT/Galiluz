@@ -38,9 +38,26 @@ export function shouldForwardToDev(config, phoneNumberId, forwardedHeader) {
  * @param {string} [logPrefix] - Prefix for error log (e.g. LOG_PREFIXES.WEBHOOK)
  */
 export function forwardToDev(rawBody, config, logger, logPrefix = 'Webhook') {
-  const base = config.whatsappDevForwardUrl
-  const path = config.whatsappDevForwardPath || '/webhook'
-  const url = path.startsWith('/') ? `${base.replace(/\/$/, '')}${path}` : `${base}/${path}`
+  let base = (config.whatsappDevForwardUrl || '').trim()
+  // If value was pasted as KEY=value (e.g. from .env), use only the URL part
+  if (base.includes('=')) {
+    const afterEq = base.slice(base.indexOf('=') + 1).trim()
+    if (afterEq.startsWith('http://') || afterEq.startsWith('https://')) base = afterEq
+  }
+  base = base.replace(/\/$/, '')
+  const path = (config.whatsappDevForwardPath || '/webhook').trim() || '/webhook'
+  const pathNorm = path.startsWith('/') ? path : `/${path}`
+  let url
+  try {
+    const parsed = new URL(base)
+    if (parsed.pathname && parsed.pathname !== '/') {
+      url = base
+    } else {
+      url = `${base}${pathNorm}`
+    }
+  } catch {
+    url = `${base}${pathNorm}`
+  }
 
   fetch(url, {
     method: 'POST',
