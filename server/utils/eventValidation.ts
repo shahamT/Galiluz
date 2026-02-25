@@ -7,8 +7,8 @@ import { FALLBACK_CATEGORY_ID } from '~/server/consts/publisherEventConsts'
 
 /** Publisher-formatted event validation and normalization (wa-bot flow). */
 const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/
-/** Minimal ISO date-time pattern for startTime/endTime (UTC). */
-const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/
+/** ISO 8601 date-time (UTC or with offset). Seconds required; optional fractional seconds and Z or ±HH:MM. */
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/
 
 type OccurrenceLike = Record<string, unknown> & {
   date?: string

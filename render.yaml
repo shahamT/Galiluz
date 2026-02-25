@@ -70,7 +70,7 @@ services:
 # The "sync: false" flag means Render will prompt you to enter the value manually.
 
 envVarGroups:
-  # Shared between galiluz-web (Nuxt) and galiluz-wa (listener): DB, API secret, OpenAI
+  # Shared between galiluz-web (Nuxt) and galiluz-wa (listener): DB, API secret. No OpenAI (web does not use it; listener has own in wa-secrets).
   - name: galiluz-shared
     envVars:
       - key: MONGODB_URI
@@ -79,12 +79,8 @@ envVarGroups:
         sync: false
       - key: API_SECRET
         sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_MODEL
-        sync: false
 
-  # WA worker only – secrets that the Nuxt app does not need
+  # WA worker only – secrets that the Nuxt app does not need. Includes listener's own OpenAI key.
   - name: galiluz-wa-secrets
     envVars:
       - key: NODE_ENV
@@ -103,8 +99,12 @@ envVarGroups:
         sync: false
       - key: CLOUDINARY_FOLDER
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
 
-  # wa-bot (Cloud API webhook) – set in Render dashboard
+  # wa-bot (Cloud API webhook) – set in Render dashboard. OpenAI used for event format (wa-bot owns format).
   - name: galiluz-wa-bot-secrets
     envVars:
       - key: WEBHOOK_VERIFY_TOKEN
@@ -118,4 +118,8 @@ envVarGroups:
       - key: GALILUZ_APP_API_KEY
         sync: false
       - key: PUBLISHERS_APPROVER_WA_NUMBER
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
         sync: false

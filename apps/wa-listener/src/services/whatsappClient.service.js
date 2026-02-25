@@ -14,6 +14,8 @@ import { LOG_PREFIXES, TIMEOUTS } from '../consts/index.js'
 import { listAllGroups } from './group.service.js'
 
 let sock = null
+/** When true, connection close handler will not start reconnect (e.g. during graceful shutdown). */
+let isShuttingDown = false
 
 const baileysLogger = P({ level: 'silent' })
 
@@ -94,7 +96,7 @@ export async function initializeClient(options = {}) {
 
         if (connection === 'close') {
           const statusCode = (lastDisconnect?.error)?.output?.statusCode
-          const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+          const shouldReconnect = statusCode !== DisconnectReason.loggedOut && !isShuttingDown
 
           logger.info(LOG_PREFIXES.WHATSAPP, `Connection closed. Status: ${statusCode}. Reconnect: ${shouldReconnect}`)
 
@@ -149,8 +151,10 @@ export function getClient() {
 
 /**
  * Destroys the socket connection.
+ * Sets isShuttingDown so the connection-close handler does not start a reconnect.
  */
 export async function destroyClient() {
+  isShuttingDown = true
   if (sock) {
     try {
       sock.end(undefined)

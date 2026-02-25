@@ -22,6 +22,8 @@ function loadConfig() {
     if (!verifyToken) missing.push('WEBHOOK_VERIFY_TOKEN')
     if (!accessToken) missing.push('WA_CLOUD_ACCESS_TOKEN')
     if (!phoneNumberId) missing.push('WA_PHONE_NUMBER_ID')
+    const openaiKey = (process.env.OPENAI_API_KEY || '').trim()
+    if (!openaiKey) missing.push('OPENAI_API_KEY')
     if (missing.length > 0) {
       logError('Missing required environment variables:')
       logErrors(missing.map((v) => `  - ${v}`))
@@ -44,6 +46,8 @@ function loadConfig() {
     galiluzAppApiKey: process.env.GALILUZ_APP_API_KEY || process.env.API_SECRET || '',
     publishersApproverWaNumber: process.env.PUBLISHERS_APPROVER_WA_NUMBER || '',
     logLevel: process.env.LOG_LEVEL || 'info',
+    openaiApiKey: (process.env.OPENAI_API_KEY || '').trim(),
+    openaiModel: (process.env.OPENAI_MODEL || 'gpt-4o-mini').trim() || 'gpt-4o-mini',
   }
 }
 

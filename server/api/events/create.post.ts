@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { getCategoriesList } from '~/server/consts/events.const'
-import { formatPublisherEvent } from '~/server/services/eventFormatOpenAI'
+import { validatePublisherFormattedEvent, normalizePublisherFormattedEvent } from '~/server/utils/eventValidation'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
 
@@ -12,34 +12,34 @@ interface PublisherInfo {
   waId: string
 }
 
-/** Request body from wa-bot: rawEvent (raw* keys), media, mainCategory, categories. Optional formattedEvent: when provided (after user confirmed preview), skip format and insert it. */
+/** Request body: formattedEvent (required), rawEvent, media, mainCategory, categories for stored rawEvent. */
 interface CreateBody {
-  rawEvent: Record<string, unknown> & { publisher?: PublisherInfo }
-  media: Array<{ cloudinaryURL: string; cloudinaryData: Record<string, unknown>; isMain?: boolean }>
-  mainCategory: string
-  categories: string[]
-  /** Pre-formatted event from /api/events/format (user confirmed); when valid, format step is skipped. */
-  formattedEvent?: Record<string, unknown>
+  formattedEvent: Record<string, unknown>
+  rawEvent?: Record<string, unknown> & { publisher?: PublisherInfo }
+  media?: Array<{ cloudinaryURL: string; cloudinaryData: Record<string, unknown>; isMain?: boolean }>
+  mainCategory?: string
+  categories?: string[]
 }
 
-/** Creates an event from wa-bot payload: validate body, enrich rawEvent, format via OpenAI, insert doc (event + rawEvent). */
+/** Insert event. formattedEvent is required (wa-bot formats locally). */
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
   const correlationId = randomBytes(4).toString('hex')
   const body = await readBody<CreateBody>(event)
 
-  const rawEvent = body?.rawEvent
-  const media = Array.isArray(body?.media) ? body.media : []
-  const mainCategory = typeof body?.mainCategory === 'string' ? body.mainCategory.trim() : ''
-  const categories = Array.isArray(body?.categories) ? body.categories.filter((c) => typeof c === 'string') : []
-
-  if (!rawEvent || typeof rawEvent !== 'object') {
+  const formattedEventSupplied = body?.formattedEvent && typeof body.formattedEvent === 'object' ? body.formattedEvent as Record<string, unknown> : null
+  if (!formattedEventSupplied) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Bad Request',
-      message: 'rawEvent is required',
+      message: 'formattedEvent is required',
     })
   }
+
+  const rawEvent = body?.rawEvent && typeof body.rawEvent === 'object' ? body.rawEvent : {}
+  const media = Array.isArray(body?.media) ? body.media : []
+  const mainCategory = typeof body?.mainCategory === 'string' ? body.mainCategory.trim() : ''
+  const categories = Array.isArray(body?.categories) ? body.categories.filter((c) => typeof c === 'string') : []
 
   const config = useRuntimeConfig()
   const mongoUri = config.mongodbUri || process.env.MONGODB_URI
@@ -92,61 +92,16 @@ export default defineEventHandler(async (event) => {
     rawMedia: media,
   }
 
-  const inputSummary = {
-    rawTitleLength: typeof rawEventWithAll.rawTitle === 'string' ? rawEventWithAll.rawTitle.trim().length : 0,
-    hasRawOccurrences: Boolean(rawEventWithAll.rawOccurrences && String(rawEventWithAll.rawOccurrences).trim()),
-    rawMainCategory: rawEventWithAll.rawMainCategory || '(empty)',
-    rawCategoriesCount: Array.isArray(rawEventWithAll.rawCategories) ? rawEventWithAll.rawCategories.length : 0,
-    rawMediaCount: Array.isArray(rawEventWithAll.rawMedia) ? rawEventWithAll.rawMedia.length : 0,
-    hasFormattedEvent: Boolean(body?.formattedEvent && typeof body.formattedEvent === 'object'),
-  }
-  console.info(LOG_PREFIX, correlationId, 'start', JSON.stringify(inputSummary))
-
-  let formattedEvent: Record<string, unknown> | null = null
-  let formatFailureReason: string | undefined
-  const suppliedFormatted = body?.formattedEvent && typeof body.formattedEvent === 'object' ? body.formattedEvent as Record<string, unknown> : null
-  const isValidSuppliedEvent =
-    suppliedFormatted &&
-    typeof suppliedFormatted.Title === 'string' &&
-    suppliedFormatted.location &&
-    typeof suppliedFormatted.location === 'object' &&
-    Array.isArray(suppliedFormatted.occurrences) &&
-    suppliedFormatted.occurrences.length > 0
-
-  if (isValidSuppliedEvent) {
-    formattedEvent = suppliedFormatted
-    console.info(LOG_PREFIX, correlationId, 'using supplied formattedEvent (user confirmed)')
-  } else {
-    try {
-      const categoriesList = getCategoriesList()
-      console.info(LOG_PREFIX, correlationId, 'format start')
-      const formattedResult = await formatPublisherEvent(rawEventWithAll, categoriesList, { correlationId })
-      if (formattedResult.formattedEvent) {
-        formattedEvent = formattedResult.formattedEvent as unknown as Record<string, unknown>
-        const ev = formattedResult.formattedEvent
-        const occCount = Array.isArray(ev.occurrences) ? ev.occurrences.length : 0
-        console.info(LOG_PREFIX, correlationId, 'format success', JSON.stringify({
-          occurrencesCount: occCount,
-          city: ev.location?.City ?? '',
-          mainCategory: ev.mainCategory ?? '',
-        }))
-      } else {
-        formatFailureReason = formattedResult.errorReason ?? 'format returned null'
-        console.warn(LOG_PREFIX, correlationId, 'format failed', JSON.stringify({ reason: formatFailureReason }))
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      formatFailureReason = msg
-      console.error(LOG_PREFIX, correlationId, 'format error', JSON.stringify({ error: msg }))
-    }
-  }
-
-  if (formattedEvent === null) {
-    console.warn(LOG_PREFIX, correlationId, 'abort: no formatted event (format failed or missing)')
+  const validCategoryIds = getCategoriesList().map((c) => c.id)
+  const formattedEvent = { ...formattedEventSupplied }
+  normalizePublisherFormattedEvent(formattedEvent, validCategoryIds)
+  const validation = validatePublisherFormattedEvent(formattedEvent)
+  if (!validation.valid) {
+    console.warn(LOG_PREFIX, correlationId, 'validation failed', JSON.stringify({ reason: validation.reason }))
     throw createError({
       statusCode: 422,
       statusMessage: 'Unprocessable Entity',
-      message: formatFailureReason ?? 'Event format failed or missing; cannot create',
+      message: validation.reason,
     })
   }
 

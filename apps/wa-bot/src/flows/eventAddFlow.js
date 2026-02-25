@@ -13,6 +13,7 @@ import { createDraft, processDraft, activateEvent } from '../services/eventsCrea
 import { createEvent } from '../services/eventsCreate.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { normalizePhone } from '../config.js'
+import { getDateInIsraelFromIso, getTimeInIsraelFromIso } from '../utils/date.helpers.js'
 import { logger } from '../utils/logger.js'
 import {
   EVENT_ADD_INITIAL,
@@ -313,7 +314,7 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
     draftId = draftResult.id
     conversationState.set(from, { eventAddDraftId: draftId })
   }
-  const processResult = await processDraft(draftId)
+  const processResult = await processDraft(draftId, { rawEvent, media, mainCategory, categories })
   if (!processResult.success || !processResult.formattedEvent) {
     logger.info(LOG_PREFIXES.EVENT_ADD, 'Process failed', from, { draftId, reason: processResult.reason || 'no formattedEvent' })
     conversationState.set(from, { eventAddConfirmPending: undefined })
@@ -494,8 +495,11 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
     logger.info(LOG_PREFIXES.EVENT_ADD, 'Event created', from, result.id)
     await sendText(phoneNumberId, from, EVENT_ADD_SUCCESS)
   } else {
-    logger.error(LOG_PREFIXES.EVENT_ADD, 'Event create/activate failed', from)
-    await sendText(phoneNumberId, from, 'משהו השתבש בשמירה. נסה שוב מאוחר יותר.')
+    logger.error(LOG_PREFIXES.EVENT_ADD, 'Event create/activate failed', from, result.reason || '')
+    const failMsg = result.reason && result.reason.length <= 200
+      ? `משהו השתבש בשמירה: ${result.reason}\n\nנסה שוב מאוחר יותר.`
+      : 'משהו השתבש בשמירה. נסה שוב מאוחר יותר.'
+    await sendText(phoneNumberId, from, failMsg)
   }
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }

@@ -26,14 +26,18 @@ wa-bot is a small web service that receives WhatsApp Cloud API webhooks and can 
 ## Production (Render)
 
 1. In Render, ensure the **galiluz-wa-bot** service exists (from `render.yaml`).
-2. In the **galiluz-wa-bot-secrets** env group, set:
+2. **Build:** wa-bot depends on the shared package `packages/event-format` via `file:../../packages/event-format`. Render runs `npm install` from `apps/wa-bot` (rootDir). The repo must be cloned in full (no shallow clone that omits `packages/`) so the file dependency resolves.
+3. In the **galiluz-wa-bot-secrets** env group, set:
    - `WEBHOOK_VERIFY_TOKEN` (same as in Meta).
    - `WA_CLOUD_ACCESS_TOKEN` (use a permanent token for production).
    - `WA_PHONE_NUMBER_ID`.
    - `GALILUZ_APP_API_KEY` (same value as `API_SECRET` on galiluz-web, so wa-bot can call the events API).
+   - `OPENAI_API_KEY` and `OPENAI_MODEL` (event formatting runs in wa-bot; use your own OpenAI key for the bot).
    - **Optional:** `PUBLISHERS_APPROVER_WA_NUMBER` – WhatsApp number (digits only, e.g. `972507153850`) of the person who approves new publishers; when set, they receive approval requests with Approve/Reject buttons.
-3. Webhook URL in Meta: `https://<galiluz-wa-bot>.onrender.com/webhook` (replace with your actual Render service URL).
-4. Verify token in Meta must match `WEBHOOK_VERIFY_TOKEN`.
+
+**Note:** galiluz-web (Nuxt) does not use OpenAI; only wa-bot and the listener do, each with their own keys (wa-bot in galiluz-wa-bot-secrets, listener in galiluz-wa-secrets).
+4. Webhook URL in Meta: `https://<galiluz-wa-bot>.onrender.com/webhook` (replace with your actual Render service URL).
+5. Verify token in Meta must match `WEBHOOK_VERIFY_TOKEN`.
 
 ## Endpoints
 
