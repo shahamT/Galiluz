@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "check-webhook-router": "node scripts/check-webhook-router.js"
   },
   "dependencies": {
     "@flasd/whatsapp-formatting": "^0.2.0",

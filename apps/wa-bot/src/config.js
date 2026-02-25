@@ -48,6 +48,11 @@ function loadConfig() {
     logLevel: process.env.LOG_LEVEL || 'info',
     openaiApiKey: (process.env.OPENAI_API_KEY || '').trim(),
     openaiModel: (process.env.OPENAI_MODEL || 'gpt-4o-mini').trim() || 'gpt-4o-mini',
+    whatsappTestPhoneNumberId: (process.env.WHATSAPP_TEST_PHONE_NUMBER_ID || '').trim(),
+    whatsappProdPhoneNumberId: (process.env.WHATSAPP_PROD_PHONE_NUMBER_ID || '').trim(),
+    whatsappDevForwardEnabled: process.env.WHATSAPP_DEV_FORWARD_ENABLED === 'true',
+    whatsappDevForwardUrl: (process.env.WHATSAPP_DEV_FORWARD_URL || '').trim(),
+    whatsappDevForwardPath: (process.env.WHATSAPP_DEV_FORWARD_PATH || '/webhook').trim() || '/webhook',
   }
 }
 

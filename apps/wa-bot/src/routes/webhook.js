@@ -41,6 +41,11 @@ import {
   rejectPublisher,
 } from '../services/publishers.service.js'
 import { CATEGORY_GROUPS, CATEGORY_ALL_ID } from '../consts/categories.const.js'
+import {
+  getPhoneNumberId,
+  shouldForwardToDev,
+  forwardToDev,
+} from '../utils/whatsappWebhookRouter.js'
 
 /** In-memory: approver waId -> (publisher waId -> fullName) for confirmation messages */
 const pendingPublisherNamesByApprover = new Map()
@@ -469,7 +474,8 @@ export function handleGet(req, res) {
 }
 
 /**
- * POST: Incoming webhook payload. Respond 200 quickly; process messages async.
+ * POST: Incoming webhook payload. Respond 200 quickly; process or forward async.
+ * When dev forward is enabled and payload is for test number, forward to ngrok and do not process.
  */
 export function handlePost(req, res) {
   let raw = ''
@@ -479,7 +485,24 @@ export function handlePost(req, res) {
     res.end(JSON.stringify({ ok: true }))
     try {
       const body = JSON.parse(raw || '{}')
-      logger.info(LOG_PREFIXES.WEBHOOK, 'POST body received', JSON.stringify(body).slice(0, 500))
+      const phoneNumberId = getPhoneNumberId(body)
+      const forwardedHeader = req.headers['x-dev-forwarded']
+
+      if (shouldForwardToDev(config, phoneNumberId, forwardedHeader)) {
+        forwardToDev(raw, config, logger, LOG_PREFIXES.WEBHOOK)
+        logger.info(LOG_PREFIXES.WEBHOOK, '[DEV FORWARD] test payload -> ngrok')
+        return
+      }
+
+      if (forwardedHeader === '1') {
+        const firstMsg = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]
+        const summary = firstMsg
+          ? `from=${firstMsg.from} type=${firstMsg.type || 'unknown'}`
+          : ''
+        logger.info(LOG_PREFIXES.WEBHOOK, `[DEV WEBHOOK RECEIVED] phone_number_id=${phoneNumberId || 'n/a'} ${summary}`.trim())
+      } else {
+        logger.info(LOG_PREFIXES.WEBHOOK, 'POST body received', JSON.stringify(body).slice(0, 500))
+      }
       processWebhookBody(body)
     } catch (err) {
       logger.error(LOG_PREFIXES.WEBHOOK, 'Webhook parse error', err)

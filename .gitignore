@@ -100,6 +100,7 @@ apps/wa-listener/.env.*
 # WhatsApp Cloud API bot
 apps/wa-bot/.env
 apps/wa-bot/.env.*
+!apps/wa-bot/.env.example
 apps/wa-listener/google-vision-key.json
 apps/wa-listener/auth/
 apps/wa-listener/data/
