@@ -12,18 +12,34 @@
   >
     <div class="DayCell-number">{{ day.dayNumber }}</div>
     <div v-if="!day.isOutsideMonth && day.eventsCount > 0" class="DayCell-events">
-      <div
-        v-for="(event, index) in displayEvents"
-        :key="event.id || index"
-        class="DayCell-chip"
-        :class="{ 'DayCell-chip--more': event.isMore }"
-        :style="event.isMore ? {} : { backgroundColor: getEventChipColor(event.mainCategory) }"
-        v-tooltip="event.isMore ? undefined : (event.title || '')"
-      >
-        <span class="DayCell-chipText" :class="{ 'DayCell-chipText--more': event.isMore }">
-          {{ event.isMore ? getMoreChipText() : (event.title || '') }}
-        </span>
-      </div>
+      <ClientOnly>
+        <div
+          v-for="(event, index) in displayEvents"
+          :key="event.id || index"
+          class="DayCell-chip"
+          :class="{ 'DayCell-chip--more': event.isMore }"
+          :style="event.isMore ? {} : { backgroundColor: getEventChipColor(event.mainCategory) }"
+          v-tooltip="event.isMore ? undefined : (event.title || '')"
+        >
+          <span class="DayCell-chipText" :class="{ 'DayCell-chipText--more': event.isMore }">
+            {{ event.isMore ? getMoreChipText() : (event.title || '') }}
+          </span>
+        </div>
+        <template #fallback>
+          <div
+            v-for="(event, index) in displayEvents"
+            :key="event.id || index"
+            class="DayCell-chip"
+            :class="{ 'DayCell-chip--more': event.isMore }"
+            :style="event.isMore ? {} : { backgroundColor: getEventChipColor(event.mainCategory) }"
+            :title="event.isMore ? undefined : (event.title || '')"
+          >
+            <span class="DayCell-chipText" :class="{ 'DayCell-chipText--more': event.isMore }">
+              {{ event.isMore ? getMoreChipText() : (event.title || '') }}
+            </span>
+          </div>
+        </template>
+      </ClientOnly>
     </div>
   </div>
 </template>
