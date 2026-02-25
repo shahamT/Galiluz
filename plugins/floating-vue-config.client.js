@@ -1,10 +1,11 @@
 /**
- * Configure floating-vue defaults (runs after floating-vue/nuxt plugin).
- * Sets tooltip distance so there is a visible gap between trigger and tooltip.
+ * Register floating-vue and set defaults (replaces floating-vue/nuxt module;
+ * styles are bundled via ~/assets/css/main.scss).
  */
+import FloatingVue from 'floating-vue'
 import { options } from 'floating-vue'
 
-export default defineNuxtPlugin(() => {
-  // Default is 5; set to 9 so there is a visible ~4px gap between trigger and tooltip
+export default defineNuxtPlugin((nuxtApp) => {
+  nuxtApp.vueApp.use(FloatingVue)
   options.distance = 9
 })

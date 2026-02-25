@@ -86,8 +86,14 @@ useSeoMeta({
 const monthYearDisplay = computed(() => {
   return formatMonthYear(currentYear.value, currentMonth.value)
 })
+// Avoid hydration mismatch: server cannot know "current month" (no client date). Use same value
+// on first paint (false), then apply real value after mount.
+const isMounted = ref(false)
+onMounted(() => {
+  isMounted.value = true
+})
 const isCurrentMonth = computed(() => {
-  if (import.meta.server) return false
+  if (!isMounted.value) return false
   const now = new Date()
   const date = currentDate.value
   return date && date.year === now.getFullYear() && date.month === now.getMonth() + 1

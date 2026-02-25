@@ -3,9 +3,12 @@
 @use './typography.scss' as *;
 
 // Swiper carousel styles
-@import 'swiper/css';
-@import 'swiper/css/navigation';
-@import 'swiper/css/pagination';
+@use 'swiper/css';
+@use 'swiper/css/navigation';
+@use 'swiper/css/pagination';
+
+// Bundle floating-vue styles (avoids 404 when loaded via floating-vue/nuxt in some setups)
+@use 'floating-vue/dist/style.css';
 
 // Hide floating-vue tooltips on mobile (desktop only)
 @media (max-width: var(--breakpoint-mobile)) {

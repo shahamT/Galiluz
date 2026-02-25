@@ -10,7 +10,19 @@ export default defineNuxtConfig({
   
   css: ['~/assets/css/main.scss'],
   
-  modules: ['@pinia/nuxt', '@vueuse/nuxt', 'floating-vue/nuxt'],
+  modules: ['@pinia/nuxt', '@vueuse/nuxt'],
+
+  build: {
+    transpile: ['floating-vue', '@floating-ui/core', '@floating-ui/dom'],
+  },
+
+  vue: {
+    compilerOptions: {
+      directiveTransforms: {
+        tooltip: () => ({ props: [], needRuntime: true }),
+      },
+    },
+  },
   
   app: {
     head: {

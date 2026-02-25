@@ -116,7 +116,15 @@ const visibleDays = computed(() => {
   return days
 })
 const today = computed(() => getTodayDateString())
-const isTodayOrPast = computed(() => dateParam.value <= today.value)
+// Avoid hydration mismatch: server date can differ from client. Use same value on first paint (false).
+const isMounted = ref(false)
+onMounted(() => {
+  isMounted.value = true
+})
+const isTodayOrPast = computed(() => {
+  if (!isMounted.value) return false
+  return dateParam.value <= today.value
+})
 const eventsByDate = computed(() => getFilteredEventsByDate(visibleDays.value))
 
 // SEO metadata (reactive: useHead tracks pageTitle)
