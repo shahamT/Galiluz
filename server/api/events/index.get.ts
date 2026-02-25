@@ -1,6 +1,5 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { checkRateLimit } from '~/server/utils/rateLimit'
-import { requireApiSecret } from '~/server/utils/requireApiSecret'
 import { transformEventForFrontend } from '~/server/utils/eventsTransform'
 import {
   parseDatesParam,
@@ -19,7 +18,6 @@ function getCutoffDate(): Date {
 }
 
 export default defineEventHandler(async (event) => {
-  requireApiSecret(event)
   await checkRateLimit(event)
   const config = useRuntimeConfig()
   const mongoUri = config.mongodbUri || process.env.MONGODB_URI
