@@ -55,7 +55,7 @@ services:
     plan: starter
     region: frankfurt
     rootDir: apps/wa-bot
-    buildCommand: npm install
+    buildCommand: npm install && (cd ../../packages/event-format && npm install)
     startCommand: npm start
     healthCheckPath: /health
     envVars:

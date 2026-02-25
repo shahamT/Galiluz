@@ -8,7 +8,9 @@
     "start": "node src/index.js"
   },
   "dependencies": {
+    "@flasd/whatsapp-formatting": "^0.2.0",
     "dotenv": "^16.3.1",
-    "event-format": "file:../../packages/event-format"
+    "event-format": "file:../../packages/event-format",
+    "openai": "^4.77.0"
   }
 }
