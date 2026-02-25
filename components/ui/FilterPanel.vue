@@ -33,31 +33,11 @@
         role="tabpanel"
         class="FilterPanel-panel FilterPanel-panel--categories"
       >
-        <div
-          v-for="group in categoriesByGroup"
-          :key="group.id"
-          class="FilterPanel-group"
-        >
-          <div class="FilterPanel-groupHeader">
-            <h3 class="FilterPanel-groupTitle">{{ group.label }}</h3>
-            <button
-              type="button"
-              class="FilterPanel-groupToggleButton"
-              :aria-label="isGroupFullySelected(group) ? ariaRemoveAllGroup : ariaSelectAllGroup"
-              @click="handleGroupToggleAll(group)"
-            >
-              {{ isGroupFullySelected(group) ? REMOVE_ALL_GROUP : SELECT_ALL_GROUP }}
-            </button>
-          </div>
-          <UiCategoryPill
-            v-for="item in group.categories"
-            :key="item.id"
-            :category="item.category"
-            :category-id="item.id"
-            :is-selected="selectedCategoriesList.includes(item.id)"
-            @click="handleToggleCategory(item.id)"
-          />
-        </div>
+        <UiCategoryFilterContent
+          :categories="categoriesList"
+          :model-value="selectedCategoriesList"
+          @update:model-value="handleCategoriesUpdate"
+        />
       </div>
       <div
         v-show="activeTab === 'hours'"
@@ -91,7 +71,6 @@
 
 <script setup>
 import { UI_TEXT, MINUTES_PER_DAY } from '~/consts/calendar.const'
-import { CATEGORY_GROUPS } from '~/consts/events.const'
 
 defineOptions({ name: 'FilterPanel' })
 
@@ -258,56 +237,6 @@ function handleClearAllFilters() {
 
     &--hours {
       padding: var(--spacing-sm) 0;
-    }
-  }
-
-  &-group {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-md);
-    row-gap: calc((var(--spacing-sm) + var(--spacing-md)) / 2);
-
-    &:not(:first-child) {
-      border-top: 1px solid var(--color-border);
-      padding-top: var(--spacing-sm);
-      margin-top: var(--spacing-xs);
-    }
-  }
-
-  &-groupHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    margin-bottom: var(--spacing-md);
-    gap: var(--spacing-sm);
-  }
-
-  &-groupTitle {
-    flex: 1;
-    margin: 0;
-    font-size: var(--font-size-base);
-    font-weight: 600;
-    color: var(--color-text-light);
-    text-align: start;
-  }
-
-  &-groupToggleButton {
-    flex-shrink: 0;
-    background: none;
-    border: none;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--brand-dark-green);
-    cursor: pointer;
-    transition: opacity 0.2s ease;
-
-    &:hover {
-      opacity: 0.85;
-      text-decoration: underline;
     }
   }
 

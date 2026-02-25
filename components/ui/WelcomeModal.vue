@@ -6,57 +6,137 @@
       @click.self="handleDismiss"
     >
       <div class="WelcomeModal-content">
-        <section class="WelcomeModal-body">
-          <div class="WelcomeModal-bodyInner">
-            <img
-              src="/logos/galiluz-logo.svg"
-              alt="גלילוז"
-              class="WelcomeModal-logo"
-            />
-            <p class="WelcomeModal-intro">
-              ברוכים הבאים לגרסת הבטא של <span class="WelcomeModal-brandGreen">גלי</span><span class="WelcomeModal-brandBlue">לו"ז</span>!
-            </p>
-            <p class="WelcomeModal-disclaimer">
-              בגרסה זו - האירועים המופיעים בלו"ז התקבלו מפרסומים בקבוצות וואטסאפ ולא ישירות מהמארגנים. האירועים עברו עיבוד בAI כדי להציג אותם בצורה מיטבית ואין לנו איך לאמת את הפרטים.
-              <span class="WelcomeModal-disclaimerHighlight">אז לפני שאתם שמים את האירוע ביומן - אל תשכחו לוודא שהבינה המלאכותית לא הוזה...</span>
-            </p>
-            <p class="WelcomeModal-organizers">
-              מארגנים אירוע/אירועים? מעוניינים לפרסם אצלנו אירועים בעצמכם בצורה ישירה?
-              <a
-                :href="CONTACT_WHATSAPP_LINK"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="WelcomeModal-whatsappLink"
-              >שלחו לנו הודעה</a>
-            </p>
-          </div>
-        </section>
-        <div class="WelcomeModal-actions">
+        <header
+          v-if="currentStep >= 1"
+          class="WelcomeModal-header"
+        >
+          <h2 class="WelcomeModal-headerTitle">
+            {{ currentStep === 1 ? WELCOME_MODAL.stepTitleRegion : WELCOME_MODAL.stepTitleCategories }}
+          </h2>
           <button
             type="button"
-            class="WelcomeModal-ctaButton"
+            class="WelcomeModal-closeButton"
+            aria-label="סגור"
             @click="handleDismiss"
           >
-            {{ WELCOME_CTA_TEXT }}
+            <UiIcon name="close" size="md" />
           </button>
-        </div>
+        </header>
+        <section class="WelcomeModal-body">
+          <div
+            class="WelcomeModal-bodyInner"
+            :class="{ 'WelcomeModal-bodyInner--step0': currentStep === 0 }"
+          >
+            <template v-if="currentStep === 0">
+              <div class="WelcomeModal-step0Main">
+                <img
+                  src="/logos/galiluz-logo.svg"
+                  alt="גלילוז"
+                  class="WelcomeModal-logo"
+                />
+                <p class="WelcomeModal-introSubtitle">
+                  {{ WELCOME_MODAL.introSubtitle }}
+                </p>
+                <p class="WelcomeModal-introLine1">
+                  {{ WELCOME_MODAL.introLine1 }}
+                </p>
+                <p class="WelcomeModal-introLine2">
+                  {{ WELCOME_MODAL.introLine2 }}
+                </p>
+                <button
+                  type="button"
+                  class="WelcomeModal-primaryButton WelcomeModal-introActionButton"
+                  @click="handleStart"
+                >
+                  {{ WELCOME_MODAL.startButtonLabel }}
+                </button>
+              </div>
+              <div class="WelcomeModal-step0Bottom">
+                <p class="WelcomeModal-skipCaption">
+                  {{ WELCOME_MODAL.skipIntroCaption }}
+                </p>
+                <button
+                  type="button"
+                  class="WelcomeModal-skipButton WelcomeModal-introActionButton"
+                  @click="handleDismiss"
+                >
+                  {{ WELCOME_MODAL.skipIntroLabel }}
+                </button>
+              </div>
+            </template>
+            <template v-else-if="currentStep === 1">
+              <p class="WelcomeModal-regionsHeading">
+                {{ WELCOME_MODAL.regionsHeading }}
+              </p>
+              <div class="WelcomeModal-regionButtons">
+                <button
+                  v-for="region in WELCOME_REGION_OPTIONS"
+                  :key="region.id"
+                  type="button"
+                  class="WelcomeModal-regionBtn"
+                  :class="{ 'WelcomeModal-regionBtn--active': selectedRegions.includes(region.id) }"
+                  @click="toggleRegion(region.id)"
+                >
+                  {{ region.label }}
+                </button>
+              </div>
+            </template>
+            <template v-else>
+              <p class="WelcomeModal-categoriesHeading">
+                {{ WELCOME_MODAL.categoriesHeading }}
+              </p>
+              <UiCategoryFilterContent
+                v-if="categoriesData && Object.keys(categoriesData).length"
+                :categories="categoriesData"
+                :model-value="localSelectedCategories"
+                @update:model-value="onCategoriesUpdate"
+              />
+            </template>
+          </div>
+        </section>
+        <footer
+          v-if="currentStep >= 1"
+          class="WelcomeModal-footer"
+        >
+          <button
+            type="button"
+            class="WelcomeModal-skipButton"
+            @click="handleDismiss"
+          >
+            {{ WELCOME_MODAL.skipLabel }}
+          </button>
+          <button
+            type="button"
+            class="WelcomeModal-primaryButton"
+            @click="currentStep === 1 ? handleNextStep() : handleTakeMeToSchedule()"
+          >
+            {{ currentStep === 1 ? WELCOME_MODAL.nextStepLabel : WELCOME_MODAL.takeMeToScheduleLabel }}
+          </button>
+        </footer>
       </div>
     </div>
   </Teleport>
 </template>
 
 <script setup>
-import { WELCOME_MODAL_STORAGE_KEY, WELCOME_MODAL_EXPIRY_DAYS, CONTACT_WHATSAPP_LINK } from '~/consts/ui.const'
+import {
+  WELCOME_MODAL_STORAGE_KEY,
+  WELCOME_MODAL,
+  WELCOME_REGION_OPTIONS,
+} from '~/consts/ui.const'
 
 defineOptions({ name: 'WelcomeModal' })
 
 defineEmits(['close'])
 
-const WELCOME_CTA_TEXT = 'יאללה קחו אותי ללו"ז'
-
 const isVisible = ref(false)
+const currentStep = ref(0)
+const selectedRegions = ref([])
+const localSelectedCategories = ref([])
 
-const EXPIRY_MS = WELCOME_MODAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+const { data: categoriesData } = useCategories()
+const calendarStore = useCalendarStore()
+const { timeFilterStart, timeFilterEnd, timeFilterPreset } = storeToRefs(calendarStore)
 
 onMounted(() => {
   if (import.meta.server) return
@@ -68,16 +148,20 @@ onMounted(() => {
     const stored = localStorage.getItem(WELCOME_MODAL_STORAGE_KEY)
     if (!stored) {
       isVisible.value = true
-      return
-    }
-    const seenAt = new Date(stored).getTime()
-    if (Number.isNaN(seenAt) || Date.now() - seenAt > EXPIRY_MS) {
-      isVisible.value = true
     }
   } catch {
     isVisible.value = true
   }
 })
+
+function toggleRegion(regionId) {
+  const idx = selectedRegions.value.indexOf(regionId)
+  if (idx > -1) {
+    selectedRegions.value = selectedRegions.value.filter((id) => id !== regionId)
+  } else {
+    selectedRegions.value = [...selectedRegions.value, regionId]
+  }
+}
 
 function handleDismiss() {
   try {
@@ -86,6 +170,28 @@ function handleDismiss() {
     // ignore
   }
   isVisible.value = false
+}
+
+function handleStart() {
+  currentStep.value = 1
+}
+
+function handleNextStep() {
+  currentStep.value = 2
+}
+
+function handleTakeMeToSchedule() {
+  calendarStore.setFiltersFromUrl(
+    localSelectedCategories.value,
+    timeFilterStart.value,
+    timeFilterEnd.value,
+    timeFilterPreset.value
+  )
+  handleDismiss()
+}
+
+function onCategoriesUpdate(ids) {
+  localSelectedCategories.value = ids
 }
 </script>
 
@@ -108,10 +214,11 @@ function handleDismiss() {
   &-content {
     position: relative;
     width: 100%;
+    min-width: var(--popup-min-width);
     max-width: var(--modal-max-width);
-    max-height: 100%;
+    max-height: min(650px, calc(100vh - 2 * var(--spacing-lg)));
     border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
+    padding: 0;
     display: flex;
     flex-direction: column;
     background-color: var(--light-bg);
@@ -119,15 +226,50 @@ function handleDismiss() {
     overflow: hidden;
 
     @include mobile {
+      min-width: 0;
       width: 100%;
       height: 100%;
       max-width: 100%;
       max-height: 100%;
       border-radius: 0;
       margin: 0;
-      padding: var(--spacing-lg);
-      display: grid;
-      grid-template-rows: 1fr auto;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+  }
+
+  &-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+
+  &-headerTitle {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  &-closeButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text);
+    transition: opacity 0.2s ease;
+    border-radius: 50%;
+
+    &:hover {
+      opacity: 0.7;
+      background-color: var(--day-cell-hover-bg);
     }
   }
 
@@ -141,6 +283,13 @@ function handleDismiss() {
     gap: 0;
     text-align: center;
     direction: ltr;
+    padding: var(--spacing-lg);
+
+    @include mobile {
+      flex: 1;
+      min-height: 0;
+      padding: var(--spacing-lg);
+    }
   }
 
   &-bodyInner {
@@ -151,6 +300,39 @@ function handleDismiss() {
     gap: var(--spacing-lg);
     text-align: center;
     min-height: min-content;
+    width: 100%;
+
+    &--step0 {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      grid-template-columns: 1fr;
+      gap: 0;
+      min-height: 100%;
+      align-items: start;
+      justify-items: center;
+    }
+  }
+
+  &-step0Main {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-lg);
+    text-align: center;
+    width: 100%;
+    max-width: 20rem;
+    min-height: 0;
+  }
+
+  &-step0Bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-md);
+    text-align: center;
+    width: 100%;
+    max-width: 20rem;
+    padding-top: var(--spacing-lg);
   }
 
   &-logo {
@@ -159,13 +341,14 @@ function handleDismiss() {
     height: auto;
     display: block;
     flex-shrink: 0;
+    align-self: center;
 
     @include mobile {
       max-width: 16rem;
     }
   }
 
-  &-intro {
+  &-introSubtitle {
     font-size: var(--font-size-lg);
     font-weight: 600;
     color: var(--color-text);
@@ -173,23 +356,13 @@ function handleDismiss() {
     line-height: 1.4;
 
     @include mobile {
-      font-size: var(--font-size-2xl);
+      font-size: var(--font-size-xl);
     }
   }
 
-  &-brandGreen {
-    color: var(--brand-dark-green);
-    font-weight: 700;
-  }
-
-  &-brandBlue {
-    color: var(--brand-dark-blue);
-    font-weight: 700;
-  }
-
-  &-disclaimer,
-  &-organizers {
+  &-introLine1 {
     font-size: var(--font-size-base);
+    font-weight: 400;
     color: var(--color-text);
     margin: 0;
     line-height: 1.5;
@@ -199,66 +372,174 @@ function handleDismiss() {
     }
   }
 
-  &-disclaimer {
-    color: var(--color-text-light);
-  }
-
-  &-disclaimerHighlight {
-    color: var(--color-text);
-  }
-
-  &-organizers {
-    font-weight: 500;
-  }
-
-  &-whatsappLink {
+  &-introLine2 {
+    font-size: var(--font-size-base);
+    font-weight: 700;
     color: var(--brand-dark-green);
-    font-weight: 600;
-    text-decoration: none;
-    transition: opacity 0.2s ease;
-
-    &:hover {
-      opacity: 0.85;
-      text-decoration: underline;
-    }
-  }
-
-  &-actions {
-    flex-shrink: 0;
-    padding-top: var(--spacing-lg);
+    margin: 0;
+    line-height: 1.5;
 
     @include mobile {
-      padding-top: var(--spacing-md);
+      font-size: var(--font-size-lg);
     }
   }
 
-  &-ctaButton {
+  &-skipCaption {
+    font-size: var(--font-size-sm);
+    font-weight: 400;
+    color: var(--color-text-light);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  &-regionsHeading {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0;
+    line-height: 1.4;
+
+    @include mobile {
+      font-size: var(--font-size-lg);
+    }
+  }
+
+  &-regionButtons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: var(--spacing-md);
+    width: 100%;
+    max-width: 20rem;
+  }
+
+  &-regionBtn {
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: var(--spacing-sm) var(--spacing-md);
     width: 100%;
-    padding: var(--spacing-sm) var(--spacing-lg);
-    background-color: var(--brand-dark-green);
-    color: var(--chip-text-white);
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-base);
+    min-height: 0;
+    font-size: var(--font-size-sm);
     font-weight: 600;
+    color: var(--color-text-light);
+    background-color: transparent;
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 
-    &:hover {
-      background-color: color-mix(in srgb, var(--brand-dark-green) 85%, black);
+    &:hover:not(.WelcomeModal-regionBtn--active) {
+      color: var(--color-text);
+      border-color: var(--brand-dark-green);
     }
 
-    &:active {
-      transform: scale(0.98);
+    &--active {
+      color: var(--chip-text-white);
+      background-color: var(--brand-dark-green);
+      border-color: var(--brand-dark-green);
     }
 
     @include mobile {
-      width: 100%;
-      padding-block: 0.75rem;
+      padding: var(--spacing-md);
+      font-size: var(--font-size-md);
+    }
+  }
+
+  &-categoriesHeading {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0;
+    line-height: 1.4;
+    width: 100%;
+    text-align: start;
+
+    @include mobile {
       font-size: var(--font-size-lg);
+    }
+  }
+
+  &-footer {
+    padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md) var(--spacing-lg);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+
+    @include mobile {
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: center;
+    }
+  }
+
+  &-skipButton {
+    flex: 1;
+    padding: 0 var(--spacing-md);
+    height: var(--control-height);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--brand-dark-green);
+    background-color: transparent;
+    border: 2px solid var(--brand-dark-green);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+
+    &:hover {
+      background-color: var(--brand-dark-green);
+      color: var(--chip-text-white);
+    }
+
+    @include mobile {
+      height: var(--section-header-height);
+      font-size: var(--font-size-md);
+    }
+  }
+
+  &-primaryButton {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    padding: 0 var(--spacing-md);
+    height: var(--control-height);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--chip-text-white);
+    background-color: var(--brand-dark-green);
+    border: 2px solid var(--brand-dark-green);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+      opacity: 0.9;
+    }
+
+    @include mobile {
+      height: var(--section-header-height);
+      font-size: var(--font-size-md);
+    }
+  }
+
+  &-introActionButton {
+    min-height: var(--control-height);
+    height: var(--control-height);
+    flex: none;
+    box-sizing: border-box;
+
+    @include mobile {
+      min-height: var(--section-header-height);
+      height: var(--section-header-height);
     }
   }
 }

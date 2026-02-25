@@ -10,9 +10,40 @@ export const DAY_CELL_BREAKPOINT = 920 // Breakpoint for day cell chip display l
 export const WELCOME_MODAL_STORAGE_KEY = 'galiluz-welcome-seen'
 export const WELCOME_MODAL_EXPIRY_DAYS = 1
 
-// Contact: display number and WhatsApp deep link (Israel: 972 + number without leading 0)
+// Welcome modal copy and region placeholders (step 0 = intro, step 1 = regions, step 2 = categories)
+export const WELCOME_MODAL = {
+  introSubtitle: 'המקום לגלות בו את כל מה שקורה עכשיו בצפון!',
+  introLine1: 'אם אני לא טועה, זו הפעם הראשונה שלכם כאן!',
+  introLine2: 'בואו נבין רגע איזה אירועים הכי רלוונטיים לכם',
+  startButtonLabel: 'בואו נתחיל!',
+  skipIntroLabel: 'ישר ללו"ז',
+  skipIntroCaption: 'רוצים לקפוץ למים?',
+  stepTitleRegion: 'בחירת איזור',
+  stepTitleCategories: 'בחירת קטגוריות',
+  regionsHeading: 'לאיזה איזורים מתאים לכם להגיע?',
+  categoriesHeading: 'בחרו את הקטגוריות הרלוונטיות לכם:',
+  skipLabel: 'דלג/י',
+  nextStepLabel: 'לצעד הבא',
+  takeMeToScheduleLabel: 'קח אותי ללו"ז',
+}
+
+export const WELCOME_REGION_OPTIONS = [
+  { id: 'region1', label: 'כפתור 1' },
+  { id: 'region2', label: 'כפתור 2' },
+  { id: 'region3', label: 'כפתור 3' },
+  { id: 'region4', label: 'כפתור 4' },
+  { id: 'region5', label: 'כפתור 5' },
+  { id: 'region6', label: 'כפתור 6' },
+]
+
+// Contact: Galiluz bot WhatsApp – number, CTA text, prefill message, and deep link
+export const CONTACT_WHATSAPP_NUMBER = '972552835970'
+export const CONTACT_WHATSAPP_CTA = 'לבוט של גלילו"ז'
+const CONTACT_WHATSAPP_PREFILL = 'היי גלילו"ז בוט, מה קורה בצפון?'
+export const CONTACT_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(CONTACT_WHATSAPP_PREFILL)}`
+
+// Legacy (kept for any other references; header uses CONTACT_WHATSAPP_* above)
 export const CONTACT_WHATSAPP_DISPLAY = '055-989-6278'
-export const CONTACT_WHATSAPP_LINK = 'https://wa.me/972559896278'
 
 export const MODAL_TEXT = {
   title: 'פרטי אירוע',

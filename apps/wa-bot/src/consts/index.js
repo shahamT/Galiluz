@@ -23,7 +23,7 @@ export const WELCOME_INTERACTIVE = {
   body: 'היי! 👋\nאני הבוט של אפליקציית *גלילו"ז* - Galiluz\n\nכנסו לאפליקציה כדי לגלות כל מה שקורה בצפון\n*גלילו"ז*🏔️ - https://galiluz.co.il\n\n*איך אפשר לעזור לכם?* 😊',
   buttons: [
     { id: 'discover', title: '?מה קורה בצפון 🏔️' },
-    { id: 'publish', title: 'פרסום אירוע 📅' },
+    { id: 'publish', title: 'פרסום/עדכון אירוע 📅' },
     { id: 'contact', title: 'צרו קשר 📩' },
   ],
 }
@@ -122,6 +122,20 @@ export const PUBLISHER_APPROVED = {
   ],
 }
 
+/** After publisher is confirmed: "How do you want to continue?" with 3 actions. */
+export const PUBLISHER_HOW_TO_CONTINUE = {
+  body: 'איך תרצו להמשיך?',
+  buttons: [
+    { id: 'event_add_new', title: 'פרסום אירוע 📅' },
+    { id: 'event_update', title: 'עדכון אירוע ✏️' },
+    { id: 'event_delete', title: 'מחיקת אירוע 🗑️' },
+  ],
+}
+
+/** Dead end for update/delete until implemented. */
+export const PUBLISHER_ACTION_COMING_SOON =
+  'האפשרות הזו תגיע בקרוב. בינתיים אפשר לפרסם אירוע חדש או לחזור לתפריט.'
+
 /** To publisher: rejected. Body without reason; append PUBLISHER_REJECTED_REASON_LINE + reason only when relevant. */
 export const PUBLISHER_REJECTED_BODY =
   '*לצערנו* הבקשה שלך לפרסום בגלילו"ז נדחתה... 😣'
@@ -136,57 +150,76 @@ export const APPROVER_CONFIRM_REJECTED = '*{fullName}* לא אושר/ה כמפר
 // --- Event add flow (publisher adds new event) ---
 
 export const EVENT_ADD_INITIAL =
-  'בואו נפרסם אירוע חדש.\n🔹 בכל שלב ניתן לשלוח *ביטול* על מנת לחזור לתפריט הראשי\n🔹 לא ניתן לדלג על שדות חובה.'
+  'בואו נפרסם אירוע חדש.\n_• בכל שלב ניתן לשלוח *ביטול* על מנת לחזור לתפריט הראשי_\n_• לא לדאוג, תמיד אפשר לערוך את כל הפרטים בסיום._'
 
 export const EVENT_ADD_ASK_TITLE = 'שם האירוע (חובה)'
 
-export const EVENT_ADD_ASK_DATETIME =
-  'מתי האירוע קורה? (חובה)\n_אפשר להשתמש בטקסט חופשי_\n_ניתן להזין תאריך בודד / טווח תאריכים / תאריכים נפרדים_\n_ניתן להזין שעת התחלה / שעת סיום (לא חובה)_\n_ניתן להשתמש בכל פורמאט של תאריך או שעה מקובלים (5 בפברואר / 5.2 / 8 בערב / 20:00 וכו\'...)_'
+export const EVENT_ADD_ASK_DATETIME = 'מתי האירוע קורה? (חובה)'
+export const EVENT_ADD_ASK_DATETIME_FOOTER = 'כתבו בשפה חופשית את תאריך/תאריכי ושעות האירוע'
 
 export const EVENT_ADD_CATEGORY_INTRO = 'בואו נשייך את האירוע שלכם לקטגוריה ראשית'
 export const EVENT_ADD_ASK_CATEGORY_GROUP = 'בחרו אחת מארבע הקבוצות הבאות'
 export const EVENT_ADD_ASK_MAIN_CATEGORY = 'בחרו את הקטגוריה המתאימה ביותר לאירוע שלכם'
-export const EVENT_ADD_CATEGORY_AI_NOTE = '_ה-AI כבר ישייך את האירוע לקטגוריות מתאימות נוספות._'
+export const EVENT_ADD_CATEGORY_FOOTER = 'אנחנו כבר נשייך את האירוע לקטגוריות נוספות'
+export const EVENT_ADD_CATEGORY_AI_NOTE = '_אנחנו כבר נשייך את האירוע לקטגוריות נוספות_'
 export const EVENT_ADD_CHANGE_GROUP_PROMPT = 'לא מתאים? אפשר לבחור קבוצה אחרת.'
 export const EVENT_ADD_CHANGE_GROUP_BUTTON = { id: 'event_add_change_group', title: 'בחירת קבוצה אחרת' }
+/** Row title for "change category group" at top of category list (single message, no follow-up) */
+export const EVENT_ADD_CHANGE_GROUP_ROW_TITLE = 'בחר/י קבוצת קטגוריות אחרת'
 
 export const EVENT_ADD_LOCATION_INTRO = '*מיקום האירוע*\nאנא מלאו את פרטי המיקום'
 
 export const EVENT_ADD_ASK_PLACE_NAME = 'שם המקום'
 export const EVENT_ADD_SKIP_BUTTON = { id: 'event_add_skip', title: 'דלג' }
 
-/** Same id as skip; use in EVENT_ADD_MEDIA / EVENT_ADD_MEDIA_MORE only. Title: "סיימתי להעלות קבצים" */
+/** Same id as skip; use in EVENT_ADD_MEDIA / EVENT_ADD_MEDIA_MORE only. */
 export const EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON = {
   id: 'event_add_skip',
-  title: 'סיימתי להעלות קבצים',
+  title: 'ללא תמונה/סרטון',
 }
 
 export const EVENT_ADD_ASK_CITY = 'יישוב (חובה)'
 
-export const EVENT_ADD_ASK_ADDRESS = 'כתובת\n_עד שתי שורות_'
+export const EVENT_ADD_ASK_ADDRESS = 'כתובת'
+export const EVENT_ADD_ASK_ADDRESS_FOOTER = 'עד שתי שורות'
 
-export const EVENT_ADD_ASK_LOCATION_NOTES =
-  'הערות נוספות למיקום\n_לדוגמה - הכוונה של איך להגיע לכניסה_'
+export const EVENT_ADD_ASK_LOCATION_NOTES = 'הערות נוספות למיקום'
+export const EVENT_ADD_ASK_LOCATION_NOTES_FOOTER = 'לדוגמה - הכוונה של איך להגיע לכניסה'
 
 export const EVENT_ADD_ASK_WAZE_GMAPS =
   'ניתן להוסיף לינקים למיקום ספציפי או לניווט עם Waze.'
 
-export const EVENT_ADD_ASK_PRICE =
-  'מחיר האירוע\n_לדוגמה - 20 ש"ח / חינם_'
+export const EVENT_ADD_ASK_PRICE = 'מחיר האירוע'
+export const EVENT_ADD_ASK_PRICE_FOOTER = 'לדוגמה - 20 ש"ח / חינם'
 
 export const EVENT_ADD_ASK_DESCRIPTION =
   'תיאור מלא של האירוע (חובה)\n_ללא לינקים ומספרי טלפון, ניתן להוסיף לינקים וטלפונים בשדה הבא_'
 
-export const EVENT_ADD_ASK_LINKS =
-  'ניתן להוסיף לינקים וטלפונים\n_יש להוסיף תיאור לכל לינק, לדוגמה:_\n_לקניית כרטיסים: tickets.co.il_'
+export const EVENT_ADD_ASK_LINKS = 'ניתן להוסיף לינקים וטלפונים'
+export const EVENT_ADD_ASK_LINKS_FOOTER = 'יש להוסיף תיאור לכל לינק. לדוגמה: tickets.co.il'
 
 export const EVENT_ADD_ASK_MEDIA_FIRST =
-  'הוספת תמונות וסרטונים (אופציונלי)\nשלח/י תמונה/סרטון ראשי'
+  'הוספת תמונות וסרטונים\nשלח/י תמונה/סרטון ראשי'
 
 /** First line (plain); second line in example format: _X/max קבצים נטענו_ */
 export const EVENT_ADD_ASK_MEDIA_MORE = 'ניתן לשלוח עוד תמונה/סרטון'
 
+/** Shown before format/process (italic). Bold line + excited emoji above, then current text. */
+export const EVENT_ADD_PROCESSING_MESSAGE =
+  '*זהו! סיימנו! 🤩*\n\n_אנחנו מעבדים את הפרטים שהזנת, זה יכול לקחת כמה רגעים..._'
+
 export const EVENT_ADD_MEDIA_MAX_REACHED = 'נשמרו 6 קבצים. ממשיכים לשלב הבא.'
+
+/** Final success: heading line (with emoji). */
+export const EVENT_ADD_SUCCESS_HEADING = 'סיימנו! 🤩'
+/** Final success: bold body line. */
+export const EVENT_ADD_SUCCESS_BODY = '*האירוע שלכם נוסף לגלילו"ז בהצלחה!*'
+/** Final success: prompt before event link. */
+export const EVENT_ADD_SUCCESS_VIEW_PROMPT = 'מוזמנים לצפות באירוע שלכם כאן:'
+/** Final success: quick reply – add another event. */
+export const EVENT_ADD_SUCCESS_ADD_AGAIN_BUTTON = { id: 'event_add_new', title: 'להוספת אירוע חדש' }
+/** Final success: quick reply – main menu. */
+export const EVENT_ADD_SUCCESS_MAIN_MENU_BUTTON = { id: 'back_to_main', title: 'לתפריט הראשי' }
 
 export const EVENT_ADD_SUCCESS = 'תודה, האירוע נשמר'
 
@@ -202,11 +235,112 @@ export const EVENT_ADD_CONFIRM_EDIT_BUTTON = { id: 'event_confirm_edit', title: 
 /** When user chooses edit: restart from title. */
 export const EVENT_ADD_CONFIRM_EDIT_RESTART = 'מתחילים מחדש. הזן את פרטי האירוע.'
 
+// --- Event edit flow (shared with future update flow) ---
+export const EVENT_EDIT_MENU_BODY = 'אילו פרטים תרצו לשנות?'
+export const EVENT_EDIT_MENU_FOOTER = "לסיום העריכה יש לבחור בתפריט ב'סיימתי לעדכן פרטים'"
+export const EVENT_EDIT_DONE_ID = 'edit_done'
+export const EVENT_EDIT_DONE_LABEL = 'סיימתי לעדכן פרטים'
+export const EVENT_EDIT_DONE_ROW = { id: 'edit_done', title: 'סיימתי לעדכן פרטים' }
+export const EVENT_EDIT_ASK_TITLE = 'הזינו שם חדש לאירוע'
+export const EVENT_EDIT_ASK_DESCRIPTION = 'הזינו תיאור חדש לאירוע'
+export const EVENT_EDIT_FIELD_IDS = {
+  EDIT_TITLE: 'edit_title',
+  EDIT_DESCRIPTION: 'edit_description',
+  EDIT_MAIN_CATEGORY: 'edit_main_category',
+  EDIT_EXTRA_CATEGORIES: 'edit_extra_categories',
+  EDIT_LOCATION: 'edit_location',
+  EDIT_DATETIME: 'edit_datetime',
+  EDIT_PRICE: 'edit_price',
+  EDIT_MEDIA: 'edit_media',
+  EDIT_LINKS: 'edit_links',
+  EDIT_DONE: 'edit_done',
+}
+export const EVENT_EDIT_MENU_ROWS = [
+  { id: 'edit_title', title: 'שם האירוע' },
+  { id: 'edit_description', title: 'תיאור האירוע' },
+  { id: 'edit_main_category', title: 'קטגוריה ראשית' },
+  { id: 'edit_extra_categories', title: 'קטגוריות נוספות' },
+  { id: 'edit_location', title: 'מיקום האירוע' },
+  { id: 'edit_datetime', title: 'תאריכים ושעה' },
+  { id: 'edit_price', title: 'מחיר' },
+  { id: 'edit_media', title: 'תמונות וסרטונים' },
+  { id: 'edit_links', title: 'לינקים וטלפונים' },
+]
+
+/** After a field was updated: success message per field (body for quick-reply screen). */
+export const EVENT_EDIT_SUCCESS_MESSAGES = {
+  title: 'שם האירוע עודכן בהצלחה',
+  description: 'תיאור האירוע עודכן בהצלחה',
+  mainCategory: 'קטגוריה ראשית עודכנה בהצלחה',
+  location: 'מיקום האירוע עודכן בהצלחה',
+}
+
+/** Quick replies after field edit: done updating / more fields to edit. */
+export const EVENT_EDIT_SUCCESS_DONE_BUTTON = { id: 'edit_success_done', title: 'סיימתי לעדכן' }
+export const EVENT_EDIT_SUCCESS_MORE_BUTTON = { id: 'edit_success_more', title: 'לעדכון פרטים נוספים' }
+
+/** Body for "choose" quick-reply screen after field edit. */
+export const EVENT_EDIT_SUCCESS_CHOOSE_BODY = 'בחר/י:'
+
+/** Shown when patch (draft update) fails. */
+export const EVENT_EDIT_PATCH_ERROR = 'שגיאה בעדכון. נסה שוב.'
+
+/** Extra categories: cannot remove last remaining category. */
+export const EVENT_EDIT_EXTRA_CANNOT_REMOVE_LAST = 'לא ניתן להסיר את הקטגוריה היחידה.'
+
+/** Location edit: city normalization failed. */
+export const EVENT_EDIT_LOCATION_CITY_UNRECOGNIZED = 'לא הצלחנו לזהות יישוב. נסה שוב.'
+
+/** Max categories per event (main + additional). Used in extra-categories edit flow. */
+export const EVENT_ADD_MAX_CATEGORIES = 4
+/** Max *extra* categories (excluding main). Shown in "cannot add more" message since main is not in the list. */
+export const EVENT_ADD_MAX_EXTRA_CATEGORIES = EVENT_ADD_MAX_CATEGORIES - 1
+
+/** Extra categories edit: body and buttons. */
+export const EVENT_EDIT_EXTRA_CATEGORIES_BODY = 'אלו הקטגוריות אליהן משויך כעת האירוע'
+export const EVENT_EDIT_EXTRA_CATEGORIES_NO_EXTRAS = 'אין קטגוריות נוספות.'
+export const EVENT_EDIT_EXTRA_ADD_BUTTON = { id: 'edit_extra_add', title: 'להוסיף קטגוריה' }
+export const EVENT_EDIT_EXTRA_REMOVE_BUTTON = { id: 'edit_extra_remove', title: 'להסיר קטגוריה' }
+export const EVENT_EDIT_EXTRA_BACK_BUTTON = { id: 'edit_extra_back', title: 'חזרה' }
+export const EVENT_EDIT_EXTRA_MAX_REACHED = (max) => `לא ניתן להוסיף יותר מ-${max} קטגוריות`
+export const EVENT_EDIT_EXTRA_REMOVE_ASK = 'איזו קטגוריה להסיר?'
+export const EVENT_EDIT_EXTRA_NO_REMOVE = 'אין קטגוריות להסיר.'
+
+/** Location edit menu: body, footer, section rows and prompts. */
+export const EVENT_EDIT_LOCATION_MENU_BODY = 'אילו פרטים במיקום האירוע תרצו לשנות:'
+export const EVENT_EDIT_LOCATION_MENU_FOOTER =
+  'ניתן לחזור חזרה או לסיים את העדכון באמצעות האפשרויות בראש התפריט'
+export const EVENT_EDIT_LOCATION_BACK_ROW = { id: 'loc_back', title: 'בחזרה לעדכון פרטים נוספים' }
+export const EVENT_EDIT_LOCATION_DONE_ROW = { id: 'loc_done', title: 'סיימתי לעדכן פרטים' }
+export const EVENT_EDIT_LOCATION_FIELD_ROWS = [
+  { id: 'loc_place_name', title: 'שם המקום' },
+  { id: 'loc_city', title: 'יישוב' },
+  { id: 'loc_address', title: 'כתובת' },
+  { id: 'loc_details', title: 'הוראות הגעה' },
+  { id: 'loc_gmaps', title: 'לינק לניווט עם google maps' },
+  { id: 'loc_waze', title: 'לינק לניווט עם Waze' },
+]
+export const EVENT_EDIT_LOCATION_ASK_PLACE_NAME = 'הזינו שם מקום חדש למיקום האירוע'
+export const EVENT_EDIT_LOCATION_ASK_CITY = 'הזינו יישוב חדש'
+export const EVENT_EDIT_LOCATION_ASK_ADDRESS = 'הזינו כתובת חדשה'
+export const EVENT_EDIT_LOCATION_ASK_DETAILS = 'הזינו הוראות הגעה חדשות'
+export const EVENT_EDIT_LOCATION_ASK_GMAPS = 'הזינו לינק לניווט עם Google Maps'
+export const EVENT_EDIT_LOCATION_ASK_WAZE = 'הזינו לינק לניווט עם Waze'
+
 /** Format API failed; ask to try again. */
 export const EVENT_ADD_FORMAT_FAILED = 'לא הצלחנו לעבד את הפרטים. נסה שוב.'
 
 /** After format failed: body for retry button (do not repeat upload status). */
 export const EVENT_ADD_FORMAT_FAILED_RETRY_BODY = 'לחץ למטה כדי לנסות שוב לעבד'
+
+/** Format failed: quick reply button (same id as media finish so re-process runs). */
+export const EVENT_ADD_FORMAT_RETRY_BUTTON = { id: 'event_add_skip', title: 'שלח/י שוב' }
+
+/** When AI raised flags: intro before listing fields we could not understand. */
+export const EVENT_ADD_FLAGS_INTRO = 'יש כמה פרטים שלא הצלחנו להבין:'
+
+/** When AI raised flags: line under the flags list, before asking for inputs again. */
+export const EVENT_ADD_FLAGS_FILL_AGAIN = 'בואו נמלא את הפרטים האלו שוב בבקשה...'
 
 // --- Event add validation (limits and error messages) ---
 

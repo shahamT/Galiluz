@@ -38,7 +38,7 @@ export const PUBLISHER_EVENT_FORMAT_SCHEMA = {
         type: 'array',
         items: {
           type: 'object',
-          required: ['Title', 'Url'],
+          required: ['Title', 'Url', 'type'],
           additionalProperties: false,
           properties: {
             Title: { type: 'string' },

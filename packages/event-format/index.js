@@ -4,7 +4,7 @@
  * Nuxt validates the result when wa-bot POSTs it.
  */
 import OpenAI from 'openai'
-import { PUBLISHER_EVENT_FORMAT_SCHEMA } from './schema.js'
+import { PUBLISHER_EVENT_FORMAT_SCHEMA, ALLOWED_FLAG_FIELD_KEYS } from './schema.js'
 import { getCurrentIsraelUtcOffset } from './israelDate.js'
 import { sanitizeRawEventForPrompt } from './promptSanitize.js'
 import { extractNavLinksFromRaw } from './navLinks.js'
@@ -56,9 +56,11 @@ RULES:
 2. rawOccurrences: Parse into occurrences. All times are Israel (Asia/Jerusalem). Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, "3 בצהריים" = 15:00, "4 בצהריים" = 16:00, etc. Convert Israel time to UTC (Israel is UTC+2 in winter, UTC+3 in summer/DST — use the offset that applies to the occurrence date). Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (if hasTime: combine date with time in Israel then convert to UTC; if !hasTime: use Israel midnight for that date in UTC), endTime = ISO UTC or null if not given.
 3. city: The publisher provided a city. Fix common Israeli place name typos (e.g. "קריעת שמונה" → "קריית שמונה", ת"א → תל אביב). Do not change correct names; only normalize obvious misspellings. Do not infer a different city. Example: קריעת שמונה → קריית שמונה.
 4. price: Convert to number or null. Free entry (e.g. חינם, בחינם, free, כניסה חופשית, ללא תשלום, אין תשלום) → 0. Ignore a number only when it is clearly not the event price (e.g. merchandise, food at event). If unclear or not a single number, use null.
-5. shortDescription: Write in Hebrew (1–2 sentences) unless the event description was in English. Base only on the provided description. Do not add details that are not in the description.
+5. shortDescription: Write in Hebrew (1–2 sentences) unless the event description was in English. Base shortDescription ONLY on the event name (rawTitle) and the full description (rawFullDescription). It must NOT contain or paraphrase: location (city, address, place name, nav links), price, or dates and times. Do not include categories or urls. Summarize only what the event is about — the name and the descriptive content of the event itself.
 6. categories: mainCategory is already provided in the raw event — it MUST be included in the categories array. Add up to 3 additional category ids ONLY from the list below when the event clearly fits (e.g. both music and party). Do not add categories the publisher did not intend. Use ONLY these ids:
 7. urls: From rawUrls and any URLs or phone numbers in rawFullDescription, produce an array of {Title, Url, type}. type = "link" for web URLs (https://...), type = "phone" for phone numbers. Title = short Hebrew label (e.g. "כרטיסים", "ניווט Waze", "טלפון להרשמה"). Url = the clean URL or the phone number (digits, optional formatting). Include both links and phone numbers that appear in the text with an appropriate title. If none, return empty array.
+
+FLAGS: You must always include "flags" (array). Add an entry only when the raw value could not be reliably processed. Allowed fieldKey values are ONLY: rawTitle, rawOccurrences, rawCity, rawNavLinks, rawPrice, rawFullDescription, rawUrls. Do NOT flag category, location name, address, location details, or media. For "reason" provide a short Hebrew explanation (e.g. "לא הצלחתי לזהות תאריך או שעה ברורה"). Required fields (rawTitle, rawOccurrences, rawCity, rawFullDescription): flag when ambiguous, missing, or unparseable. Optional fields (rawNavLinks, rawPrice, rawUrls): only flag when the publisher provided non-empty content that you could not reliably parse; do NOT flag when the field is empty or missing. If all fields are clear, use an empty array [].
 
 ${categoriesText}`
 }
@@ -109,7 +111,21 @@ function isValidAIResult(parsed) {
     if (!u || typeof u !== 'object' || typeof u.Title !== 'string' || typeof u.Url !== 'string') return false
     if (u.type !== undefined && u.type !== 'link' && u.type !== 'phone') return false
   }
+  if (Array.isArray(p.flags)) {
+    for (const f of p.flags) {
+      if (!f || typeof f !== 'object') return false
+      if (typeof f.fieldKey !== 'string' || !ALLOWED_FLAG_FIELD_KEYS.has(f.fieldKey)) return false
+      if (typeof f.reason !== 'string' || !f.reason.trim()) return false
+    }
+  }
   return true
+}
+
+function normalizeFlags(flags) {
+  if (!Array.isArray(flags) || flags.length === 0) return []
+  return flags
+    .filter((f) => f && typeof f === 'object' && ALLOWED_FLAG_FIELD_KEYS.has(f.fieldKey) && typeof f.reason === 'string' && f.reason.trim())
+    .map((f) => ({ fieldKey: f.fieldKey, reason: f.reason.trim() }))
 }
 
 async function callOpenAIForPublisherFormat(rawEventWithAll, categoriesList, dateContext, correlationId, openai, model) {
@@ -262,11 +278,154 @@ export async function formatPublisherEvent(rawEventWithAll, categoriesList, opti
     log(correlationId, 'error', 'merged event has no occurrences')
     return { formattedEvent: null, errorReason: 'validation failed: no occurrences' }
   }
+  const flags = normalizeFlags(aiResult.flags)
   log(correlationId, 'info', 'format complete', {
     occurrencesCount: event.occurrences.length,
     city: event.location.City,
     mainCategory: event.mainCategory,
     price: event.price,
+    flagsCount: flags.length,
   })
-  return { formattedEvent: event }
+  return { formattedEvent: event, flags }
 }
+
+const SHORT_DESCRIPTION_SCHEMA = {
+  name: 'short_description_only',
+  strict: true,
+  schema: {
+    type: 'object',
+    required: ['shortDescription'],
+    additionalProperties: false,
+    properties: {
+      shortDescription: { type: 'string' },
+    },
+  },
+}
+
+const SHORT_DESCRIPTION_SYSTEM_PROMPT = `You are a summarizer for a Hebrew community events calendar. Given an event title and full description (may contain HTML tags), output ONLY a shortDescription: 1-2 sentences in Hebrew that summarize what the event is about — the name and the descriptive content only. Do NOT include: location, address, city, price, dates, times, or URLs. Do not include categories. Output valid JSON only: {"shortDescription": "..."}.`
+
+/**
+ * Generate shortDescription from event title and full description (edit-flow: description change).
+ * Used when the publisher edits the full description; we regenerate shortDescription to match.
+ * @param {string} title - Event title
+ * @param {string} fullDescription - Full description (may be HTML)
+ * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string }} [options]
+ * @returns {Promise<{ shortDescription: string } | { shortDescription: null, errorReason: string }>}
+ */
+export async function generateShortDescription(title, fullDescription, options = {}) {
+  const apiKey = (options.openaiApiKey ?? process.env.OPENAI_API_KEY ?? '').trim()
+  const model = (options.openaiModel ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL).trim() || DEFAULT_MODEL
+  const correlationId = options.correlationId
+
+  if (!apiKey) {
+    log(correlationId, 'warn', 'generateShortDescription: no OpenAI API key')
+    return { shortDescription: null, errorReason: 'no_openai_key' }
+  }
+
+  const userContent = `Event title: ${typeof title === 'string' ? title.trim() : ''}\n\nFull description:\n${typeof fullDescription === 'string' ? fullDescription : ''}`.slice(0, 8000)
+
+  try {
+    const openai = new OpenAI({ apiKey, timeout: 30_000 })
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: SHORT_DESCRIPTION_SYSTEM_PROMPT },
+        { role: 'user', content: userContent },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: SHORT_DESCRIPTION_SCHEMA,
+      },
+      max_tokens: 300,
+      temperature: 0.2,
+    })
+    const content = response.choices[0]?.message?.content
+    if (!content) {
+      log(correlationId, 'warn', 'generateShortDescription: empty content')
+      return { shortDescription: null, errorReason: 'openai_empty_content' }
+    }
+    const parsed = JSON.parse(content)
+    const short = typeof parsed.shortDescription === 'string' ? parsed.shortDescription.trim() : ''
+    if (!short) {
+      return { shortDescription: null, errorReason: 'openai_empty_short_description' }
+    }
+    log(correlationId, 'info', 'generateShortDescription: ok', { length: short.length })
+    return { shortDescription: short }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log(correlationId, 'error', 'generateShortDescription failed', { error: msg })
+    return { shortDescription: null, errorReason: `openai_error: ${msg}` }
+  }
+}
+
+const NORMALIZE_CITY_SCHEMA = {
+  name: 'normalize_city',
+  strict: true,
+  schema: {
+    type: 'object',
+    required: ['city'],
+    additionalProperties: false,
+    properties: {
+      city: { type: 'string' },
+    },
+  },
+}
+
+const NORMALIZE_CITY_SYSTEM_PROMPT = `You are a normalizer for Israeli city and place names. Given a user-provided city or place name (possibly with typos or shorthand), output ONLY the corrected, normalized name in Hebrew. Fix common typos (e.g. "קריעת שמונה" → "קריית שמונה", "ת\\"א" → "תל אביב"). Do not add extra text. Output valid JSON only: {"city": "..."}.`
+
+/**
+ * Normalize city/place name for edit flow (Israeli names, typo fixes).
+ * @param {string} cityText - Raw city text from user
+ * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string }} [options]
+ * @returns {Promise<{ city: string } | { city: null, errorReason: string }>}
+ */
+export async function normalizeCityForEdit(cityText, options = {}) {
+  const apiKey = (options.openaiApiKey ?? process.env.OPENAI_API_KEY ?? '').trim()
+  const model = (options.openaiModel ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL).trim() || DEFAULT_MODEL
+  const correlationId = options.correlationId
+
+  if (!apiKey) {
+    log(correlationId, 'warn', 'normalizeCityForEdit: no OpenAI API key')
+    return { city: null, errorReason: 'no_openai_key' }
+  }
+
+  const userContent = typeof cityText === 'string' ? cityText.trim() : ''
+  if (!userContent) {
+    return { city: null, errorReason: 'empty_input' }
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey, timeout: 15_000 })
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: NORMALIZE_CITY_SYSTEM_PROMPT },
+        { role: 'user', content: userContent },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: NORMALIZE_CITY_SCHEMA,
+      },
+      max_tokens: 100,
+      temperature: 0.1,
+    })
+    const content = response.choices[0]?.message?.content
+    if (!content) {
+      log(correlationId, 'warn', 'normalizeCityForEdit: empty content')
+      return { city: null, errorReason: 'openai_empty_content' }
+    }
+    const parsed = JSON.parse(content)
+    const city = typeof parsed.city === 'string' ? parsed.city.trim() : ''
+    if (!city) {
+      return { city: null, errorReason: 'openai_empty_city' }
+    }
+    log(correlationId, 'info', 'normalizeCityForEdit: ok', { city })
+    return { city }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log(correlationId, 'error', 'normalizeCityForEdit failed', { error: msg })
+    return { city: null, errorReason: `openai_error: ${msg}` }
+  }
+}
+
+export { extractNavLinksFromRaw }

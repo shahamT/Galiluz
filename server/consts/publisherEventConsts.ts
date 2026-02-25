@@ -23,3 +23,6 @@ export const FREE_INDICATING_PHRASES = [
 
 /** Fallback category when AI returns no valid category. */
 export const FALLBACK_CATEGORY_ID = 'community_meetup'
+
+/** Max categories per event (main + additional). Enforced in PATCH and extra-categories flow. */
+export const PUBLISHER_EVENT_MAX_CATEGORIES = 4

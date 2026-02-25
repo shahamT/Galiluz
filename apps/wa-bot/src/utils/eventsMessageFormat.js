@@ -83,7 +83,7 @@ export function formatEventsListMessage(
   }
 
   if (onDateFlatEvents.length === 0) {
-    return `אין אירועים ביום הזה. לצפייה בלוח השנה כנסו ל־${baseUrl}`
+    return `אין אירועים ביום הזה. לצפייה בכל האירועים כנסו ל־${baseUrl}`
   }
   let body = lines.join('\n').trim()
   if (onDateFlatEvents.length > MAX_EVENTS_IN_MESSAGE) body += MORE_EVENTS_LINE

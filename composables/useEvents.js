@@ -13,11 +13,11 @@ export const useEvents = () => {
     headers: import.meta.server ? { 'X-API-Key': config.apiSecret || '' } : {},
   })
 
-  // Log on client side only
+  // Log on client side only (dev only for info/debug; errors always)
   if (import.meta.client) {
     // Log when fetching starts
     watch(pending, (isLoading) => {
-      if (isLoading) {
+      if (isLoading && import.meta.dev) {
         logger.info(LOG_PREFIX, 'Fetching events...')
       }
     })
@@ -25,10 +25,10 @@ export const useEvents = () => {
     // Log when data is loaded (including empty array)
     watch(data, (events) => {
       if (events && Array.isArray(events)) {
-        if (events.length > 0) {
+        if (events.length > 0 && import.meta.dev) {
           logger.info(LOG_PREFIX, `${events.length} events were fetched:`, events)
         }
-        if (import.meta.DEV) {
+        if (import.meta.dev) {
           const flat = flattenEventsByOccurrence(events)
           logger.debug(LOG_PREFIX, 'Refactored events (flat):', flat)
         }

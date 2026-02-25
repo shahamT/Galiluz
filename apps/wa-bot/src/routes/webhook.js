@@ -26,6 +26,8 @@ import {
   APPROVER_BUTTONS,
   APPROVER_ASK_REASON,
   PUBLISHER_APPROVED,
+  PUBLISHER_HOW_TO_CONTINUE,
+  PUBLISHER_ACTION_COMING_SOON,
   PUBLISHER_REJECTED_BODY,
   PUBLISHER_REJECTED_REASON_LINE,
   PUBLISHER_REJECTED_FOOTER,
@@ -33,7 +35,7 @@ import {
   APPROVER_CONFIRM_APPROVED,
   APPROVER_CONFIRM_REJECTED,
 } from '../consts/index.js'
-import { sendInitialMessage, handleEventAddFlow, isEventAddStep } from '../flows/eventAddFlow.js'
+import { sendInitialMessage, handleEventAddFlow, isEventAddStep, sendMediaMoreMessageIfNeeded } from '../flows/eventAddFlow.js'
 import {
   checkPublisher,
   registerPublisher,
@@ -81,7 +83,7 @@ function isPrivateMessage(message) {
   return typeof ctxId !== 'string' || !ctxId.endsWith('@g.us')
 }
 
-/** Category list for discover flow: 4 groups + הכל */
+/** Category list for discover flow: הכל first, then 4 groups */
 const DISCOVER_CATEGORY_LIST = {
   body: DISCOVER_ASK_CATEGORY,
   button: 'בחר',
@@ -89,8 +91,8 @@ const DISCOVER_CATEGORY_LIST = {
     {
       title: 'אפשרויות',
       rows: [
-        ...CATEGORY_GROUPS.map((g) => ({ id: g.id, title: g.label })),
         { id: CATEGORY_ALL_ID, title: 'הכל' },
+        ...CATEGORY_GROUPS.map((g) => ({ id: g.id, title: g.label })),
       ],
     },
   ],
@@ -128,8 +130,8 @@ function handleDiscoverTimeChoice(phoneNumberId, from, timeChoice) {
 async function handlePublishButton(phoneNumberId, from, profileName) {
   const { status } = await checkPublisher(from)
   if (status === 'approved') {
-    conversationState.set(from, { step: conversationState.STEPS.EVENT_ADD_INITIAL })
-    return sendInitialMessage(phoneNumberId, from)
+    conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
+    return sendInteractiveButtons(phoneNumberId, from, PUBLISHER_HOW_TO_CONTINUE)
   }
   if (status === 'pending') {
     return sendText(phoneNumberId, from, PUBLISH_PENDING_MESSAGE)
@@ -330,6 +332,18 @@ function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if (id === 'back_to_menu' || id === 'back_to_main') {
       return handleBackToMenu(phoneNumberId, from)
     }
+    if (state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION) {
+      if (id === 'event_add_new') {
+        return sendInitialMessage(phoneNumberId, from)
+      }
+      if (id === 'event_update' || id === 'event_delete') {
+        conversationState.clear(from)
+        return sendText(phoneNumberId, from, PUBLISHER_ACTION_COMING_SOON).then((r) => {
+          if (r && !r.success) return r
+          return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+        })
+      }
+    }
     if (id === 'publish_sign_me_up') {
       return handlePublishSignMeUp(phoneNumberId, from, profileName)
     }
@@ -391,34 +405,67 @@ function processOneMessage(phoneNumberId, from, msg, context = {}) {
 /** Per-user message queue: process one message at a time per user so state updates correctly (e.g. bulk media). */
 const userMessageQueues = new Map()
 
+/** Idle time (ms) with no new message after which we flush pending into the processing queue. */
+const BATCH_FLUSH_MS = 250
+
+function flushPending(entry) {
+  if (entry.flushTimerId != null) {
+    clearTimeout(entry.flushTimerId)
+    entry.flushTimerId = null
+  }
+  if (entry.pending.length === 0) return
+  const count = entry.pending.length
+  entry.queue.push(...entry.pending)
+  entry.pending = []
+  if (!entry.processing) {
+    entry.processing = true
+    setImmediate(() => processQueueLoop(entry))
+  }
+}
+
+async function processQueueLoop(entry) {
+  let lastItem = null
+  while (entry.queue.length > 0) {
+    const item = entry.queue.shift()
+    item.context.hasMoreInQueue = entry.queue.length > 0
+    try {
+      const result = await processOneMessage(
+        item.phoneNumberId,
+        item.from,
+        item.msg,
+        item.context,
+      )
+      if (result && !result.success) logger.error(LOG_PREFIXES.WEBHOOK, 'Send result', result.error)
+    } catch (err) {
+      logger.error(LOG_PREFIXES.WEBHOOK, 'Failed to send reply', err)
+    }
+    lastItem = item
+  }
+  entry.processing = false
+  if (entry.queue.length > 0) {
+    entry.processing = true
+    processQueueLoop(entry)
+  } else if (lastItem) {
+    const isMedia = lastItem.msg?.type === 'image' || lastItem.msg?.type === 'video'
+    if (isMedia) {
+      Promise.resolve(sendMediaMoreMessageIfNeeded(lastItem.phoneNumberId, lastItem.from))
+        .catch((err) => logger.error(LOG_PREFIXES.WEBHOOK, 'sendMediaMoreMessageIfNeeded failed', err))
+    }
+  }
+}
+
 function enqueueAndProcessUser(phoneNumberId, from, msg, context) {
   const key = normalizePhone(from)
   let entry = userMessageQueues.get(key)
   if (!entry) {
-    entry = { queue: [], processing: false }
+    entry = { queue: [], processing: false, userKey: key, pending: [], flushTimerId: null }
     userMessageQueues.set(key, entry)
+  } else {
+    entry.userKey = key
   }
-  entry.queue.push({ phoneNumberId, from, msg, context })
-
-  if (entry.processing) return
-  entry.processing = true
-  setImmediate(async () => {
-    while (entry.queue.length > 0) {
-      const item = entry.queue.shift()
-      try {
-        const result = await processOneMessage(
-          item.phoneNumberId,
-          item.from,
-          item.msg,
-          item.context,
-        )
-        if (result && !result.success) logger.error(LOG_PREFIXES.WEBHOOK, 'Send result', result.error)
-      } catch (err) {
-        logger.error(LOG_PREFIXES.WEBHOOK, 'Failed to send reply', err)
-      }
-    }
-    entry.processing = false
-  })
+  entry.pending.push({ phoneNumberId, from, msg, context })
+  if (entry.flushTimerId != null) clearTimeout(entry.flushTimerId)
+  entry.flushTimerId = setTimeout(() => flushPending(entry), BATCH_FLUSH_MS)
 }
 
 /**
@@ -446,6 +493,10 @@ function processWebhookBody(body) {
         const from = msg.from
         if (!phoneNumberId || !from || typeof phoneNumberId !== 'string' || typeof from !== 'string') {
           logger.warn(LOG_PREFIXES.WEBHOOK, 'Skip message: missing phoneNumberId or from', msg?.id)
+          continue
+        }
+        if (msg.type === 'unsupported') {
+          logger.debug(LOG_PREFIXES.WEBHOOK, 'Skip unsupported message', msg.id)
           continue
         }
         logger.info(LOG_PREFIXES.WEBHOOK, 'Private message from', from)
@@ -495,11 +546,18 @@ export function handlePost(req, res) {
       }
 
       if (forwardedHeader === '1') {
-        const firstMsg = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]
-        const summary = firstMsg
-          ? `from=${firstMsg.from} type=${firstMsg.type || 'unknown'}`
-          : ''
-        logger.info(LOG_PREFIXES.WEBHOOK, `[DEV WEBHOOK RECEIVED] phone_number_id=${phoneNumberId || 'n/a'} ${summary}`.trim())
+        const value = body.entry?.[0]?.changes?.[0]?.value
+        const messages = value?.messages ?? []
+        if (messages.length > 0) {
+          const firstMsg = messages[0]
+          const summary = firstMsg
+            ? `from=${firstMsg.from} type=${firstMsg.type || 'unknown'}`
+            : ''
+          logger.info(
+            LOG_PREFIXES.WEBHOOK,
+            `[DEV WEBHOOK RECEIVED] phone_number_id=${phoneNumberId || 'n/a'} messages=${messages.length} ${summary}`.trim(),
+          )
+        }
       } else {
         logger.info(LOG_PREFIXES.WEBHOOK, 'POST body received', JSON.stringify(body).slice(0, 500))
       }

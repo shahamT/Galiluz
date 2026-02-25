@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nuxt dev",
+    "dev": "node scripts/dev.js",
     "dev:web": "nuxt dev",
     "dev:wa": "npm --prefix apps/wa-listener run dev",
     "dev:wa-bot": "npm --prefix apps/wa-bot run dev",

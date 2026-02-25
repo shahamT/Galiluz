@@ -10,6 +10,11 @@
  *       eventAddFormattedPreview (temporary: formatted event from process API for confirm step).
  *       eventAddDraftId (draft record id in MongoDB; set after createDraft, used for process and activate).
  *       eventAddConfirmPending (temporary: true while handling max media, to avoid duplicate "נשמרו 6 קבצים" and multiple goToConfirm calls).
+ *       eventAddFlags (array of { fieldKey, reason } from last processResult when AI raised flags).
+ *       eventAddFlagFieldOrder (array of field keys to re-ask, deduplicated, canonical order).
+ *       eventAddFlagIndex (index into eventAddFlagFieldOrder for current field being collected).
+ *       eventAddEditMenu / eventAddEditField / eventAddEditMainCategoryGroup / eventAddEditMainCategory (edit-details flow).
+ *       eventEditFieldKey (when step is event_add_edit_field: 'title' | 'description' | 'mainCategory' | ...).
  *
  * State is in-memory only and is lost on process restart or deploy. Users in the middle of a flow
  * will see the welcome menu on their next message after a restart.
@@ -27,6 +32,7 @@ const STEPS = {
   PUBLISH_ASK_EVENT_TYPES: 'publish_ask_event_types',
   PUBLISH_ASK_COMMITMENT: 'publish_ask_commitment',
   APPROVER_WAITING_REASON: 'approver_waiting_reason',
+  PUBLISHER_CHOOSE_ACTION: 'publisher_choose_action',
   EVENT_ADD_INITIAL: 'event_add_initial',
   EVENT_ADD_TITLE: 'event_add_title',
   EVENT_ADD_DATETIME: 'event_add_datetime',
@@ -44,7 +50,20 @@ const STEPS = {
   EVENT_ADD_LINKS: 'event_add_links',
   EVENT_ADD_MEDIA: 'event_add_media',
   EVENT_ADD_MEDIA_MORE: 'event_add_media_more',
+  EVENT_ADD_FLAGS_REVIEW: 'event_add_flags_review',
+  EVENT_ADD_FLAG_INPUT: 'event_add_flag_input',
   EVENT_ADD_CONFIRM: 'event_add_confirm',
+  EVENT_ADD_EDIT_MENU: 'event_add_edit_menu',
+  EVENT_ADD_EDIT_FIELD: 'event_add_edit_field',
+  EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP: 'event_add_edit_main_category_group',
+  EVENT_ADD_EDIT_MAIN_CATEGORY: 'event_add_edit_main_category',
+  EVENT_ADD_EDIT_SUCCESS: 'event_add_edit_success',
+  EVENT_ADD_EDIT_EXTRA_CATEGORIES: 'event_add_edit_extra_categories',
+  EVENT_ADD_EDIT_EXTRA_ADD_GROUP: 'event_add_edit_extra_add_group',
+  EVENT_ADD_EDIT_EXTRA_ADD_CATEGORY: 'event_add_edit_extra_add_category',
+  EVENT_ADD_EDIT_EXTRA_REMOVE: 'event_add_edit_extra_remove',
+  EVENT_ADD_EDIT_LOCATION_MENU: 'event_add_edit_location_menu',
+  EVENT_ADD_EDIT_LOCATION_FIELD: 'event_add_edit_location_field',
 }
 
 function get(waId) {

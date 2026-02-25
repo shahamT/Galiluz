@@ -6,33 +6,38 @@ const BASE_URL = `https://graph.facebook.com/${API_VERSION}`
 
 /**
  * Send interactive list message via WhatsApp Cloud API.
+ * Optional footer (max 60 chars, plain text).
  * @param {string} phoneNumberId - Business phone number ID
  * @param {string} to - Recipient wa_id
- * @param {{ body: string, button: string, sections: Array<{ title: string, rows: Array<{ id: string, title: string, description?: string }> }> }} interactive
+ * @param {{ body: string, footer?: string, button: string, sections: Array<{ title: string, rows: Array<{ id: string, title: string, description?: string }> }> }} interactive
  * @returns {Promise<{ success: boolean, messageId?: string, error?: string }>}
  */
 export async function sendInteractiveList(phoneNumberId, to, interactive) {
   const url = `${BASE_URL}/${phoneNumberId}/messages`
+  const interactivePayload = {
+    type: 'list',
+    body: { text: interactive.body },
+    action: {
+      button: interactive.button,
+      sections: interactive.sections.map((sec) => ({
+        title: sec.title,
+        rows: sec.rows.map((row) => ({
+          id: row.id,
+          title: row.title,
+          ...(row.description && { description: row.description }),
+        })),
+      })),
+    },
+  }
+  if (interactive.footer) {
+    interactivePayload.footer = { text: interactive.footer }
+  }
   const payload = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to: to.replace(/\D/g, ''),
     type: 'interactive',
-    interactive: {
-      type: 'list',
-      body: { text: interactive.body },
-      action: {
-        button: interactive.button,
-        sections: interactive.sections.map((sec) => ({
-          title: sec.title,
-          rows: sec.rows.map((row) => ({
-            id: row.id,
-            title: row.title,
-            ...(row.description && { description: row.description }),
-          })),
-        })),
-      },
-    },
+    interactive: interactivePayload,
   }
   try {
     const res = await fetch(url, {

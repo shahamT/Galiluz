@@ -1,13 +1,24 @@
 /**
  * OpenAI JSON schema for publisher event formatting (wa-bot flow).
- * AI returns: shortDescription, categories, occurrences, city, price, urls.
+ * AI returns: shortDescription, categories, occurrences, city, price, urls, and flags (always; may be empty).
+ * Only these field keys may appear in flags: rawTitle, rawOccurrences, rawCity, rawNavLinks, rawPrice, rawFullDescription, rawUrls.
  */
+const FLAG_FIELD_KEYS = [
+  'rawTitle',
+  'rawOccurrences',
+  'rawCity',
+  'rawNavLinks',
+  'rawPrice',
+  'rawFullDescription',
+  'rawUrls',
+]
+
 export const PUBLISHER_EVENT_FORMAT_SCHEMA = {
   name: 'publisher_event_format',
   strict: true,
   schema: {
     type: 'object',
-    required: ['shortDescription', 'categories', 'occurrences', 'city', 'price', 'urls'],
+    required: ['shortDescription', 'categories', 'occurrences', 'city', 'price', 'urls', 'flags'],
     additionalProperties: false,
     properties: {
       shortDescription: { type: 'string' },
@@ -37,7 +48,7 @@ export const PUBLISHER_EVENT_FORMAT_SCHEMA = {
         type: 'array',
         items: {
           type: 'object',
-          required: ['Title', 'Url'],
+          required: ['Title', 'Url', 'type'],
           additionalProperties: false,
           properties: {
             Title: { type: 'string' },
@@ -46,6 +57,20 @@ export const PUBLISHER_EVENT_FORMAT_SCHEMA = {
           },
         },
       },
+      flags: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['fieldKey', 'reason'],
+          additionalProperties: false,
+          properties: {
+            fieldKey: { type: 'string', enum: FLAG_FIELD_KEYS },
+            reason: { type: 'string' },
+          },
+        },
+      },
     },
   },
 }
+
+export const ALLOWED_FLAG_FIELD_KEYS = new Set(FLAG_FIELD_KEYS)

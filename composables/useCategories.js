@@ -10,13 +10,13 @@ export const useCategories = () => {
 
   if (import.meta.client) {
     watch(pending, (isLoading) => {
-      if (isLoading) {
+      if (isLoading && import.meta.dev) {
         logger.info(LOG_PREFIX, 'Fetching categories...')
       }
     })
 
     watch(data, (categories) => {
-      if (categories && Object.keys(categories).length > 0) {
+      if (categories && Object.keys(categories).length > 0 && import.meta.dev) {
         logger.info(LOG_PREFIX, `${Object.keys(categories).length} categories were fetched:`, categories)
       }
     })

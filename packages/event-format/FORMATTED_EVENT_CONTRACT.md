@@ -7,7 +7,7 @@ This document defines the **publisher-formatted event** shape produced by `forma
 | Field | Type | Required | Notes |
 |-------|------|----------|--------|
 | `Title` | string | yes | Non-empty; fallback "אירוע" if raw empty. |
-| `shortDescription` | string | yes | From AI; Hebrew by default. |
+| `shortDescription` | string | yes | From AI; Hebrew by default. Must be derived only from event name (Title) and full description; must not include price, location, occurrences, or other fields. |
 | `fullDescription` | string | yes | HTML (e.g. WhatsApp formatting converted). |
 | `mainCategory` | string | yes | One of the valid category ids; must be in `categories`. |
 | `categories` | string[] | yes | At least one; all must be valid category ids. |
@@ -18,6 +18,7 @@ This document defines the **publisher-formatted event** shape produced by `forma
 | `urls` | array | yes | `{ Title, Url, type: "link" \| "phone" }[]`. |
 | `publisherPhone` | string \| undefined | no | From raw publisher. |
 | `publisherName` | string \| undefined | no | From raw publisher. |
+| `publisherId` | string \| undefined | no | Set by server (create/process) from publishers collection \_id. |
 
 ## location
 
@@ -57,3 +58,7 @@ Each element:
 - **apps/wa-bot** — Sends the result of `formatPublisherEvent()` to Nuxt; Nuxt validates before updating draft or creating event.
 
 When changing the schema (e.g. new field or rule), update this doc, the event-format build logic, and server validation together.
+
+## Flags (wa-bot only)
+
+`formatPublisherEvent()` may return an optional `flags` array: `{ fieldKey: string, reason: string }[]`. These indicate raw fields the AI could not reliably parse. Flags are consumed only by wa-bot to re-ask the user for those fields; they are not sent to Nuxt or persisted.

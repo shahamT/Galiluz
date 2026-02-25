@@ -88,7 +88,7 @@ export async function createDraft(body) {
  * Process draft: format locally (OpenAI) then POST formattedEvent to Nuxt to update draft.
  * @param {string} draftId - id from createDraft
  * @param {{ rawEvent: object, media: Array, mainCategory: string, categories: string[] }} body - same as createDraft
- * @returns {Promise<{ success: boolean, formattedEvent?: object, reason?: string }>}
+ * @returns {Promise<{ success: boolean, formattedEvent?: object, flags?: Array<{ fieldKey: string, reason: string }>, reason?: string }>}
  */
 export async function processDraft(draftId, body) {
   const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
@@ -117,6 +117,13 @@ export async function processDraft(draftId, body) {
   })
   if (!formatResult.formattedEvent) {
     return { success: false, reason: formatResult.errorReason || 'format failed' }
+  }
+
+  const flags = Array.isArray(formatResult.flags)
+    ? formatResult.flags.filter((f) => f && typeof f.fieldKey === 'string' && typeof f.reason === 'string').map((f) => ({ fieldKey: f.fieldKey, reason: f.reason }))
+    : []
+  if (flags.length > 0) {
+    return { success: true, formattedEvent: formatResult.formattedEvent, flags }
   }
 
   const url = `${baseUrl}/api/events/${encodeURIComponent(draftId)}/process`
@@ -150,7 +157,7 @@ export async function processDraft(draftId, body) {
     }
     const data = await res.json()
     if (!data.formattedEvent) return { success: false, reason: 'no formattedEvent' }
-    return { success: true, formattedEvent: data.formattedEvent }
+    return { success: true, formattedEvent: data.formattedEvent, flags: [] }
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     logger.error(LOG_PREFIXES.CLOUD_API, 'Events process error', err)

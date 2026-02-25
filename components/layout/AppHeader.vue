@@ -19,10 +19,10 @@
           target="_blank"
           rel="noopener noreferrer"
           class="AppHeader-whatsappButton"
-          aria-label="דברו איתנו בוואטסאפ"
+          :aria-label="contactButtonAriaLabel"
         >
           <img src="/icons/whatsapp-icon.svg" alt="" class="AppHeader-whatsappIcon" />
-          <span class="AppHeader-whatsappText">דברו איתנו</span>
+          <span class="AppHeader-whatsappText">{{ CONTACT_WHATSAPP_CTA }}</span>
         </a>
       </div>
     </div>
@@ -30,9 +30,12 @@
 </template>
 
 <script setup>
-import { CONTACT_WHATSAPP_LINK } from '~/consts/ui.const'
+import { CONTACT_WHATSAPP_LINK, CONTACT_WHATSAPP_CTA } from '~/consts/ui.const'
+import { computed } from 'vue'
 
 defineOptions({ name: 'AppHeader' })
+
+const contactButtonAriaLabel = computed(() => `${CONTACT_WHATSAPP_CTA} בוואטסאפ`)
 </script>
 
 <style lang="scss">

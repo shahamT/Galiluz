@@ -42,6 +42,9 @@ const server = createServer((req, res) => {
 server.listen(config.port, () => {
   logger.info(LOG_PREFIXES.MAIN, `wa-bot listening on port ${config.port}`)
   logger.info(LOG_PREFIXES.MAIN, `Webhook: GET/POST /webhook, Health: GET /health`)
+  if (!config.isProduction) {
+    logger.info(LOG_PREFIXES.MAIN, `Publishers API: ${config.galiluzAppUrl} (dev MongoDB when Nuxt runs with root .env)`)
+  }
 })
 
 const shutdown = () => {
