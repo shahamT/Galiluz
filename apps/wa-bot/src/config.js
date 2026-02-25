@@ -42,7 +42,10 @@ function loadConfig() {
       accessToken,
       phoneNumberId,
     },
-    galiluzAppUrl: process.env.GALILUZ_APP_URL || 'https://galiluz.co.il',
+    // In development, default to local Nuxt so publishers API uses dev MongoDB (root .env MONGODB_DB_NAME).
+    galiluzAppUrl: isProduction
+      ? (process.env.GALILUZ_APP_URL || 'https://galiluz.co.il')
+      : (process.env.GALILUZ_APP_URL || 'http://localhost:3000'),
     galiluzAppApiKey: process.env.GALILUZ_APP_API_KEY || process.env.API_SECRET || '',
     publishersApproverWaNumber: process.env.PUBLISHERS_APPROVER_WA_NUMBER || '',
     logLevel: process.env.LOG_LEVEL || 'info',

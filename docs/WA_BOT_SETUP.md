@@ -12,13 +12,14 @@ wa-bot is a small web service that receives WhatsApp Cloud API webhooks and can 
 
 ## Local development
 
-1. Copy `apps/wa-bot/.env.example` to `apps/wa-bot/.env` (or use the existing `.env` if already filled).
+1. Create `apps/wa-bot/.env` with the required vars (see Production for keys).
 2. Set `WA_PHONE_NUMBER_ID` from Meta API Setup.
-3. Run: `cd apps/wa-bot && npm install && npm run dev`.
-4. Expose your server to the internet (Meta requires HTTPS):
+3. **Publishers and dev database:** In development, wa-bot defaults `GALILUZ_APP_URL` to `http://localhost:3000`, so publisher check/register/approve/reject call your **local** Nuxt app, which uses the dev MongoDB from the root `.env` (`MONGODB_DB_NAME=valley_luz_app_dev`). Set `PUBLISHERS_APPROVER_WA_NUMBER` in `apps/wa-bot/.env` to your dev approver WhatsApp number. Run the Nuxt app (`npm run dev` in repo root) so the publishers API is available at localhost:3000.
+4. Run: `cd apps/wa-bot && npm install && npm run dev`.
+5. Expose your server to the internet (Meta requires HTTPS):
    - **ngrok**: `ngrok http 3001` → use the `https://…` URL.
    - **localtunnel**: `npx localtunnel --port 3001`.
-5. In Meta: WhatsApp → Configuration → Webhook:
+6. In Meta: WhatsApp → Configuration → Webhook:
    - Callback URL: `https://<your-ngrok-or-tunnel-host>/webhook`
    - Verify token: same value as `WEBHOOK_VERIFY_TOKEN` in `.env`.
    - Subscribe to **messages**.
