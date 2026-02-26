@@ -9,8 +9,7 @@ import {
   downloadMedia,
 } from '../services/cloudApi.service.js'
 import { uploadMediaToApp, deleteMediaOnApp } from '../services/eventAddMedia.service.js'
-import { createDraft, processDraft, activateEvent } from '../services/eventsCreate.service.js'
-import { createEvent } from '../services/eventsCreate.service.js'
+import { createDraft, processDraft, activateEvent, createEvent } from '../services/eventsCreate.service.js'
 import { patchDraft } from '../services/eventDraftPatch.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { config, normalizePhone } from '../config.js'
@@ -31,7 +30,6 @@ import {
   EVENT_ADD_LOCATION_INTRO,
   EVENT_ADD_ASK_PLACE_NAME,
   EVENT_ADD_SKIP_BUTTON,
-  EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON,
   EVENT_ADD_NO_MEDIA_BUTTON,
   EVENT_ADD_MEDIA_DONE_BUTTON,
   EVENT_ADD_ASK_CITY,
@@ -47,6 +45,8 @@ import {
   EVENT_ADD_ASK_LINKS_FOOTER,
   EVENT_ADD_ASK_MEDIA_FIRST,
   EVENT_ADD_ASK_MEDIA_MORE,
+  EVENT_ADD_MEDIA_MORE_ONE,
+  EVENT_ADD_MEDIA_MORE_MANY_TEMPLATE,
   EVENT_ADD_PROCESSING_MESSAGE,
   EVENT_ADD_SUCCESS,
   EVENT_ADD_TITLE_MIN,
@@ -196,8 +196,8 @@ function buildMediaCountMessage(mediaCount) {
 
 /** Body for "עוד X תמונות/סרטונים" with button. remaining = MAX_MEDIA - mediaCount. */
 function buildMediaMoreBody(remaining) {
-  if (remaining <= 1) return 'ניתן לשלוח עוד תמונה/סרטון אחד'
-  return `ניתן לשלוח עוד ${remaining} תמונות/סרטונים`
+  if (remaining <= 1) return EVENT_ADD_MEDIA_MORE_ONE
+  return EVENT_ADD_MEDIA_MORE_MANY_TEMPLATE.replace('{remaining}', String(remaining))
 }
 
 /**
@@ -1778,7 +1778,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_TITLE) {
-    if (textBody === 'טסט') return applyEventAddTestModeAndGoToMedia(phoneNumberId, from)
+    if (!config.isProduction && textBody === 'טסט') return applyEventAddTestModeAndGoToMedia(phoneNumberId, from)
     if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
     const len = textBody.length
     if (len < EVENT_ADD_TITLE_MIN || len > EVENT_ADD_TITLE_MAX) {
@@ -2104,7 +2104,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_MEDIA) {
-    if (msg.type === 'interactive' && buttonId === EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON.id) {
+    if (msg.type === 'interactive' && buttonId === EVENT_ADD_MEDIA_DONE_BUTTON.id) {
       if (state.eventAddConfirmPending) return Promise.resolve()
       conversationState.set(from, { eventAddConfirmPending: true })
       conversationState.set(from, { eventAddMedia: [] })
@@ -2152,7 +2152,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_MEDIA_MORE) {
-    if (msg.type === 'interactive' && buttonId === EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON.id) {
+    if (msg.type === 'interactive' && buttonId === EVENT_ADD_MEDIA_DONE_BUTTON.id) {
       if (state.eventAddConfirmPending) return Promise.resolve()
       conversationState.set(from, { eventAddConfirmPending: true })
       const s = conversationState.get(from)

@@ -8,11 +8,16 @@ import {
   EVENT_EDIT_MENU_FOOTER,
   EVENT_EDIT_MENU_ROWS,
   EVENT_EDIT_DONE_ROW,
+  EVENT_EDIT_LIST_BUTTON,
+  EVENT_EDIT_SECTION_DONE,
+  EVENT_EDIT_SECTION_FIELDS,
   EVENT_EDIT_LOCATION_MENU_BODY,
   EVENT_EDIT_LOCATION_MENU_FOOTER,
   EVENT_EDIT_LOCATION_BACK_ROW,
   EVENT_EDIT_LOCATION_DONE_ROW,
   EVENT_EDIT_LOCATION_FIELD_ROWS,
+  EVENT_EDIT_SECTION_NAV,
+  EVENT_EDIT_SECTION_LOCATION_FIELDS,
 } from '../consts/index.js'
 
 /** Row id for "סיימתי לעדכן פרטים" — exit edit flow. */
@@ -34,14 +39,14 @@ export function buildEditMenuListPayload() {
   return {
     body: EVENT_EDIT_MENU_BODY,
     footer: EVENT_EDIT_MENU_FOOTER,
-    button: 'בחר',
+    button: EVENT_EDIT_LIST_BUTTON,
     sections: [
       {
-        title: 'סיום עריכה',
+        title: EVENT_EDIT_SECTION_DONE,
         rows: [EVENT_EDIT_DONE_ROW],
       },
       {
-        title: 'עריכת שדות',
+        title: EVENT_EDIT_SECTION_FIELDS,
         rows: EVENT_EDIT_MENU_ROWS,
       },
     ],
@@ -57,14 +62,14 @@ export function buildLocationEditMenuPayload() {
   return {
     body: EVENT_EDIT_LOCATION_MENU_BODY,
     footer: EVENT_EDIT_LOCATION_MENU_FOOTER,
-    button: 'בחר',
+    button: EVENT_EDIT_LIST_BUTTON,
     sections: [
       {
-        title: 'ניווט',
+        title: EVENT_EDIT_SECTION_NAV,
         rows: [EVENT_EDIT_LOCATION_BACK_ROW, EVENT_EDIT_LOCATION_DONE_ROW],
       },
       {
-        title: 'שדות מיקום',
+        title: EVENT_EDIT_SECTION_LOCATION_FIELDS,
         rows: EVENT_EDIT_LOCATION_FIELD_ROWS,
       },
     ],

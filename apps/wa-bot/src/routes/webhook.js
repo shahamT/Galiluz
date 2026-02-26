@@ -3,6 +3,8 @@ import {
   sendText,
   sendInteractiveButtons,
   sendInteractiveList,
+  sendTemplate,
+  REENGAGEMENT_ERROR_CODE,
 } from '../services/cloudApi.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { getEventsMessageForDateAndCategory, getDateIsrael } from '../services/eventsDiscovery.service.js'
@@ -22,6 +24,8 @@ import {
   PUBLISH_ASK_COMMITMENT,
   PUBLISH_THANK_YOU,
   PUBLISH_PENDING_MESSAGE,
+  PUBLISH_REGISTER_ERROR,
+  PUBLISH_EXPECT_TEXT,
   APPROVER_REQUEST_BODY_TEMPLATE,
   APPROVER_BUTTONS,
   APPROVER_ASK_REASON,
@@ -51,6 +55,15 @@ import {
 
 /** In-memory: approver waId -> (publisher waId -> fullName) for confirmation messages */
 const pendingPublisherNamesByApprover = new Map()
+
+/** When we send approver request we store messageId -> approverWaId so on status failed 131047 we can send template. */
+const messageIdToApproverWaId = new Map()
+
+/** Payload of the approver request per messageId; on 131047 we move it to pendingApproverRequestByApprover so when approver replies we send the buttons. */
+const lastApproverRequestPayloadByMessageId = new Map()
+
+/** Set only after 131047 + template send: when approver replies (non-button) we send all queued approval UIs. approverWaId -> Array<{ publisherWaId, fullName, body, buttons }> */
+const pendingApproverRequestByApprover = new Map()
 
 function getAndRemovePublisherName(approverFrom, publisherWaId) {
   const normalized = normalizePhone(approverFrom)
@@ -173,7 +186,7 @@ async function handlePublishCommitYes(phoneNumberId, from) {
     eventTypesDescription,
   })
   if (!result.success) {
-    return sendText(phoneNumberId, from, 'משהו השתבש. נסה שוב מאוחר יותר.')
+    return sendText(phoneNumberId, from, PUBLISH_REGISTER_ERROR)
   }
   const thankYouPromise = sendInteractiveButtons(phoneNumberId, from, PUBLISH_THANK_YOU)
   const approverWaId = config.publishersApproverWaNumber
@@ -193,14 +206,42 @@ async function handlePublishCommitYes(phoneNumberId, from) {
         title: APPROVER_BUTTONS.rejectNoReason.title,
       },
     ]
-    sendInteractiveButtons(phoneNumberId, approverWaId, { body, buttons }).catch((err) =>
-      logger.error(LOG_PREFIXES.WEBHOOK, 'Notify approver failed', err),
-    )
+    const sendResult = await sendInteractiveButtons(phoneNumberId, approverWaId, { body, buttons })
+    if (sendResult.success && sendResult.messageId) {
+      messageIdToApproverWaId.set(sendResult.messageId, approverWaId)
+      lastApproverRequestPayloadByMessageId.set(sendResult.messageId, {
+        approverWaId,
+        body,
+        buttons,
+        publisherWaId: waId,
+        fullName,
+      })
+    }
+    if (!sendResult.success) {
+      logger.error(LOG_PREFIXES.WEBHOOK, 'Notify approver failed', sendResult.error)
+    }
   }
   return thankYouPromise
 }
 
 async function handleApproverFlow(phoneNumberId, from, msg) {
+  const approverNorm = normalizePhone(from)
+  const pendingList = pendingApproverRequestByApprover.get(approverNorm)
+  const isButtonReply = msg.interactive?.type === 'button_reply'
+  if (pendingList && pendingList.length > 0 && !isButtonReply) {
+    pendingApproverRequestByApprover.delete(approverNorm)
+    let lastPromise = Promise.resolve()
+    for (const pending of pendingList) {
+      lastPromise = lastPromise.then(() =>
+        sendInteractiveButtons(phoneNumberId, from, {
+          body: pending.body,
+          buttons: pending.buttons,
+        }),
+      )
+    }
+    return lastPromise
+  }
+
   const state = conversationState.get(from)
   const interactive = msg.interactive
 
@@ -396,7 +437,7 @@ function processOneMessage(phoneNumberId, from, msg, context = {}) {
     conversationState.STEPS.PUBLISH_ASK_COMMITMENT,
   ]
   if (publishSteps.includes(state.step) && msg.type !== 'text') {
-    return sendText(phoneNumberId, from, 'נא להשיב בטקסט.')
+    return sendText(phoneNumberId, from, PUBLISH_EXPECT_TEXT)
   }
 
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
@@ -470,6 +511,7 @@ function enqueueAndProcessUser(phoneNumberId, from, msg, context) {
 
 /**
  * Parse webhook body and process incoming messages. Route by interactive type and conversation state.
+ * Also handles status updates: when approver request message fails with 131047 (re-engagement), send template and queue approval UI for when approver replies.
  * Messages for the same user are processed sequentially so bulk uploads update state correctly.
  */
 function processWebhookBody(body) {
@@ -482,6 +524,54 @@ function processWebhookBody(body) {
       const value = change.value || {}
       const metadata = value.metadata || {}
       const phoneNumberId = metadata.phone_number_id
+
+      const statuses = value.statuses || []
+      for (const st of statuses) {
+        const messageId = st.id
+        if (st.status === 'sent' || st.status === 'delivered') {
+          if (messageIdToApproverWaId.has(messageId)) {
+            messageIdToApproverWaId.delete(messageId)
+            lastApproverRequestPayloadByMessageId.delete(messageId)
+          }
+        }
+        if (st.status === 'failed' && Array.isArray(st.errors) && st.errors.length > 0) {
+          const err = st.errors[0]
+          if (err.code === REENGAGEMENT_ERROR_CODE) {
+            const payload = lastApproverRequestPayloadByMessageId.get(messageId)
+            if (payload && phoneNumberId) {
+              lastApproverRequestPayloadByMessageId.delete(messageId)
+              messageIdToApproverWaId.delete(messageId)
+              let list = pendingApproverRequestByApprover.get(payload.approverWaId)
+              if (!list) {
+                list = []
+                pendingApproverRequestByApprover.set(payload.approverWaId, list)
+              }
+              list.push({
+                publisherWaId: payload.publisherWaId,
+                fullName: payload.fullName,
+                body: payload.body,
+                buttons: payload.buttons,
+              })
+              const isFirst = list.length === 1
+              if (config.approverReengagementTemplateName && isFirst) {
+                sendTemplate(
+                  phoneNumberId,
+                  payload.approverWaId,
+                  config.approverReengagementTemplateName,
+                  config.approverReengagementTemplateLanguage,
+                  { includeQuickReplyButton: true },
+                ).then((r) => {
+                  if (!r.success) logger.error(LOG_PREFIXES.WEBHOOK, 'Approver re-engagement template failed', r.error)
+                })
+              }
+            }
+            if (payload && !config.approverReengagementTemplateName) {
+              logger.warn(LOG_PREFIXES.WEBHOOK, 'Approver request failed with 131047 but APPROVER_REENGAGEMENT_TEMPLATE_NAME not set')
+            }
+          }
+        }
+      }
+
       const messages = value.messages || []
       if (messages.length === 0) continue
       const profileName = value.contacts?.[0]?.profile?.name

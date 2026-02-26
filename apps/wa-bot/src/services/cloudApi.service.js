@@ -191,3 +191,66 @@ export async function sendText(phoneNumberId, to, body) {
     return { success: false, error: err.message }
   }
 }
+
+const REENGAGEMENT_ERROR_CODE = 131047
+
+/**
+ * Send a pre-approved template message via WhatsApp Cloud API.
+ * Use when the recipient is outside the 24h window (e.g. after error 131047).
+ * Template must be created and approved in Meta Business Manager.
+ * If the template has a body only, components stay empty. If it has quick reply buttons,
+ * we include a button component so the structure matches (index 0, empty parameters for static button).
+ * @param {string} phoneNumberId - Business phone number ID
+ * @param {string} to - Recipient wa_id
+ * @param {string} templateName - Template name as created in Meta
+ * @param {string} languageCode - Language code (e.g. 'he', 'en')
+ * @param {{ includeQuickReplyButton?: boolean }} opts - Set includeQuickReplyButton: true if template has a quick reply button
+ * @returns {Promise<{ success: boolean, messageId?: string, error?: string, errorCode?: number }>}
+ */
+export async function sendTemplate(phoneNumberId, to, templateName, languageCode = 'he', opts = {}) {
+  const url = `${BASE_URL}/${phoneNumberId}/messages`
+  const components = []
+  if (opts.includeQuickReplyButton) {
+    components.push({
+      type: 'button',
+      sub_type: 'quick_reply',
+      index: '0',
+      parameters: [],
+    })
+  }
+  const payload = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: to.replace(/\D/g, ''),
+    type: 'template',
+    template: {
+      name: templateName,
+      language: { code: languageCode },
+      components,
+    },
+  }
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.whatsapp.accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const code = data.error?.code || data.error?.error_data?.details?.code
+      logger.error(LOG_PREFIXES.CLOUD_API, 'Send template failed', data)
+      return { success: false, error: data.error?.message || res.statusText, errorCode: code }
+    }
+    const messageId = data.messages?.[0]?.id
+    logger.info(LOG_PREFIXES.CLOUD_API, `Template "${templateName}" sent to ${to}, id: ${messageId || 'n/a'}`)
+    return { success: true, messageId }
+  } catch (err) {
+    logger.error(LOG_PREFIXES.CLOUD_API, err)
+    return { success: false, error: err.message }
+  }
+}
+
+export { REENGAGEMENT_ERROR_CODE }

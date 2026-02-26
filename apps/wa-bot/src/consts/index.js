@@ -94,6 +94,12 @@ export const PUBLISH_THANK_YOU = {
 export const PUBLISH_PENDING_MESSAGE =
   'אנחנו בודקים את הפרטים שהעברת. *תקבל/י מאיתנו הודעת וואטסאפ* ברגע שאושרת. עד אז אפשר להיכנס לאתר גלילו"ז.'
 
+/** Publish flow: registration API failed */
+export const PUBLISH_REGISTER_ERROR = 'משהו השתבש. נסה שוב מאוחר יותר.'
+
+/** Publish flow: when user must reply with text (e.g. during registration steps) */
+export const PUBLISH_EXPECT_TEXT = 'נא להשיב בטקסט.'
+
 // --- Publisher approver flow (button titles max 20 chars) ---
 
 /** Approver: body template for new publisher request. Use: name, publishingAs, eventTypes, waId */
@@ -213,6 +219,11 @@ export const EVENT_ADD_ASK_MEDIA_FIRST =
 /** First line (plain); second line in example format: _X/max קבצים נטענו_ */
 export const EVENT_ADD_ASK_MEDIA_MORE = 'ניתן לשלוח עוד תמונה/סרטון'
 
+/** "More media" message when exactly one slot left. */
+export const EVENT_ADD_MEDIA_MORE_ONE = 'ניתן לשלוח עוד תמונה/סרטון אחד'
+/** "More media" message when multiple slots left. Use .replace('{remaining}', count). */
+export const EVENT_ADD_MEDIA_MORE_MANY_TEMPLATE = 'ניתן לשלוח עוד {remaining} תמונות/סרטונים'
+
 /** Shown before format/process (italic). Bold line + excited emoji above, then current text. */
 export const EVENT_ADD_PROCESSING_MESSAGE =
   '*זהו! סיימנו! 🤩*\n\n_אנחנו מעבדים את הפרטים שהזנת, זה יכול לקחת כמה רגעים..._'
@@ -249,6 +260,16 @@ export const EVENT_EDIT_MENU_BODY = 'אילו פרטים תרצו לשנות?'
 export const EVENT_EDIT_MENU_FOOTER = "לסיום העריכה יש לבחור בתפריט ב'סיימתי לעדכן פרטים'"
 export const EVENT_EDIT_DONE_ID = 'edit_done'
 export const EVENT_EDIT_DONE_LABEL = 'סיימתי לעדכן פרטים'
+/** Edit menu: list button label (WhatsApp interactive list). */
+export const EVENT_EDIT_LIST_BUTTON = 'בחר'
+/** Edit menu: section title for "done updating" row. */
+export const EVENT_EDIT_SECTION_DONE = 'סיום עריכה'
+/** Edit menu: section title for field rows. */
+export const EVENT_EDIT_SECTION_FIELDS = 'עריכת שדות'
+/** Location edit menu: section title for back/done rows. */
+export const EVENT_EDIT_SECTION_NAV = 'ניווט'
+/** Location edit menu: section title for location field rows. */
+export const EVENT_EDIT_SECTION_LOCATION_FIELDS = 'שדות מיקום'
 export const EVENT_EDIT_DONE_ROW = { id: 'edit_done', title: 'סיימתי לעדכן פרטים' }
 export const EVENT_EDIT_ASK_TITLE = 'הזינו שם חדש לאירוע'
 export const EVENT_EDIT_ASK_DESCRIPTION = 'הזינו תיאור חדש לאירוע'
