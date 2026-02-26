@@ -108,6 +108,7 @@
           <button
             type="button"
             class="WelcomeModal-primaryButton"
+            :disabled="currentStep === 2 && !localSelectedCategories.length"
             @click="currentStep === 1 ? handleNextStep() : handleTakeMeToSchedule()"
           >
             {{ currentStep === 1 ? WELCOME_MODAL.nextStepLabel : WELCOME_MODAL.takeMeToScheduleLabel }}
@@ -173,7 +174,8 @@ function handleDismiss() {
 }
 
 function handleStart() {
-  currentStep.value = 1
+  // TODO: Re-enable region step when ready – go to step 1 (regions) then step 2 (categories)
+  currentStep.value = 2
 }
 
 function handleNextStep() {
@@ -523,6 +525,11 @@ function onCategoriesUpdate(ids) {
 
     &:hover {
       opacity: 0.9;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     @include mobile {

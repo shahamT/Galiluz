@@ -2,17 +2,29 @@ import { randomBytes } from 'node:crypto'
 import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
-import { logEventCreation } from '~/server/utils/eventLogs.service'
+import { logEventDeletion } from '~/server/utils/eventLogs.service'
 
-const LOG_PREFIX = '[EventsAPI] Activate'
+const LOG_PREFIX = '[EventsAPI] Delete'
 
-/** Set isActive: true on an existing (processed) draft. Called when user confirms in wa-bot. */
+/** Body for delete: optional deletionType to record why the event was removed. */
+interface DeleteBody {
+  deletionType?: 'kill' | 'user_deleted'
+}
+
+/**
+ * Delete an event document (draft or published). Logs the deletion to eventLogs then removes the document.
+ * Body.deletionType: 'kill' = flow abandoned (e.g. timeout/cancel before completing add); 'user_deleted' = user chose to delete (default).
+ * Requires API secret.
+ */
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
   const id = getRouterParam(event, 'id')
   if (!id) {
     throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'id required' })
   }
+
+  const body = await readBody<DeleteBody>(event).catch(() => ({}))
+  const deletionType = body?.deletionType === 'kill' ? 'kill' : 'user_deleted'
 
   let objectId: ObjectId
   try {
@@ -41,30 +53,28 @@ export default defineEventHandler(async (event) => {
   if (!doc) {
     throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'event not found' })
   }
-  if (doc.event == null) {
-    throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'event not yet processed' })
-  }
 
-  const result = await collection.updateOne(
-    { _id: objectId },
-    { $set: { isActive: true, updatedAt: new Date() } }
-  )
-  if (result.matchedCount === 0) {
-    throw createError({ statusCode: 500, statusMessage: 'Internal Server Error' })
-  }
-  console.info(LOG_PREFIX, correlationId, 'activated', JSON.stringify({ id }))
-  const rawEvent = doc.rawEvent as Record<string, unknown> | undefined
-  const publisherIdStr = rawEvent?.publisherId ?? (rawEvent?.publisher as Record<string, unknown>)?.publisherId
-  const waIdStr = (rawEvent?.publisher as Record<string, unknown>)?.waId
-  await logEventCreation({
+  const ev = doc.event as Record<string, unknown> | null | undefined
+  const rawEv = doc.rawEvent as Record<string, unknown> | null | undefined
+  const title = ev && typeof ev.Title === 'string' ? ev.Title : undefined
+  const rawTitle = rawEv && typeof rawEv.rawTitle === 'string' ? rawEv.rawTitle : undefined
+  const publisherIdStr = rawEv?.publisherId ?? (rawEv?.publisher as Record<string, unknown>)?.publisherId
+  const waIdStr = (rawEv?.publisher as Record<string, unknown>)?.waId
+
+  await logEventDeletion({
     eventId: id,
-    action: 'event_activated',
-    title: doc.event && typeof doc.event === 'object' && typeof (doc.event as Record<string, unknown>).Title === 'string'
-      ? (doc.event as Record<string, unknown>).Title as string
-      : undefined,
+    deletionType,
+    title,
+    rawTitle,
     publisherId: typeof publisherIdStr === 'string' ? publisherIdStr : undefined,
     waId: typeof waIdStr === 'string' ? waIdStr : undefined,
     correlationId,
   })
-  return { id, success: true }
+
+  const deleteResult = await collection.deleteOne({ _id: objectId })
+  if (deleteResult.deletedCount === 0) {
+    throw createError({ statusCode: 500, statusMessage: 'Internal Server Error' })
+  }
+  console.info(LOG_PREFIX, correlationId, 'deleted', JSON.stringify({ id }))
+  return { success: true, id }
 })

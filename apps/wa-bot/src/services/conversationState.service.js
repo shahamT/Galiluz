@@ -64,6 +64,7 @@ const STEPS = {
   EVENT_ADD_EDIT_EXTRA_REMOVE: 'event_add_edit_extra_remove',
   EVENT_ADD_EDIT_LOCATION_MENU: 'event_add_edit_location_menu',
   EVENT_ADD_EDIT_LOCATION_FIELD: 'event_add_edit_location_field',
+  EVENT_ADD_EDIT_MEDIA_INTRO: 'event_add_edit_media_intro',
 }
 
 function get(waId) {

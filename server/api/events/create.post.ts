@@ -3,6 +3,7 @@ import { getCategoriesList } from '~/server/consts/events.const'
 import { validatePublisherFormattedEvent, normalizePublisherFormattedEvent } from '~/server/utils/eventValidation'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
+import { logEventCreation } from '~/server/utils/eventLogs.service'
 
 const LOG_PREFIX = '[EventsAPI] Create'
 
@@ -120,6 +121,15 @@ export default defineEventHandler(async (event) => {
     const result = await collection.insertOne(doc)
     const id = result.insertedId.toString()
     console.info(LOG_PREFIX, correlationId, 'inserted', JSON.stringify({ id }))
+    await logEventCreation({
+      eventId: id,
+      action: 'event_created',
+      title: typeof formattedEvent.Title === 'string' ? formattedEvent.Title : undefined,
+      rawTitle: typeof rawEventWithAll.rawTitle === 'string' ? rawEventWithAll.rawTitle : undefined,
+      publisherId: publisherId ?? undefined,
+      waId: waId || undefined,
+      correlationId,
+    })
     return { id, success: true }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

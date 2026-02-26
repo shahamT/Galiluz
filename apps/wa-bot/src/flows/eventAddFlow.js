@@ -14,7 +14,7 @@ import { createEvent } from '../services/eventsCreate.service.js'
 import { patchDraft } from '../services/eventDraftPatch.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { config, normalizePhone } from '../config.js'
-import { generateShortDescription, normalizeCityForEdit, extractNavLinksFromRaw } from 'event-format'
+import { generateShortDescription, normalizeCityForEdit, extractNavLinksFromRaw, parseOccurrencesFromText, parsePriceFromText, parseUrlsFromText } from 'event-format'
 import { getDateInIsraelFromIso, getTimeInIsraelFromIso } from '../utils/date.helpers.js'
 import { logger } from '../utils/logger.js'
 import {
@@ -32,6 +32,8 @@ import {
   EVENT_ADD_ASK_PLACE_NAME,
   EVENT_ADD_SKIP_BUTTON,
   EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON,
+  EVENT_ADD_NO_MEDIA_BUTTON,
+  EVENT_ADD_MEDIA_DONE_BUTTON,
   EVENT_ADD_ASK_CITY,
   EVENT_ADD_ASK_ADDRESS,
   EVENT_ADD_ASK_ADDRESS_FOOTER,
@@ -84,9 +86,20 @@ import {
   EVENT_ADD_CONFIRM_EDIT_RESTART,
   EVENT_EDIT_ASK_TITLE,
   EVENT_EDIT_ASK_DESCRIPTION,
+  EVENT_EDIT_ASK_DATETIME,
+  EVENT_EDIT_ASK_DATETIME_FOOTER,
+  EVENT_EDIT_ASK_PRICE,
+  EVENT_EDIT_ASK_PRICE_FOOTER,
+  EVENT_EDIT_ASK_LINKS,
+  EVENT_EDIT_ASK_LINKS_FOOTER,
+  EVENT_EDIT_ASK_MEDIA,
+  EVENT_EDIT_ASK_MEDIA_FOOTER,
+  EVENT_EDIT_MEDIA_CANCEL_BUTTON,
   EVENT_EDIT_SUCCESS_MESSAGES,
+  EVENT_EDIT_SUCCESS_VALUE_EMPTY,
   EVENT_EDIT_SUCCESS_DONE_BUTTON,
   EVENT_EDIT_SUCCESS_MORE_BUTTON,
+  EVENT_EDIT_SUCCESS_MORE_LOCATION_BUTTON,
   EVENT_EDIT_SUCCESS_CHOOSE_BODY,
   EVENT_EDIT_PATCH_ERROR,
   EVENT_EDIT_EXTRA_CANNOT_REMOVE_LAST,
@@ -170,6 +183,7 @@ const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_EDIT_EXTRA_REMOVE,
   STEPS.EVENT_ADD_EDIT_LOCATION_MENU,
   STEPS.EVENT_ADD_EDIT_LOCATION_FIELD,
+  STEPS.EVENT_ADD_EDIT_MEDIA_INTRO,
 ]
 
 function isEventAddStep(step) {
@@ -204,7 +218,7 @@ export function sendMediaMoreMessageIfNeeded(phoneNumberId, from) {
   ) {
     return sendInteractiveButtons(phoneNumberId, from, {
       body: buildMediaMoreBody(MAX_MEDIA - media.length),
-      buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+      buttons: [EVENT_ADD_MEDIA_DONE_BUTTON],
     })
   }
 }
@@ -270,7 +284,7 @@ function applyEventAddTestModeAndGoToMedia(phoneNumberId, from) {
   logger.info(LOG_PREFIXES.EVENT_ADD, 'Test mode: skip to media', from)
   return sendInteractiveButtons(phoneNumberId, from, {
     body: EVENT_ADD_ASK_MEDIA_FIRST,
-    buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+    buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
   })
 }
 
@@ -394,6 +408,87 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
 }
 
 /**
+ * Build the value block shown after edit success (new line + empty line + value in summary format).
+ * Uses EVENT_EDIT_SUCCESS_VALUE_EMPTY for empty values.
+ * @param {'title' | 'description' | 'mainCategory' | 'location' | 'datetime' | 'price' | 'links'} fieldKey
+ * @param {Record<string, unknown>} formattedEvent - result.event or eventAddFormattedPreview
+ * @param {Record<string, { label: string }>} eventCategories - id → { label }
+ * @returns {string}
+ */
+function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories) {
+  const empty = EVENT_EDIT_SUCCESS_VALUE_EMPTY
+  const catLabel = (id) => (eventCategories[id]?.label ?? id)
+  const ev = formattedEvent && typeof formattedEvent === 'object' ? formattedEvent : {}
+
+  if (fieldKey === 'title') {
+    const title = typeof ev.Title === 'string' ? ev.Title.trim() : ''
+    return `*שם האירוע:*\n${title || empty}`
+  }
+  if (fieldKey === 'description') {
+    const shortDesc = typeof ev.shortDescription === 'string' ? ev.shortDescription.trim() : ''
+    return `*תיאור מקוצר:*\n${shortDesc || empty}`
+  }
+  if (fieldKey === 'mainCategory') {
+    const mainCatId = ev.mainCategory
+    const mainCatLabel = mainCatId ? catLabel(mainCatId) : empty
+    const categoriesArr = Array.isArray(ev.categories) ? ev.categories : []
+    const otherCategories = categoriesArr.filter((c) => c !== mainCatId).map(catLabel)
+    const lines = [`*קטגוריה ראשית:*`, mainCatLabel, '', `*קטגוריות נוספות:*`, otherCategories.length ? otherCategories.join(', ') : empty]
+    return lines.join('\n')
+  }
+  if (fieldKey === 'location') {
+    const loc = ev.location && typeof ev.location === 'object' ? ev.location : {}
+    const locLines = []
+    if (loc.locationName) locLines.push(String(loc.locationName))
+    if (loc.City) locLines.push(String(loc.City))
+    if (loc.addressLine1) locLines.push(String(loc.addressLine1))
+    if (loc.addressLine2) locLines.push(String(loc.addressLine2))
+    if (loc.locationDetails) locLines.push(String(loc.locationDetails))
+    if (loc.wazeNavLink || loc.gmapsNavLink) {
+      locLines.push('')
+      if (loc.wazeNavLink) locLines.push(`ניווט בוויז - ${loc.wazeNavLink}`)
+      if (loc.gmapsNavLink) locLines.push(`ניווט בגוגל מפות - ${loc.gmapsNavLink}`)
+    }
+    const locationBlock = locLines.length ? locLines.join('\n') : empty
+    return `*מיקום האירוע:*\n${locationBlock}`
+  }
+  if (fieldKey === 'datetime') {
+    const occurrences = Array.isArray(ev.occurrences) ? ev.occurrences : []
+    const occLines = occurrences.map((occ) => {
+      const startIso = occ.startTime ?? occ.date
+      const dateStr = occ.date ? formatDateDisplayNoYear(occ.date) : (startIso ? formatDateDisplayNoYear(getDateInIsraelFromIso(startIso)) : '-')
+      const timeStr = !occ.hasTime || !startIso ? 'כל היום' : (() => {
+        const startTime = getTimeInIsraelFromIso(startIso)
+        const endTime = occ.endTime ? getTimeInIsraelFromIso(occ.endTime) : ''
+        return endTime ? `${startTime} – ${endTime}` : startTime
+      })()
+      return `תאריך: ${dateStr} | שעה: ${timeStr}`
+    })
+    const datesBlock = occLines.length ? occLines.join('\n') : empty
+    return `*תאריכים ושעה:*\n${datesBlock}`
+  }
+  if (fieldKey === 'price') {
+    const priceNum = typeof ev.price === 'number' ? ev.price : NaN
+    const priceStr = Number.isNaN(priceNum) ? empty : priceNum === 0 ? 'חינם' : `${priceNum} ₪`
+    return `*מחיר:*\n${priceStr}`
+  }
+  if (fieldKey === 'links') {
+    const urls = Array.isArray(ev.urls) ? ev.urls : []
+    const linkLines = urls
+      .filter((u) => u && typeof u.Title === 'string' && typeof u.Url === 'string')
+      .map((u) => `${u.Title} - ${u.Url}`)
+    const linksBlock = linkLines.length ? linkLines.join('\n') : empty
+    return `*לינקים:*\n${linksBlock}`
+  }
+  if (fieldKey === 'media') {
+    const media = Array.isArray(ev.media) ? ev.media : []
+    const mediaSummary = media.length === 0 ? empty : media.length === 1 ? 'קובץ אחד' : `${media.length} קבצים`
+    return `*תמונות וסרטונים:*\n${mediaSummary}`
+  }
+  return empty
+}
+
+/**
  * Send confirm step message (summary + אישור ושמירה / עריכת פרטים). Used when entering confirm or returning from edit flow.
  * @param {string} phoneNumberId
  * @param {string} from
@@ -431,7 +526,7 @@ async function runProcessDraftAfterFlagInput(phoneNumberId, from, state, context
     await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
     return sendInteractiveButtons(phoneNumberId, from, {
       body: EVENT_ADD_FORMAT_FAILED_RETRY_BODY,
-      buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+      buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
     })
   }
   const publisherInfo = { phone: from, name: context?.profileName ?? '', waId: from }
@@ -446,7 +541,7 @@ async function runProcessDraftAfterFlagInput(phoneNumberId, from, state, context
     await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
     return sendInteractiveButtons(phoneNumberId, from, {
       body: EVENT_ADD_FORMAT_FAILED_RETRY_BODY,
-      buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+      buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
     })
   }
   const flags = Array.isArray(processResult.flags) ? processResult.flags : []
@@ -519,6 +614,38 @@ async function runProcessDraftAfterFlagInput(phoneNumberId, from, state, context
  */
 async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts = {}) {
   const publisherInfo = { phone: from, name: context?.profileName ?? '', waId: from }
+  let draftId = state.eventAddDraftId
+
+  if (state.eventAddEditMediaMode && draftId) {
+    const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
+    logger.info(LOG_PREFIXES.EVENT_ADD, 'goToConfirmOrRetryMedia (edit media)', from, { mediaCount: media.length })
+    const patchPayload = media.map((m) => ({
+      cloudinaryURL: m.cloudinaryURL,
+      cloudinaryData: m.cloudinaryData,
+      isMain: m.isMain ?? false,
+    }))
+    const result = await patchDraft(draftId, { media: patchPayload })
+    if (!result.success) {
+      logger.error(LOG_PREFIXES.EVENT_ADD, 'Edit media patch failed', from, result.reason)
+      conversationState.set(from, { eventAddConfirmPending: undefined })
+      await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: buildMediaMoreBody(MAX_MEDIA - media.length),
+        buttons: [EVENT_ADD_MEDIA_DONE_BUTTON],
+      })
+    }
+    const updatedEvent = result.event || state.eventAddFormattedPreview
+    conversationState.set(from, {
+      eventAddFormattedPreview: updatedEvent,
+      step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+      eventAddEditMediaMode: undefined,
+      eventAddConfirmPending: undefined,
+    })
+    let body = EVENT_EDIT_SUCCESS_MESSAGES.media + '\n\n' + buildEditSuccessValueBlock('media', updatedEvent || {}, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.media
+    return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+  }
+
   const rawEvent = buildRawEvent(state, publisherInfo)
   const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
   const mainCategory = (state.eventAddMainCategory ?? '').trim()
@@ -528,7 +655,6 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
 
   await sendText(phoneNumberId, from, EVENT_ADD_PROCESSING_MESSAGE)
 
-  let draftId = state.eventAddDraftId
   if (!draftId) {
     const body = { rawEvent, media, mainCategory, categories }
     const draftResult = await createDraft(body)
@@ -551,7 +677,7 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
     await sendText(phoneNumberId, from, EVENT_ADD_FORMAT_FAILED)
     return sendInteractiveButtons(phoneNumberId, from, {
       body: EVENT_ADD_FORMAT_FAILED_RETRY_BODY,
-      buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+      buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
     })
   }
   const flags = Array.isArray(processResult.flags) ? processResult.flags : []
@@ -1066,15 +1192,46 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
       return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
     }
+    if (listReplyId === 'edit_datetime') {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_FIELD, eventEditFieldKey: 'datetime' })
+      return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
+    }
+    if (listReplyId === 'edit_price') {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_FIELD, eventEditFieldKey: 'price' })
+      return sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER)
+    }
+    if (listReplyId === 'edit_links') {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_FIELD, eventEditFieldKey: 'links' })
+      return sendText(phoneNumberId, from, EVENT_EDIT_ASK_LINKS + '\n' + EVENT_EDIT_ASK_LINKS_FOOTER)
+    }
+    if (listReplyId === 'edit_media') {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MEDIA_INTRO })
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_EDIT_ASK_MEDIA,
+        footer: EVENT_EDIT_ASK_MEDIA_FOOTER,
+        buttons: [EVENT_EDIT_MEDIA_CANCEL_BUTTON],
+      })
+    }
     return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_FIELD) {
     const fieldKey = state.eventEditFieldKey
     const draftId = state.eventAddDraftId
-    if (!draftId || !textBody) {
+    if (!draftId) {
       if (fieldKey === 'title') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_TITLE)
       if (fieldKey === 'description') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DESCRIPTION)
+      if (fieldKey === 'datetime') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
+      if (fieldKey === 'price') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER)
+      if (fieldKey === 'links') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_LINKS + '\n' + EVENT_EDIT_ASK_LINKS_FOOTER)
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+    }
+    if (!textBody) {
+      if (fieldKey === 'title') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_TITLE)
+      if (fieldKey === 'description') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DESCRIPTION)
+      if (fieldKey === 'datetime') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
+      if (fieldKey === 'price') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER)
+      if (fieldKey === 'links') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_LINKS + '\n' + EVENT_EDIT_ASK_LINKS_FOOTER)
       return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
     }
     if (fieldKey === 'title') {
@@ -1095,7 +1252,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         step: STEPS.EVENT_ADD_EDIT_SUCCESS,
         eventEditFieldKey: undefined,
       })
-      return sendEditSuccessQuickReplies(phoneNumberId, from, EVENT_EDIT_SUCCESS_MESSAGES.title)
+      const updatedEvent = result.event || state.eventAddFormattedPreview
+      let body = EVENT_EDIT_SUCCESS_MESSAGES.title + '\n\n' + buildEditSuccessValueBlock('title', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.title
+      return sendEditSuccessQuickReplies(phoneNumberId, from, body)
     }
     if (fieldKey === 'description') {
       const len = textBody.length
@@ -1123,10 +1283,169 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         step: STEPS.EVENT_ADD_EDIT_SUCCESS,
         eventEditFieldKey: undefined,
       })
-      return sendEditSuccessQuickReplies(phoneNumberId, from, EVENT_EDIT_SUCCESS_MESSAGES.description)
+      const updatedEvent = result.event || state.eventAddFormattedPreview
+      let body = EVENT_EDIT_SUCCESS_MESSAGES.description + '\n\n' + buildEditSuccessValueBlock('description', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.description
+      return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+    }
+    if (fieldKey === 'datetime') {
+      if (textBody.length > EVENT_ADD_DATETIME_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_DATETIME, () =>
+          sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER),
+        )
+      }
+      const parseResult = await parseOccurrencesFromText(textBody, {
+        openaiApiKey: config.openaiApiKey,
+        openaiModel: config.openaiModel,
+      })
+      if (parseResult.flagReason) {
+        await sendText(phoneNumberId, from, parseResult.flagReason)
+        return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
+      }
+      const occurrences = Array.isArray(parseResult.occurrences) ? parseResult.occurrences : []
+      if (occurrences.length === 0) {
+        await sendText(phoneNumberId, from, 'לא הצלחנו לזהות תאריכים ושעות. נסה שוב.')
+        return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
+      }
+      const result = await patchDraft(draftId, { occurrences })
+      if (!result.success) {
+        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      }
+      conversationState.set(from, {
+        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
+        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+        eventEditFieldKey: undefined,
+      })
+      const updatedEvent = result.event || state.eventAddFormattedPreview
+      let body = EVENT_EDIT_SUCCESS_MESSAGES.datetime + '\n\n' + buildEditSuccessValueBlock('datetime', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.datetime
+      return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+    }
+    if (fieldKey === 'price') {
+      if (textBody.length > EVENT_ADD_PRICE_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_PRICE, () =>
+          sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER),
+        )
+      }
+      const parseResult = await parsePriceFromText(textBody, {
+        openaiApiKey: config.openaiApiKey,
+        openaiModel: config.openaiModel,
+      })
+      if (parseResult.flagReason) {
+        await sendText(phoneNumberId, from, parseResult.flagReason)
+        return sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER)
+      }
+      const price = parseResult.price !== undefined ? parseResult.price : null
+      const result = await patchDraft(draftId, { price })
+      if (!result.success) {
+        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      }
+      conversationState.set(from, {
+        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
+        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+        eventEditFieldKey: undefined,
+      })
+      const updatedEvent = result.event || state.eventAddFormattedPreview
+      let body = EVENT_EDIT_SUCCESS_MESSAGES.price + '\n\n' + buildEditSuccessValueBlock('price', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.price
+      return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+    }
+    if (fieldKey === 'links') {
+      if (textBody.length > EVENT_ADD_LINKS_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_LINKS, () =>
+          sendText(phoneNumberId, from, EVENT_EDIT_ASK_LINKS + '\n' + EVENT_EDIT_ASK_LINKS_FOOTER),
+        )
+      }
+      const parseResult = await parseUrlsFromText(textBody, {
+        openaiApiKey: config.openaiApiKey,
+        openaiModel: config.openaiModel,
+      })
+      const urls = Array.isArray(parseResult.urls) ? parseResult.urls : []
+      const result = await patchDraft(draftId, { urls })
+      if (!result.success) {
+        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      }
+      conversationState.set(from, {
+        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
+        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+        eventEditFieldKey: undefined,
+      })
+      const updatedEvent = result.event || state.eventAddFormattedPreview
+      let body = EVENT_EDIT_SUCCESS_MESSAGES.links + '\n\n' + buildEditSuccessValueBlock('links', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.links
+      return sendEditSuccessQuickReplies(phoneNumberId, from, body)
     }
     conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventEditFieldKey: undefined })
     return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+  }
+
+  if (step === STEPS.EVENT_ADD_EDIT_MEDIA_INTRO) {
+    const draftId = state.eventAddDraftId
+    if (buttonId === EVENT_EDIT_MEDIA_CANCEL_BUTTON.id) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+    }
+    if ((msg.type === 'image' || msg.type === 'video') && mediaId) {
+      if (!draftId) {
+        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      }
+      const preview = state.eventAddFormattedPreview
+      const currentMedia = Array.isArray(preview?.media) ? preview.media : []
+      const deleteItems = currentMedia
+        .filter((item) => item?.cloudinaryData?.public_id)
+        .map((item) => {
+          const rt = item.cloudinaryData.resource_type
+          const resourceType = rt === 'video' ? 'video' : rt === 'raw' ? 'raw' : 'image'
+          return { publicId: item.cloudinaryData.public_id, resourceType }
+        })
+      if (deleteItems.length > 0) {
+        const deleted = await deleteMediaOnApp(deleteItems)
+        if (!deleted) {
+          logger.warn(LOG_PREFIXES.EVENT_ADD, 'deleteMediaOnApp failed in edit media intro', from)
+        }
+      }
+      const patchResult = await patchDraft(draftId, { media: [] })
+      if (!patchResult.success) {
+        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      }
+      conversationState.set(from, {
+        eventAddMedia: [],
+        eventAddEditMediaMode: true,
+        eventAddFormattedPreview: patchResult.event || state.eventAddFormattedPreview,
+        step: STEPS.EVENT_ADD_MEDIA,
+      })
+      const stateAfterSet = conversationState.get(from)
+      const item = await processIncomingMedia(mediaId, stateAfterSet)
+      if (!item) {
+        await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_UPLOAD_FAILED)
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_EDIT_ASK_MEDIA,
+          footer: EVENT_EDIT_ASK_MEDIA_FOOTER,
+          buttons: [EVENT_EDIT_MEDIA_CANCEL_BUTTON],
+        })
+      }
+      const media = [item]
+      conversationState.set(from, { eventAddMedia: media, step: STEPS.EVENT_ADD_MEDIA_MORE })
+      await sendText(phoneNumberId, from, buildMediaCountMessage(media.length))
+      return Promise.resolve()
+    }
+    if (msg.type === 'text') {
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_EDIT_ASK_MEDIA,
+        footer: EVENT_EDIT_ASK_MEDIA_FOOTER,
+        buttons: [EVENT_EDIT_MEDIA_CANCEL_BUTTON],
+      })
+    }
+    return Promise.resolve()
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP) {
@@ -1183,7 +1502,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       step: STEPS.EVENT_ADD_EDIT_SUCCESS,
       eventAddMainCategoryGroupId: undefined,
     })
-    return sendEditSuccessQuickReplies(phoneNumberId, from, EVENT_EDIT_SUCCESS_MESSAGES.mainCategory)
+    const updatedEvent = result.event || state.eventAddFormattedPreview
+    let body = EVENT_EDIT_SUCCESS_MESSAGES.mainCategory + '\n\n' + buildEditSuccessValueBlock('mainCategory', updatedEvent || {}, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.mainCategory
+    return sendEditSuccessQuickReplies(phoneNumberId, from, body)
   }
 
   function sendExtraCategoriesScreen() {
@@ -1319,7 +1641,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_EDIT_LOCATION_MENU) {
     if (listReplyId === EVENT_EDIT_LOCATION_DONE_ROW.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_SUCCESS })
-      return sendEditSuccessQuickReplies(phoneNumberId, from, EVENT_EDIT_SUCCESS_MESSAGES.location)
+      const updatedEvent = state.eventAddFormattedPreview
+      let body = EVENT_EDIT_SUCCESS_MESSAGES.location + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.location
+      return sendEditSuccessQuickReplies(phoneNumberId, from, body, {
+        addLocationOption: true,
+      })
     }
     if (listReplyId === EVENT_EDIT_LOCATION_BACK_ROW.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
@@ -1392,7 +1719,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       step: STEPS.EVENT_ADD_EDIT_SUCCESS,
       eventEditLocationFieldKey: undefined,
     })
-    return sendEditSuccessQuickReplies(phoneNumberId, from, EVENT_EDIT_SUCCESS_MESSAGES.location)
+    const updatedEvent = result.event || state.eventAddFormattedPreview
+    let body = EVENT_EDIT_SUCCESS_MESSAGES.location + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.location
+    return sendEditSuccessQuickReplies(phoneNumberId, from, body, {
+      addLocationOption: true,
+    })
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_SUCCESS) {
@@ -1407,6 +1739,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     if (buttonId === EVENT_EDIT_SUCCESS_MORE_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+    }
+    if (buttonId === EVENT_EDIT_SUCCESS_MORE_LOCATION_BUTTON.id) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
+      return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
     }
     return sendEditSuccessQuickReplies(phoneNumberId, from)
   }
@@ -1789,7 +2125,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
           if (r && !r.success) return r
           return sendInteractiveButtons(phoneNumberId, from, {
             body: EVENT_ADD_ASK_MEDIA_FIRST,
-            buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+            buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
           })
         })
       }
@@ -1808,7 +2144,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MEDIA, () =>
         sendInteractiveButtons(phoneNumberId, from, {
           body: EVENT_ADD_ASK_MEDIA_FIRST,
-          buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+          buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
         }),
       )
     }
@@ -1837,7 +2173,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
           const count = (state.eventAddMedia || []).length
           return sendInteractiveButtons(phoneNumberId, from, {
             body: buildMediaMoreBody(MAX_MEDIA - count),
-            buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+            buttons: [EVENT_ADD_MEDIA_DONE_BUTTON],
           })
         })
       }
@@ -1856,7 +2192,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         const count = (state.eventAddMedia || []).length
         return sendInteractiveButtons(phoneNumberId, from, {
           body: buildMediaMoreBody(MAX_MEDIA - count),
-          buttons: [EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON],
+          buttons: [EVENT_ADD_MEDIA_DONE_BUTTON],
         })
       })
     }

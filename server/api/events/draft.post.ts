@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
+import { logEventCreation } from '~/server/utils/eventLogs.service'
 
 const LOG_PREFIX = '[EventsAPI] Draft'
 
@@ -106,6 +107,14 @@ export default defineEventHandler(async (event) => {
     const result = await collection.insertOne(doc)
     const id = result.insertedId.toString()
     console.info(LOG_PREFIX, correlationId, 'draft created', JSON.stringify({ id }))
+    await logEventCreation({
+      eventId: id,
+      action: 'draft_created',
+      rawTitle: typeof rawEventWithAll.rawTitle === 'string' ? rawEventWithAll.rawTitle : undefined,
+      publisherId: publisherId ?? undefined,
+      waId: waId || undefined,
+      correlationId,
+    })
     return { id, success: true }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

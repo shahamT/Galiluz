@@ -164,8 +164,8 @@ export const EVENT_ADD_CATEGORY_FOOTER = 'אנחנו כבר נשייך את הא
 export const EVENT_ADD_CATEGORY_AI_NOTE = '_אנחנו כבר נשייך את האירוע לקטגוריות נוספות_'
 export const EVENT_ADD_CHANGE_GROUP_PROMPT = 'לא מתאים? אפשר לבחור קבוצה אחרת.'
 export const EVENT_ADD_CHANGE_GROUP_BUTTON = { id: 'event_add_change_group', title: 'בחירת קבוצה אחרת' }
-/** Row title for "change category group" at top of category list (single message, no follow-up) */
-export const EVENT_ADD_CHANGE_GROUP_ROW_TITLE = 'בחר/י קבוצת קטגוריות אחרת'
+/** Row title for "change category group" at top of category list (max 24 chars). */
+export const EVENT_ADD_CHANGE_GROUP_ROW_TITLE = 'קבוצת קטגוריות אחרת'
 
 export const EVENT_ADD_LOCATION_INTRO = '*מיקום האירוע*\nאנא מלאו את פרטי המיקום'
 
@@ -173,10 +173,19 @@ export const EVENT_ADD_ASK_PLACE_NAME = 'שם המקום'
 export const EVENT_ADD_SKIP_BUTTON = { id: 'event_add_skip', title: 'דלג' }
 
 /** Same id as skip; use in EVENT_ADD_MEDIA / EVENT_ADD_MEDIA_MORE only. */
-export const EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON = {
-  id: 'event_add_skip',
-  title: 'ללא תמונה/סרטון',
+export const EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON_ID = 'event_add_skip'
+/** First media ask: "no media" quick reply. */
+export const EVENT_ADD_NO_MEDIA_BUTTON = {
+  id: EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON_ID,
+  title: 'ללא תמונות/סרטונים',
 }
+/** "ניתן לשלוח עוד X..." message: done uploading quick reply. */
+export const EVENT_ADD_MEDIA_DONE_BUTTON = {
+  id: EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON_ID,
+  title: 'סיימתי להעלות קבצים',
+}
+/** @deprecated Use EVENT_ADD_NO_MEDIA_BUTTON or EVENT_ADD_MEDIA_DONE_BUTTON per context; same id. */
+export const EVENT_ADD_SKIP_MEDIA_FINISH_BUTTON = EVENT_ADD_NO_MEDIA_BUTTON
 
 export const EVENT_ADD_ASK_CITY = 'יישוב (חובה)'
 
@@ -243,6 +252,16 @@ export const EVENT_EDIT_DONE_LABEL = 'סיימתי לעדכן פרטים'
 export const EVENT_EDIT_DONE_ROW = { id: 'edit_done', title: 'סיימתי לעדכן פרטים' }
 export const EVENT_EDIT_ASK_TITLE = 'הזינו שם חדש לאירוע'
 export const EVENT_EDIT_ASK_DESCRIPTION = 'הזינו תיאור חדש לאירוע'
+export const EVENT_EDIT_ASK_DATETIME = 'הזינו תאריכים ושעות חדשים'
+export const EVENT_EDIT_ASK_DATETIME_FOOTER = EVENT_ADD_ASK_DATETIME_FOOTER
+export const EVENT_EDIT_ASK_PRICE = EVENT_ADD_ASK_PRICE
+export const EVENT_EDIT_ASK_PRICE_FOOTER = EVENT_ADD_ASK_PRICE_FOOTER
+export const EVENT_EDIT_ASK_LINKS = 'הזינו לינקים וטלפונים'
+export const EVENT_EDIT_ASK_LINKS_FOOTER = EVENT_ADD_ASK_LINKS_FOOTER
+export const EVENT_EDIT_ASK_MEDIA = 'ניתן להעלות תמונות וסרטונים חדשים, נתחיל בתמונה/סרטון הראשיים'
+/** Footer for edit media intro (max 60 chars). */
+export const EVENT_EDIT_ASK_MEDIA_FOOTER = 'כל התמונות והסרטונים הקודמים יימחקו'
+export const EVENT_EDIT_MEDIA_CANCEL_BUTTON = { id: 'edit_media_cancel', title: 'לא משנה, התחרטתי' }
 export const EVENT_EDIT_FIELD_IDS = {
   EDIT_TITLE: 'edit_title',
   EDIT_DESCRIPTION: 'edit_description',
@@ -273,11 +292,20 @@ export const EVENT_EDIT_SUCCESS_MESSAGES = {
   description: 'תיאור האירוע עודכן בהצלחה',
   mainCategory: 'קטגוריה ראשית עודכנה בהצלחה',
   location: 'מיקום האירוע עודכן בהצלחה',
+  datetime: 'תאריכים ושעות עודכנו בהצלחה',
+  price: 'מחיר עודכן בהצלחה',
+  links: 'לינקים וטלפונים עודכנו בהצלחה',
+  media: 'תמונות וסרטונים עודכנו בהצלחה',
 }
+
+/** Placeholder when edited field value is empty (edit-success value block). */
+export const EVENT_EDIT_SUCCESS_VALUE_EMPTY = 'ללא'
 
 /** Quick replies after field edit: done updating / more fields to edit. */
 export const EVENT_EDIT_SUCCESS_DONE_BUTTON = { id: 'edit_success_done', title: 'סיימתי לעדכן' }
 export const EVENT_EDIT_SUCCESS_MORE_BUTTON = { id: 'edit_success_more', title: 'לעדכון פרטים נוספים' }
+/** Shown after location field edit: go back to location menu (max 20 chars for button). */
+export const EVENT_EDIT_SUCCESS_MORE_LOCATION_BUTTON = { id: 'edit_success_more_location', title: 'לעדכון נוסף במיקום' }
 
 /** Body for "choose" quick-reply screen after field edit. */
 export const EVENT_EDIT_SUCCESS_CHOOSE_BODY = 'בחר/י:'
@@ -308,17 +336,18 @@ export const EVENT_EDIT_EXTRA_NO_REMOVE = 'אין קטגוריות להסיר.'
 
 /** Location edit menu: body, footer, section rows and prompts. */
 export const EVENT_EDIT_LOCATION_MENU_BODY = 'אילו פרטים במיקום האירוע תרצו לשנות:'
+/** Footer for location list (WhatsApp max 60 chars). */
 export const EVENT_EDIT_LOCATION_MENU_FOOTER =
-  'ניתן לחזור חזרה או לסיים את העדכון באמצעות האפשרויות בראש התפריט'
-export const EVENT_EDIT_LOCATION_BACK_ROW = { id: 'loc_back', title: 'בחזרה לעדכון פרטים נוספים' }
+  'לחזרה או סיום העריכה - בחרו באפשרויות שבראש התפריט'
+export const EVENT_EDIT_LOCATION_BACK_ROW = { id: 'loc_back', title: 'לעדכון פרטים אחרים' }
 export const EVENT_EDIT_LOCATION_DONE_ROW = { id: 'loc_done', title: 'סיימתי לעדכן פרטים' }
 export const EVENT_EDIT_LOCATION_FIELD_ROWS = [
   { id: 'loc_place_name', title: 'שם המקום' },
   { id: 'loc_city', title: 'יישוב' },
   { id: 'loc_address', title: 'כתובת' },
   { id: 'loc_details', title: 'הוראות הגעה' },
-  { id: 'loc_gmaps', title: 'לינק לניווט עם google maps' },
-  { id: 'loc_waze', title: 'לינק לניווט עם Waze' },
+  { id: 'loc_gmaps', title: 'לינק Google Maps' },
+  { id: 'loc_waze', title: 'לינק Waze' },
 ]
 export const EVENT_EDIT_LOCATION_ASK_PLACE_NAME = 'הזינו שם מקום חדש למיקום האירוע'
 export const EVENT_EDIT_LOCATION_ASK_CITY = 'הזינו יישוב חדש'

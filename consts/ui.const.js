@@ -24,7 +24,7 @@ export const WELCOME_MODAL = {
   categoriesHeading: 'בחרו את הקטגוריות הרלוונטיות לכם:',
   skipLabel: 'דלג/י',
   nextStepLabel: 'לצעד הבא',
-  takeMeToScheduleLabel: 'קח אותי ללו"ז',
+  takeMeToScheduleLabel: 'קחו אותי ללו"ז',
 }
 
 export const WELCOME_REGION_OPTIONS = [

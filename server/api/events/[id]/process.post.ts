@@ -4,6 +4,7 @@ import { getCategoriesList } from '~/server/consts/events.const'
 import { validatePublisherFormattedEvent, normalizePublisherFormattedEvent } from '~/server/utils/eventValidation'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
+import { logEventCreation } from '~/server/utils/eventLogs.service'
 
 const LOG_PREFIX = '[EventsAPI] Process'
 
@@ -81,5 +82,16 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: 'Internal Server Error' })
   }
   console.info(LOG_PREFIX, correlationId, 'draft updated', JSON.stringify({ id }))
+  const rawEvent = doc.rawEvent as Record<string, unknown> | undefined
+  const publisherIdStr = rawEvent?.publisherId ?? (rawEvent?.publisher as Record<string, unknown>)?.publisherId
+  const waIdStr = (rawEvent?.publisher as Record<string, unknown>)?.waId
+  await logEventCreation({
+    eventId: id,
+    action: 'draft_processed',
+    title: typeof formattedEvent.Title === 'string' ? formattedEvent.Title : undefined,
+    publisherId: typeof publisherIdStr === 'string' ? publisherIdStr : undefined,
+    waId: typeof waIdStr === 'string' ? waIdStr : undefined,
+    correlationId,
+  })
   return { formattedEvent, success: true }
 })

@@ -52,15 +52,16 @@ function buildSystemPrompt(categoriesList) {
 OUTPUT LANGUAGE: All generated text (shortDescription, urls titles, etc.) must be in Hebrew by default. Use English only when the original raw data (rawTitle, rawFullDescription, rawUrls) is clearly in English; otherwise output Hebrew.
 
 RULES:
-1. Use the full raw event object only as context (keys: rawTitle, rawOccurrences, rawCity, rawLocationName, rawAddressLine1, rawAddressLine2, rawLocationDetails, rawNavLinks, rawPrice, rawFullDescription, rawUrls, rawMainCategory, rawCategories, rawMedia). Output only the fields defined in the schema.
-2. rawOccurrences: Parse into occurrences. All times are Israel (Asia/Jerusalem). Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, "3 בצהריים" = 15:00, "4 בצהריים" = 16:00, etc. Convert Israel time to UTC (Israel is UTC+2 in winter, UTC+3 in summer/DST — use the offset that applies to the occurrence date). Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (if hasTime: combine date with time in Israel then convert to UTC; if !hasTime: use Israel midnight for that date in UTC), endTime = ISO UTC or null if not given.
-3. city: The publisher provided a city. Fix common Israeli place name typos (e.g. "קריעת שמונה" → "קריית שמונה", ת"א → תל אביב). Do not change correct names; only normalize obvious misspellings. Do not infer a different city. Example: קריעת שמונה → קריית שמונה.
-4. price: Convert to number or null. Free entry (e.g. חינם, בחינם, free, כניסה חופשית, ללא תשלום, אין תשלום) → 0. Ignore a number only when it is clearly not the event price (e.g. merchandise, food at event). If unclear or not a single number, use null.
-5. shortDescription: Write in Hebrew (1–2 sentences) unless the event description was in English. Base shortDescription ONLY on the event name (rawTitle) and the full description (rawFullDescription). It must NOT contain or paraphrase: location (city, address, place name, nav links), price, or dates and times. Do not include categories or urls. Summarize only what the event is about — the name and the descriptive content of the event itself.
-6. categories: mainCategory is already provided in the raw event — it MUST be included in the categories array. Add up to 3 additional category ids ONLY from the list below when the event clearly fits (e.g. both music and party). Do not add categories the publisher did not intend. Use ONLY these ids:
-7. urls: From rawUrls and any URLs or phone numbers in rawFullDescription, produce an array of {Title, Url, type}. type = "link" for web URLs (https://...), type = "phone" for phone numbers. Title = short Hebrew label (e.g. "כרטיסים", "ניווט Waze", "טלפון להרשמה"). Url = the clean URL or the phone number (digits, optional formatting). Include both links and phone numbers that appear in the text with an appropriate title. If none, return empty array.
+1. Prefer best-effort interpretation: try to parse and fill every field from the raw data. Only when it is truly impossible to produce any reasonable value should you leave a field minimal or flag it (see FLAGS).
+2. Use the full raw event object only as context (keys: rawTitle, rawOccurrences, rawCity, rawLocationName, rawAddressLine1, rawAddressLine2, rawLocationDetails, rawNavLinks, rawPrice, rawFullDescription, rawUrls, rawMainCategory, rawCategories, rawMedia). Output only the fields defined in the schema.
+3. rawOccurrences: Parse into occurrences. All times are Israel (Asia/Jerusalem). Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, "3 בצהריים" = 15:00, "4 בצהריים" = 16:00, etc. Convert Israel time to UTC (Israel is UTC+2 in winter, UTC+3 in summer/DST — use the offset that applies to the occurrence date). Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (if hasTime: combine date with time in Israel then convert to UTC; if !hasTime: use Israel midnight for that date in UTC), endTime = ISO UTC or null if not given. Interpret flexibly (e.g. "סוף השבוע" → pick a reasonable weekend date from context); only flag when the text contains no date/time at all or an impossible date.
+4. city: The publisher provided a city. Fix common Israeli place name typos (e.g. "קריעת שמונה" → "קריית שמונה", ת"א → תל אביב). Do not change correct names; only normalize obvious misspellings. Do not infer a different city. Example: קריעת שמונה → קריית שמונה.
+5. price: Convert to number or null. Free entry (e.g. חינם, בחינם, free, כניסה חופשית, ללא תשלום, אין תשלום) → 0. Ignore a number only when it is clearly not the event price (e.g. merchandise, food at event). If unclear or not a single number, use null.
+6. shortDescription: Write in Hebrew (1–2 sentences) unless the event description was in English. Base shortDescription ONLY on the event name (rawTitle) and the full description (rawFullDescription). It must NOT contain or paraphrase: location (city, address, place name, nav links), price, or dates and times. Do not include categories or urls. Summarize only what the event is about — the name and the descriptive content of the event itself.
+7. categories: mainCategory is already provided in the raw event — it MUST be included in the categories array. Add up to 3 additional category ids ONLY from the list below when the event clearly fits (e.g. both music and party). Do not add categories the publisher did not intend. Use ONLY these ids:
+8. urls: From rawUrls and any URLs or phone numbers in rawFullDescription, produce an array of {Title, Url, type}. type = "link" for web URLs (https://...), type = "phone" for phone numbers. Title = short Hebrew label (e.g. "כרטיסים", "ניווט Waze", "טלפון להרשמה"). Url = the clean URL or the phone number (digits, optional formatting). Include both links and phone numbers that appear in the text with an appropriate title. If none, return empty array.
 
-FLAGS: You must always include "flags" (array). Add an entry only when the raw value could not be reliably processed. Allowed fieldKey values are ONLY: rawTitle, rawOccurrences, rawCity, rawNavLinks, rawPrice, rawFullDescription, rawUrls. Do NOT flag category, location name, address, location details, or media. For "reason" provide a short Hebrew explanation (e.g. "לא הצלחתי לזהות תאריך או שעה ברורה"). Required fields (rawTitle, rawOccurrences, rawCity, rawFullDescription): flag when ambiguous, missing, or unparseable. Optional fields (rawNavLinks, rawPrice, rawUrls): only flag when the publisher provided non-empty content that you could not reliably parse; do NOT flag when the field is empty or missing. If all fields are clear, use an empty array [].
+FLAGS: You must always include "flags" (array). Add an entry ONLY when it is truly impossible to output any reasonable value for that field — do NOT flag when a best-effort interpretation is possible. The publisher can edit the processed data afterwards, so prefer filling in your best interpretation over flagging. Flag only when: the raw value is purely irrelevant text (e.g. date/time field contains no date or time at all), logically impossible (e.g. date that does not exist), or completely empty for a required field with no possible inference. Do NOT flag for mere ambiguity, vagueness, or missing details — interpret as well as you can and leave flags empty. Allowed fieldKey values are ONLY: rawTitle, rawOccurrences, rawCity, rawNavLinks, rawPrice, rawFullDescription, rawUrls. Do NOT flag category, location name, address, location details, or media. For "reason" provide a short Hebrew explanation only when you do flag. If you can output any proper data for a field, use empty array [] for flags.
 
 ${categoriesText}`
 }
@@ -425,6 +426,278 @@ export async function normalizeCityForEdit(cityText, options = {}) {
     const msg = err instanceof Error ? err.message : String(err)
     log(correlationId, 'error', 'normalizeCityForEdit failed', { error: msg })
     return { city: null, errorReason: `openai_error: ${msg}` }
+  }
+}
+
+const PARSE_OCCURRENCES_SCHEMA = {
+  name: 'parse_occurrences',
+  strict: true,
+  schema: {
+    type: 'object',
+    required: ['occurrences', 'valid', 'reason'],
+    additionalProperties: false,
+    properties: {
+      occurrences: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['date', 'hasTime', 'startTime', 'endTime'],
+          additionalProperties: false,
+          properties: {
+            date: { type: 'string' },
+            hasTime: { type: 'boolean' },
+            startTime: { type: 'string' },
+            endTime: { type: ['string', 'null'] },
+          },
+        },
+      },
+      valid: { type: 'boolean' },
+      reason: { type: 'string' },
+    },
+  },
+}
+
+/** Server expects ISO 8601 with seconds and Z or offset. Normalize so validation passes. */
+const SERVER_ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/i
+function normalizeOccurrenceTime(s) {
+  if (s == null || typeof s !== 'string') return s
+  let trimmed = s.trim().replace(/\s+/, 'T')
+  if (!trimmed) return s
+  if (SERVER_ISO_DATETIME.test(trimmed)) return trimmed
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(\.[0-9]+)?(Z|[+-]\d{2}:?\d{2})?$/i)
+  if (match) {
+    const datePart = match[1]
+    const hh = match[2]
+    const mm = match[3]
+    const ss = match[4] || '00'
+    const frac = match[5] || ''
+    const tz = match[6] || 'Z'
+    return `${datePart}T${hh}:${mm}:${ss}${frac}${tz}`
+  }
+  const d = new Date(trimmed)
+  if (!Number.isNaN(d.getTime())) return d.toISOString()
+  return s
+}
+
+const PARSE_OCCURRENCES_SYSTEM_PROMPT = `You parse free-text dates and times (Hebrew or English) into event occurrences. All times are Israel (Asia/Jerusalem). Convert Israel time to UTC: subtract the Israel UTC offset (UTC+2 winter, UTC+3 summer) from the time. Each occurrence: date = YYYY-MM-DD (Israel date), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string in this exact form: YYYY-MM-DDTHH:mm:ssZ (e.g. 2025-02-25T08:00:00Z — always include seconds and trailing Z), endTime = same format or null if not given. Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, etc. If the text cannot be reliably parsed into at least one occurrence, set valid to false and provide reason: a short Hebrew explanation (e.g. "לא הצלחתי לזהות תאריך או שעה ברורה"). When valid is true, set reason to "". Output valid JSON only.`
+
+/**
+ * Parse free-text dates/times into occurrences (edit flow).
+ * @param {string} text - User input
+ * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string }} [options]
+ * @returns {Promise<{ occurrences: Array, flagReason?: string }>}
+ */
+export async function parseOccurrencesFromText(text, options = {}) {
+  const apiKey = (options.openaiApiKey ?? process.env.OPENAI_API_KEY ?? '').trim()
+  const model = (options.openaiModel ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL).trim() || DEFAULT_MODEL
+  const correlationId = options.correlationId
+
+  if (!apiKey) {
+    log(correlationId, 'warn', 'parseOccurrencesFromText: no OpenAI API key')
+    return { occurrences: [], flagReason: 'שירות לא זמין. נסה שוב.' }
+  }
+
+  const userContent = (typeof text === 'string' ? text.trim() : '') || ''
+  if (!userContent) {
+    return { occurrences: [], flagReason: 'לא הוזן טקסט.' }
+  }
+
+  const dateContext = getIsraelDateContext()
+
+  try {
+    const openai = new OpenAI({ apiKey, timeout: 30_000 })
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: PARSE_OCCURRENCES_SYSTEM_PROMPT + '\n\n' + dateContext },
+        { role: 'user', content: userContent },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: PARSE_OCCURRENCES_SCHEMA,
+      },
+      max_tokens: 800,
+      temperature: 0.1,
+    })
+    const content = response.choices[0]?.message?.content
+    if (!content) {
+      log(correlationId, 'warn', 'parseOccurrencesFromText: empty content')
+      return { occurrences: [], flagReason: 'לא התקבלה תשובה. נסה שוב.' }
+    }
+    const parsed = JSON.parse(content)
+    const occurrences = Array.isArray(parsed.occurrences) ? parsed.occurrences : []
+    const valid = parsed.valid === true && occurrences.length > 0
+    const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : ''
+    if (!valid) {
+      return { occurrences: [], flagReason: reason || 'לא הצלחתי לזהות תאריכים ושעות.' }
+    }
+    const normalized = occurrences.map((occ) => {
+      if (!occ || typeof occ !== 'object') return occ
+      const startTime = normalizeOccurrenceTime(occ.startTime)
+      const endTime = occ.endTime != null && occ.endTime !== '' ? normalizeOccurrenceTime(occ.endTime) : null
+      return { ...occ, startTime: startTime ?? occ.startTime, endTime }
+    })
+    log(correlationId, 'info', 'parseOccurrencesFromText: ok', { count: normalized.length })
+    return { occurrences: normalized }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log(correlationId, 'error', 'parseOccurrencesFromText failed', { error: msg })
+    return { occurrences: [], flagReason: `שגיאה: ${msg}` }
+  }
+}
+
+const PARSE_PRICE_SCHEMA = {
+  name: 'parse_price',
+  strict: true,
+  schema: {
+    type: 'object',
+    required: ['price', 'valid', 'reason'],
+    additionalProperties: false,
+    properties: {
+      price: { type: ['number', 'null'] },
+      valid: { type: 'boolean' },
+      reason: { type: 'string' },
+    },
+  },
+}
+
+const PARSE_PRICE_SYSTEM_PROMPT = `You parse free-text event price (Hebrew or English). Free entry (חינם, בחינם, free, כניסה חופשית, ללא תשלום) → 0. Single number (e.g. 20 ש"ח, 50 שח) → that number. If unclear or not a single price, set valid to false and provide reason: short Hebrew explanation. When valid is true, set reason to "". Output valid JSON only.`
+
+/**
+ * Parse free-text price (edit flow).
+ * @param {string} text - User input
+ * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string }} [options]
+ * @returns {Promise<{ price: number|null, flagReason?: string }>}
+ */
+export async function parsePriceFromText(text, options = {}) {
+  const apiKey = (options.openaiApiKey ?? process.env.OPENAI_API_KEY ?? '').trim()
+  const model = (options.openaiModel ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL).trim() || DEFAULT_MODEL
+  const correlationId = options.correlationId
+
+  if (!apiKey) {
+    log(correlationId, 'warn', 'parsePriceFromText: no OpenAI API key')
+    return { price: null, flagReason: 'שירות לא זמין. נסה שוב.' }
+  }
+
+  const userContent = (typeof text === 'string' ? text.trim() : '') || ''
+  if (!userContent) {
+    return { price: null, flagReason: 'לא הוזן טקסט.' }
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey, timeout: 15_000 })
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: PARSE_PRICE_SYSTEM_PROMPT },
+        { role: 'user', content: userContent },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: PARSE_PRICE_SCHEMA,
+      },
+      max_tokens: 100,
+      temperature: 0.1,
+    })
+    const content = response.choices[0]?.message?.content
+    if (!content) {
+      log(correlationId, 'warn', 'parsePriceFromText: empty content')
+      return { price: null, flagReason: 'לא התקבלה תשובה. נסה שוב.' }
+    }
+    const parsed = JSON.parse(content)
+    const valid = parsed.valid === true
+    const price = valid && (typeof parsed.price === 'number' && Number.isFinite(parsed.price)) ? parsed.price : (valid && parsed.price === null ? null : null)
+    const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : ''
+    if (!valid) {
+      return { price: null, flagReason: reason || 'לא הצלחתי לזהות מחיר.' }
+    }
+    log(correlationId, 'info', 'parsePriceFromText: ok', { price })
+    return { price }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log(correlationId, 'error', 'parsePriceFromText failed', { error: msg })
+    return { price: null, flagReason: `שגיאה: ${msg}` }
+  }
+}
+
+const PARSE_URLS_SCHEMA = {
+  name: 'parse_urls',
+  strict: true,
+  schema: {
+    type: 'object',
+    required: ['urls'],
+    additionalProperties: false,
+    properties: {
+      urls: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['Title', 'Url', 'type'],
+          additionalProperties: false,
+          properties: {
+            Title: { type: 'string' },
+            Url: { type: 'string' },
+            type: { type: 'string', enum: ['link', 'phone'] },
+          },
+        },
+      },
+    },
+  },
+}
+
+const PARSE_URLS_SYSTEM_PROMPT = `You extract links and phone numbers from free text (Hebrew/English). Output array of {Title, Url, type}. type = "link" for web URLs (https://...), type = "phone" for phone numbers. Title = short Hebrew label (e.g. "כרטיסים", "טלפון להרשמה"). Url = clean URL or digits. If none found, return empty array. Output valid JSON only.`
+
+/**
+ * Parse free-text links/phones into urls array (edit flow). No flags.
+ * @param {string} text - User input
+ * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string }} [options]
+ * @returns {Promise<{ urls: Array<{ Title: string, Url: string, type: string }> }>}
+ */
+export async function parseUrlsFromText(text, options = {}) {
+  const apiKey = (options.openaiApiKey ?? process.env.OPENAI_API_KEY ?? '').trim()
+  const model = (options.openaiModel ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL).trim() || DEFAULT_MODEL
+  const correlationId = options.correlationId
+
+  if (!apiKey) {
+    log(correlationId, 'warn', 'parseUrlsFromText: no OpenAI API key')
+    return { urls: [] }
+  }
+
+  const userContent = (typeof text === 'string' ? text.trim() : '') || ''
+  if (!userContent) {
+    return { urls: [] }
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey, timeout: 15_000 })
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: PARSE_URLS_SYSTEM_PROMPT },
+        { role: 'user', content: userContent },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: PARSE_URLS_SCHEMA,
+      },
+      max_tokens: 500,
+      temperature: 0.1,
+    })
+    const content = response.choices[0]?.message?.content
+    if (!content) {
+      log(correlationId, 'warn', 'parseUrlsFromText: empty content')
+      return { urls: [] }
+    }
+    const parsed = JSON.parse(content)
+    const urls = Array.isArray(parsed.urls)
+      ? parsed.urls.filter((u) => u && typeof u?.Title === 'string' && typeof u?.Url === 'string').map((u) => ({ Title: u.Title, Url: u.Url, type: u.type === 'phone' ? 'phone' : 'link' }))
+      : []
+    log(correlationId, 'info', 'parseUrlsFromText: ok', { count: urls.length })
+    return { urls }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log(correlationId, 'error', 'parseUrlsFromText failed', { error: msg })
+    return { urls: [] }
   }
 }
 
