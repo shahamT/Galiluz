@@ -1,4 +1,4 @@
-import { parseCategories, serializeCategories, parseTimeFilter, isValidMonthYear } from '~/utils/validation.helpers'
+import { parseCategories, serializeCategories, parseRegions, serializeRegions, parseTimeFilter, isValidMonthYear } from '~/utils/validation.helpers'
 import {
   MINUTES_PER_DAY,
   FILTER_PREFERENCE_STORAGE_KEY,
@@ -21,7 +21,7 @@ export const useUrlState = (options = {}) => {
   const route = useRoute()
   const router = useRouter()
   const calendarStore = useCalendarStore()
-  const { selectedCategories, timeFilterStart, timeFilterEnd, timeFilterPreset, currentDate } = storeToRefs(calendarStore)
+  const { selectedCategories, selectedRegions, timeFilterStart, timeFilterEnd, timeFilterPreset, currentDate } = storeToRefs(calendarStore)
 
   const isInitialized = ref(false)
 
@@ -32,11 +32,13 @@ export const useUrlState = (options = {}) => {
    */
   const parseUrlParams = (query) => {
     const categories = parseCategories(query.categories)
+    const regions = parseRegions(query.regions)
     const timeRange = parseTimeFilter(query.timeStart, query.timeEnd)
     const preset = query.timePreset || null
-    
+
     return {
       categories,
+      regions,
       timeStart: timeRange.start,
       timeEnd: timeRange.end,
       timePreset: preset,
@@ -65,6 +67,7 @@ export const useUrlState = (options = {}) => {
   const hasFilterParamsInQuery = (query) => {
     return (
       'categories' in query ||
+      'regions' in query ||
       'timeStart' in query ||
       'timeEnd' in query ||
       'timePreset' in query
@@ -99,6 +102,10 @@ export const useUrlState = (options = {}) => {
       if (categoriesParam) {
         payload.categories = categoriesParam
       }
+      const regionsParam = serializeRegions(selectedRegions.value)
+      if (regionsParam) {
+        payload.regions = regionsParam
+      }
       if (timeFilterStart.value !== 0 || timeFilterEnd.value !== MINUTES_PER_DAY) {
         payload.timeStart = timeFilterStart.value
         payload.timeEnd = timeFilterEnd.value
@@ -130,6 +137,11 @@ export const useUrlState = (options = {}) => {
     const categoriesParam = serializeCategories(selectedCategories.value)
     if (categoriesParam) {
       params.categories = categoriesParam
+    }
+
+    const regionsParam = serializeRegions(selectedRegions.value)
+    if (regionsParam) {
+      params.regions = regionsParam
     }
 
     if (timeFilterStart.value !== 0 || timeFilterEnd.value !== MINUTES_PER_DAY) {
@@ -187,7 +199,8 @@ export const useUrlState = (options = {}) => {
         filters.categories,
         filters.timeStart,
         filters.timeEnd,
-        filters.timePreset
+        filters.timePreset,
+        filters.regions
       )
       saveFilterPreference()
     } else {
@@ -197,7 +210,8 @@ export const useUrlState = (options = {}) => {
           filters.categories,
           filters.timeStart,
           filters.timeEnd,
-          filters.timePreset
+          filters.timePreset,
+          filters.regions
         )
       }
     }
@@ -215,6 +229,7 @@ export const useUrlState = (options = {}) => {
     watch(
       () => [
         selectedCategories.value,
+        selectedRegions.value,
         timeFilterStart.value,
         timeFilterEnd.value,
         timeFilterPreset.value,

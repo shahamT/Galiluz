@@ -24,7 +24,10 @@
         <section class="WelcomeModal-body">
           <div
             class="WelcomeModal-bodyInner"
-            :class="{ 'WelcomeModal-bodyInner--step0': currentStep === 0 }"
+            :class="{
+              'WelcomeModal-bodyInner--step0': currentStep === 0,
+              'WelcomeModal-bodyInner--step1': currentStep === 1,
+            }"
           >
             <template v-if="currentStep === 0">
               <div class="WelcomeModal-step0Main">
@@ -67,18 +70,10 @@
               <p class="WelcomeModal-regionsHeading">
                 {{ WELCOME_MODAL.regionsHeading }}
               </p>
-              <div class="WelcomeModal-regionButtons">
-                <button
-                  v-for="region in WELCOME_REGION_OPTIONS"
-                  :key="region.id"
-                  type="button"
-                  class="WelcomeModal-regionBtn"
-                  :class="{ 'WelcomeModal-regionBtn--active': selectedRegions.includes(region.id) }"
-                  @click="toggleRegion(region.id)"
-                >
-                  {{ region.label }}
-                </button>
-              </div>
+              <UiAreaFilterMap
+                :model-value="localSelectedRegions"
+                @update:model-value="localSelectedRegions = $event"
+              />
             </template>
             <template v-else>
               <p class="WelcomeModal-categoriesHeading">
@@ -122,7 +117,6 @@
 import {
   WELCOME_MODAL_STORAGE_KEY,
   WELCOME_MODAL,
-  WELCOME_REGION_OPTIONS,
 } from '~/consts/ui.const'
 
 defineOptions({ name: 'WelcomeModal' })
@@ -131,7 +125,7 @@ defineEmits(['close'])
 
 const isVisible = ref(false)
 const currentStep = ref(0)
-const selectedRegions = ref([])
+const localSelectedRegions = ref([])
 const localSelectedCategories = ref([])
 
 const { data: categoriesData } = useCategories()
@@ -154,15 +148,6 @@ onMounted(() => {
   }
 })
 
-function toggleRegion(regionId) {
-  const idx = selectedRegions.value.indexOf(regionId)
-  if (idx > -1) {
-    selectedRegions.value = selectedRegions.value.filter((id) => id !== regionId)
-  } else {
-    selectedRegions.value = [...selectedRegions.value, regionId]
-  }
-}
-
 function handleDismiss() {
   try {
     localStorage.setItem(WELCOME_MODAL_STORAGE_KEY, new Date().toISOString())
@@ -173,8 +158,7 @@ function handleDismiss() {
 }
 
 function handleStart() {
-  // TODO: Re-enable region step when ready – go to step 1 (regions) then step 2 (categories)
-  currentStep.value = 2
+  currentStep.value = 1
 }
 
 function handleNextStep() {
@@ -186,7 +170,8 @@ function handleTakeMeToSchedule() {
     localSelectedCategories.value,
     timeFilterStart.value,
     timeFilterEnd.value,
-    timeFilterPreset.value
+    timeFilterPreset.value,
+    localSelectedRegions.value
   )
   handleDismiss()
 }
@@ -292,6 +277,7 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-start;
     gap: 0;
     text-align: center;
     direction: ltr;
@@ -322,6 +308,10 @@ onUnmounted(() => {
       min-height: 100%;
       align-items: start;
       justify-items: center;
+    }
+
+    &--step1 {
+      justify-content: flex-start;
     }
   }
 
@@ -410,51 +400,11 @@ onUnmounted(() => {
     color: var(--color-text);
     margin: 0;
     line-height: 1.4;
+    width: 100%;
+    text-align: start;
 
     @include mobile {
       font-size: var(--font-size-lg);
-    }
-  }
-
-  &-regionButtons {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto auto;
-    gap: var(--spacing-md);
-    width: 100%;
-    max-width: 20rem;
-  }
-
-  &-regionBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--spacing-sm) var(--spacing-md);
-    width: 100%;
-    min-height: 0;
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-text-light);
-    background-color: transparent;
-    border: 2px solid var(--color-border);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
-
-    &:hover:not(.WelcomeModal-regionBtn--active) {
-      color: var(--color-text);
-      border-color: var(--brand-dark-green);
-    }
-
-    &--active {
-      color: var(--chip-text-white);
-      background-color: var(--brand-dark-green);
-      border-color: var(--brand-dark-green);
-    }
-
-    @include mobile {
-      padding: var(--spacing-md);
-      font-size: var(--font-size-md);
     }
   }
 

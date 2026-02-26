@@ -76,12 +76,38 @@ onMounted(() => {
 const currentYear = computed(() => currentDate.value?.year ?? getCurrentYearMonth().year)
 const currentMonth = computed(() => currentDate.value?.month ?? getCurrentYearMonth().month)
 const pageTitle = computed(() => `גלילו"ז - ${HEBREW_MONTHS[currentMonth.value - 1]}`)
-// SEO metadata (reactive: useHead tracks pageTitle)
-useHead({ title: pageTitle })
+
+// SEO: event-specific meta when ?event=id (for social cards)
+const { data: eventMeta } = useEventMetaForSeo()
+const requestUrl = useRequestURL()
+const defaultOgImage = new URL('/galiluz-thumbnail.png', requestUrl.origin).href
+const MONTHLY_DEFAULT_DESC = 'יומן אירועים חודשי של Galiluz - צפייה בכל האירועים והפעילויות החודשיות'
+
+const seoTitle = computed(() =>
+  eventMeta.value?.title ? `גלילו"ז - ${eventMeta.value.title}` : pageTitle.value
+)
+const seoDescription = computed(() =>
+  eventMeta.value?.shortDescription || eventMeta.value?.title || MONTHLY_DEFAULT_DESC
+)
+const seoImage = computed(() =>
+  eventMeta.value?.imageUrl || defaultOgImage
+)
+
+useHead({ title: seoTitle })
 useSeoMeta({
-  description: 'יומן אירועים חודשי של Galiluz - צפייה בכל האירועים והפעילויות החודשיות',
-  ogTitle: pageTitle,
-  ogDescription: 'יומן אירועים חודשי של Galiluz',
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogImage: seoImage,
+  ogUrl: requestUrl.href,
+  ogType: 'website',
+  ogSiteName: 'גלילו"ז',
+  ogLocale: 'he_IL',
+  twitterCard: 'summary_large_image',
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
+  twitterImage: seoImage,
 })
 const monthYearDisplay = computed(() => {
   return formatMonthYear(currentYear.value, currentMonth.value)

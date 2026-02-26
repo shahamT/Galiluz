@@ -127,12 +127,37 @@ const isTodayOrPast = computed(() => {
 })
 const eventsByDate = computed(() => getFilteredEventsByDate(visibleDays.value))
 
-// SEO metadata (reactive: useHead tracks pageTitle)
-useHead({ title: pageTitle })
+// SEO: event-specific meta when ?event=id (for social cards)
+const { data: eventMeta } = useEventMetaForSeo()
+const requestUrl = useRequestURL()
+const defaultOgImage = new URL('/galiluz-thumbnail.png', requestUrl.origin).href
+const DAILY_DEFAULT_DESC = 'תצוגה יומית של אירועים ופעילויות ב-Galiluz'
+
+const seoTitle = computed(() =>
+  eventMeta.value?.title ? `גלילו"ז - ${eventMeta.value.title}` : pageTitle.value
+)
+const seoDescription = computed(() =>
+  eventMeta.value?.shortDescription || eventMeta.value?.title || DAILY_DEFAULT_DESC
+)
+const seoImage = computed(() =>
+  eventMeta.value?.imageUrl || defaultOgImage
+)
+
+useHead({ title: seoTitle })
 useSeoMeta({
-  description: 'תצוגה יומית של אירועים ופעילויות ב-Galiluz',
-  ogTitle: pageTitle,
-  ogDescription: 'תצוגה יומית של אירועים ב-Galiluz',
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogImage: seoImage,
+  ogUrl: requestUrl.href,
+  ogType: 'website',
+  ogSiteName: 'גלילו"ז',
+  ogLocale: 'he_IL',
+  twitterCard: 'summary_large_image',
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
+  twitterImage: seoImage,
 })
 
 // methods

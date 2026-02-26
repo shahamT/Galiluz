@@ -16,6 +16,9 @@ export const MORE_EVENTS_TEXT = (count) => `עוד ${count} אירועים...`
 // Time filter: minutes in a day (24 * 60)
 export const MINUTES_PER_DAY = 24 * 60
 
+// Region filter keys (re-export from regions.const — single source of truth)
+export { REGION_KEYS } from '~/consts/regions.const'
+
 // localStorage key for persisting user filter preference (categories + time range)
 export const FILTER_PREFERENCE_STORAGE_KEY = 'galiluz-calendar-filters'
 
@@ -49,6 +52,8 @@ export const UI_TEXT = {
   filterButtonLabel: 'סינון',
   categoriesFilter: 'קטגוריות',
   categoriesFilterTitle: 'קטגוריות',
+  regionsFilter: 'אזורים',
+  regionsCountLabel: (count) => `${count} אזורים`,
   hoursFilter: 'שעות',
   hoursFilterAll: 'כל שעה',
   resetFilter: 'ניקוי',

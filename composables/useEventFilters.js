@@ -1,8 +1,10 @@
 import {
   filterEventsByCategories,
+  filterEventsByRegions,
   filterEventsByTimeRangeForMonth,
   getEventsForDate,
   eventMatchesCategories,
+  eventMatchesRegions,
   filterEventOccurrencesByTimeRange,
 } from '~/utils/events.service'
 import { transformEventForCard, formatEventLocationForChip } from '~/utils/events.helpers'
@@ -16,7 +18,7 @@ import { transformEventForCard, formatEventLocationForChip } from '~/utils/event
  */
 export const useEventFilters = (events) => {
   const calendarStore = useCalendarStore()
-  const { selectedCategories, timeFilterStart, timeFilterEnd } = storeToRefs(calendarStore)
+  const { selectedCategories, selectedRegions, timeFilterStart, timeFilterEnd } = storeToRefs(calendarStore)
 
   /**
    * Get events filtered by categories and time range for a specific month
@@ -26,11 +28,14 @@ export const useEventFilters = (events) => {
    */
   const getFilteredEventsForMonth = (year, month) => {
     let allEvents = events.value
-    
+
     if (selectedCategories.value.length > 0) {
       allEvents = filterEventsByCategories(allEvents, selectedCategories.value)
     }
-    
+    if (selectedRegions.value.length > 0) {
+      allEvents = filterEventsByRegions(allEvents, selectedRegions.value)
+    }
+
     return filterEventsByTimeRangeForMonth(
       allEvents,
       year,
@@ -47,6 +52,7 @@ export const useEventFilters = (events) => {
    */
   const getFilteredEventsForDate = (dateString) => {
     const categories = selectedCategories.value
+    const regions = selectedRegions.value
     const startMin = timeFilterStart.value
     const endMin = timeFilterEnd.value
 
@@ -54,6 +60,9 @@ export const useEventFilters = (events) => {
 
     if (categories.length > 0) {
       pairs = pairs.filter(({ event }) => eventMatchesCategories(event, categories))
+    }
+    if (regions.length > 0) {
+      pairs = pairs.filter(({ event }) => eventMatchesRegions(event, regions))
     }
 
     return filterEventOccurrencesByTimeRange(pairs, startMin, endMin)

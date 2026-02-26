@@ -1,5 +1,6 @@
 import { parseDateString } from './date.helpers'
 import { MINUTES_PER_DAY } from '~/consts/calendar.const'
+import { REGION_KEYS } from '~/consts/regions.const'
 
 /**
  * Validates if a string matches YYYY-MM-DD format
@@ -54,6 +55,25 @@ export function parseCategories(queryParam) {
  */
 export function serializeCategories(categories) {
   return categories.length > 0 ? categories.join(',') : undefined
+}
+
+/**
+ * Parse regions from URL query parameter (valid keys only)
+ * @param {string} queryParam - Comma-separated region keys
+ * @returns {string[]} - Array of valid region keys
+ */
+export function parseRegions(queryParam) {
+  if (!queryParam) return []
+  return queryParam.split(',').filter((key) => REGION_KEYS.includes(key.trim()))
+}
+
+/**
+ * Serialize regions to URL query parameter
+ * @param {string[]} regions - Array of region keys
+ * @returns {string|undefined} - Comma-separated string or undefined if empty
+ */
+export function serializeRegions(regions) {
+  return regions && regions.length > 0 ? regions.join(',') : undefined
 }
 
 /**

@@ -18,13 +18,22 @@
       <button
         type="button"
         role="tab"
+        :aria-selected="activeTab === 'regions'"
+        :class="{ 'FilterPanel-tab--active': activeTab === 'regions' }"
+        class="FilterPanel-tab"
+        @click="activeTab = 'regions'"
+      >
+        {{ regionsTabLabel }}
+      </button>
+      <button
+        type="button"
+        role="tab"
         :aria-selected="activeTab === 'hours'"
         :class="{ 'FilterPanel-tab--active': activeTab === 'hours' }"
         class="FilterPanel-tab"
         @click="activeTab = 'hours'"
       >
         {{ UI_TEXT.hoursFilter }}
-        (<span dir="ltr">{{ hoursFilterLabel }}</span>)
       </button>
     </div>
     <div class="FilterPanel-panels">
@@ -37,6 +46,16 @@
           :categories="categoriesList"
           :model-value="selectedCategoriesList"
           @update:model-value="handleCategoriesUpdate"
+        />
+      </div>
+      <div
+        v-show="activeTab === 'regions'"
+        role="tabpanel"
+        class="FilterPanel-panel FilterPanel-panel--regions"
+      >
+        <UiAreaFilterMap
+          :model-value="selectedRegionsList"
+          @update:model-value="handleRegionsUpdate"
         />
       </div>
       <div
@@ -71,6 +90,7 @@
 
 <script setup>
 import { UI_TEXT, MINUTES_PER_DAY } from '~/consts/calendar.const'
+import { CATEGORY_GROUPS } from '~/consts/events.const'
 
 defineOptions({ name: 'FilterPanel' })
 
@@ -94,7 +114,7 @@ defineEmits(['close'])
 // data
 const activeTab = ref('categories')
 const calendarStore = useCalendarStore()
-const { selectedCategories, timeFilterStart, timeFilterEnd } = storeToRefs(calendarStore)
+const { selectedCategories, selectedRegions, timeFilterStart, timeFilterEnd } = storeToRefs(calendarStore)
 
 const resetButtonText = UI_TEXT.resetFilter
 const doneButtonText = UI_TEXT.filterDone
@@ -105,11 +125,11 @@ const ariaSelectAllGroup = 'בחר את כל הקטגוריות בקבוצה'
 const ariaRemoveAllGroup = 'הסר את כל הקטגוריות בקבוצה'
 
 // computed
-const categoriesTabLabel = computed(
-  () => `${UI_TEXT.categoriesFilter} (${props.selectedCategoriesCount})`
-)
+const categoriesTabLabel = computed(() => UI_TEXT.categoriesFilter)
+const regionsTabLabel = computed(() => UI_TEXT.regionsFilter)
 
 const selectedCategoriesList = computed(() => selectedCategories?.value ?? [])
+const selectedRegionsList = computed(() => selectedRegions?.value ?? [])
 const categoriesList = computed(() => props.categories ?? {})
 
 const categoriesByGroup = computed(() => {
@@ -128,7 +148,11 @@ const isTimeFilterActive = computed(() => {
 })
 
 const hasAnyFilter = computed(() => {
-  return selectedCategoriesList.value.length > 0 || isTimeFilterActive.value
+  return (
+    selectedCategoriesList.value.length > 0 ||
+    selectedRegionsList.value.length > 0 ||
+    isTimeFilterActive.value
+  )
 })
 
 // methods
@@ -159,6 +183,10 @@ function handleClearAllFilters() {
 
 function handleCategoriesUpdate(newSelectedIds) {
   selectedCategories.value = newSelectedIds ?? []
+}
+
+function handleRegionsUpdate(newRegions) {
+  selectedRegions.value = newRegions ?? []
 }
 </script>
 
@@ -244,6 +272,13 @@ function handleCategoriesUpdate(newSelectedIds) {
       flex-direction: column;
       gap: var(--spacing-lg);
       align-items: stretch;
+    }
+
+    &--regions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
     }
 
     &--hours {

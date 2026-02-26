@@ -31,6 +31,8 @@ export interface PublisherRawEvent {
  */
 export interface EventLocation {
   city?: string
+  /** Region key e.g. 'center' | 'golan' | 'upper' */
+  region?: string
   /** Venue or place name (from rawLocationName) */
   locationName?: string
   addressLine1?: string

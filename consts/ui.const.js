@@ -20,10 +20,10 @@ export const WELCOME_MODAL = {
   skipIntroCaption: 'רוצים לקפוץ למים?',
   stepTitleRegion: 'בחירת איזור',
   stepTitleCategories: 'בחירת קטגוריות',
-  regionsHeading: 'לאיזה איזורים מתאים לכם להגיע?',
+  regionsHeading: 'בחרו את האיזורים הרלוונטיים אליכם:',
   categoriesHeading: 'בחרו את הקטגוריות הרלוונטיות לכם:',
   skipLabel: 'דלג/י',
-  nextStepLabel: 'לצעד הבא',
+  nextStepLabel: 'המשך/י',
   takeMeToScheduleLabel: 'קחו אותי ללו"ז',
 }
 

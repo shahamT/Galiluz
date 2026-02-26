@@ -23,6 +23,7 @@
 
 <script setup>
 import { UI_TEXT, MINUTES_PER_DAY } from '~/consts/calendar.const'
+import { REGIONS } from '~/consts/regions.const'
 
 import { formatMinutesToTime } from '~/utils/date.helpers'
 
@@ -73,7 +74,7 @@ defineEmits([
 
 // data
 const calendarStore = useCalendarStore()
-const { selectedCategories, timeFilterStart, timeFilterEnd } = storeToRefs(calendarStore)
+const { selectedCategories, selectedRegions, timeFilterStart, timeFilterEnd } = storeToRefs(calendarStore)
 
 // computed
 const isTimeFilterActive = computed(() => {
@@ -81,7 +82,11 @@ const isTimeFilterActive = computed(() => {
 })
 
 const isFilterActive = computed(() => {
-  return selectedCategories.value.length > 0 || isTimeFilterActive.value
+  return (
+    selectedCategories.value.length > 0 ||
+    selectedRegions.value.length > 0 ||
+    isTimeFilterActive.value
+  )
 })
 
 const hoursFilterLabel = computed(() => {
@@ -100,11 +105,19 @@ const filterButtonLabel = computed(() => {
   const parts = []
   const cats = props.categories ?? {}
   const ids = selectedCategories.value
+  const regionIds = selectedRegions.value
   if (ids.length > 0) {
     if (ids.length === 1 && cats[ids[0]]?.label) {
       parts.push(cats[ids[0]].label)
     } else {
       parts.push(UI_TEXT.categoriesCountLabel(ids.length))
+    }
+  }
+  if (regionIds.length > 0) {
+    if (regionIds.length === 1 && REGIONS[regionIds[0]]?.label) {
+      parts.push(REGIONS[regionIds[0]].label)
+    } else {
+      parts.push(UI_TEXT.regionsCountLabel(regionIds.length))
     }
   }
   if (isTimeFilterActive.value) {

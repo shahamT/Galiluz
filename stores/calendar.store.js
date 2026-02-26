@@ -8,6 +8,7 @@ import { MINUTES_PER_DAY, TIME_FILTER_PRESETS } from '~/consts/calendar.const'
 
 export const useCalendarStore = defineStore('calendar', () => {
   const selectedCategories = ref([])
+  const selectedRegions = ref([])
   const currentDate = ref(getCurrentYearMonth())
   const timeFilterStart = ref(0)
   const timeFilterEnd = ref(MINUTES_PER_DAY)
@@ -24,8 +25,22 @@ export const useCalendarStore = defineStore('calendar', () => {
     }
   }
 
+  function toggleRegion(regionKey) {
+    const index = selectedRegions.value.indexOf(regionKey)
+    if (index > -1) {
+      selectedRegions.value.splice(index, 1)
+    } else {
+      selectedRegions.value.push(regionKey)
+    }
+  }
+
+  function setSelectedRegions(regions) {
+    selectedRegions.value = Array.isArray(regions) ? [...regions] : []
+  }
+
   function resetFilter() {
     selectedCategories.value = []
+    selectedRegions.value = []
     timeFilterStart.value = 0
     timeFilterEnd.value = MINUTES_PER_DAY
     timeFilterPreset.value = null
@@ -59,8 +74,9 @@ export const useCalendarStore = defineStore('calendar', () => {
     lastDailyViewDate.value = dateString || null
   }
 
-  function setFiltersFromUrl(categories, timeStart, timeEnd, timePreset) {
+  function setFiltersFromUrl(categories, timeStart, timeEnd, timePreset, regions) {
     selectedCategories.value = categories || []
+    selectedRegions.value = regions || []
     timeFilterStart.value = timeStart ?? 0
     timeFilterEnd.value = timeEnd ?? MINUTES_PER_DAY
     timeFilterPreset.value = timePreset || null
@@ -68,12 +84,15 @@ export const useCalendarStore = defineStore('calendar', () => {
 
   return {
     selectedCategories,
+    selectedRegions,
     currentDate,
     timeFilterStart,
     timeFilterEnd,
     timeFilterPreset,
     lastDailyViewDate,
     toggleCategory,
+    toggleRegion,
+    setSelectedRegions,
     resetFilter,
     setTimeRange,
     setTimePreset,
