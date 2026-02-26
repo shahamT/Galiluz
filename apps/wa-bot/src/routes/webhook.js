@@ -16,7 +16,6 @@ import {
   DISCOVER_ASK_CATEGORY,
   DISCOVER_ASK_TIME,
   DISCOVER_AFTER_LIST,
-  PUBLISH_REPLY,
   PUBLISH_NOT_REGISTERED,
   PUBLISH_ASK_FULL_NAME,
   PUBLISH_ASK_PUBLISHING_AS,
@@ -31,7 +30,6 @@ import {
   APPROVER_ASK_REASON,
   PUBLISHER_APPROVED,
   PUBLISHER_HOW_TO_CONTINUE,
-  PUBLISHER_ACTION_COMING_SOON,
   PUBLISHER_REJECTED_BODY,
   PUBLISHER_REJECTED_REASON_LINE,
   PUBLISHER_REJECTED_FOOTER,
@@ -49,10 +47,15 @@ import {
   EVENT_DELETE_SUCCESS_BUTTONS,
   MAIN_MENU_INTENT_IRRELEVANT,
   MAIN_MENU_INTENT_UNCLEAR,
-  MAIN_MENU_PUBLISHER_ONLY,
   BATCH_FLUSH_MS,
 } from '../consts/index.js'
-import { sendInitialMessage, handleEventAddFlow, isEventAddStep, sendMediaMoreMessageIfNeeded } from '../flows/eventAddFlow.js'
+import {
+  sendInitialMessage,
+  sendEventAddMethodChoice,
+  handleEventAddFlow,
+  isEventAddStep,
+  sendMediaMoreMessageIfNeeded,
+} from '../flows/eventAddFlow.js'
 import { buildEditMenuFirstMessagePayload, buildPublisherEventListPayload } from '../flows/eventEditFlow.js'
 import { getEventsByPublisher, getEventById, deleteEvent } from '../services/eventsCreate.service.js'
 import {
@@ -449,10 +452,14 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if (id === 'back_to_menu' || id === 'back_to_main') {
       return handleBackToMenu(phoneNumberId, from)
     }
-    if (state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION) {
-      if (id === 'event_add_new') {
-        return sendInitialMessage(phoneNumberId, from)
+    if (id === 'event_add_new') {
+      const { status } = await checkPublisher(from)
+      if (status === 'approved') {
+        return sendEventAddMethodChoice(phoneNumberId, from)
       }
+      return handlePublishButton(phoneNumberId, from, profileName)
+    }
+    if (state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION) {
       if (id === 'event_update') {
         return handleEventUpdateChoice(phoneNumberId, from)
       }
@@ -563,11 +570,11 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'event_add_new') {
-          if (isPublisherChoice) return sendInitialMessage(phoneNumberId, from)
+          if (isPublisherChoice) return sendEventAddMethodChoice(phoneNumberId, from)
           const { status } = await checkPublisher(from)
           if (status === 'approved') {
             conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
-            return sendInitialMessage(phoneNumberId, from)
+            return sendEventAddMethodChoice(phoneNumberId, from)
           }
           return handlePublishButton(phoneNumberId, from, profileName)
         }
@@ -575,19 +582,13 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           if (isPublisherChoice) return handleEventUpdateChoice(phoneNumberId, from)
           const { status } = await checkPublisher(from)
           if (status === 'approved') return handleEventUpdateChoice(phoneNumberId, from)
-          return sendInteractiveButtons(phoneNumberId, from, {
-            body: MAIN_MENU_PUBLISHER_ONLY,
-            buttons: WELCOME_INTERACTIVE.buttons,
-          })
+          return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'event_delete') {
           if (isPublisherChoice) return handleEventDeleteChoice(phoneNumberId, from)
           const { status } = await checkPublisher(from)
           if (status === 'approved') return handleEventDeleteChoice(phoneNumberId, from)
-          return sendInteractiveButtons(phoneNumberId, from, {
-            body: MAIN_MENU_PUBLISHER_ONLY,
-            buttons: WELCOME_INTERACTIVE.buttons,
-          })
+          return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'irrelevant') {
           return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU_INTENT_IRRELEVANT)

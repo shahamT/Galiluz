@@ -1,16 +1,18 @@
 /**
  * OpenAI JSON schema for publisher event formatting (wa-bot flow).
  * AI returns: shortDescription, categories, occurrences, city, price, urls, and flags (always; may be empty).
- * Only these field keys may appear in flags: rawTitle, rawOccurrences, rawCity, rawNavLinks, rawPrice, rawFullDescription, rawUrls.
+ * Only these field keys may appear in flags: rawTitle, rawOccurrences, rawCity, rawLocation, rawNavLinks, rawPrice, rawFullDescription, rawUrls, rawMainCategory.
  */
 const FLAG_FIELD_KEYS = [
   'rawTitle',
   'rawOccurrences',
   'rawCity',
+  'rawLocation',
   'rawNavLinks',
   'rawPrice',
   'rawFullDescription',
   'rawUrls',
+  'rawMainCategory',
 ]
 
 export const PUBLISHER_EVENT_FORMAT_SCHEMA = {

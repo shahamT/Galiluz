@@ -230,6 +230,13 @@ export async function formatPublisherEvent(rawEventWithAll, categoriesList, opti
   }
   const aiResult = aiCall.result
 
+  const normalizedOccurrences = (Array.isArray(aiResult.occurrences) ? aiResult.occurrences : []).map((occ) => {
+    if (!occ || typeof occ !== 'object') return occ
+    const startTime = normalizeOccurrenceTime(occ.startTime)
+    const endTime = occ.endTime != null && occ.endTime !== '' ? normalizeOccurrenceTime(occ.endTime) : null
+    return { ...occ, startTime: startTime ?? occ.startTime, endTime }
+  })
+
   const publisher = rawEventWithAll.publisher
   const title = typeof rawEventWithAll.rawTitle === 'string' ? rawEventWithAll.rawTitle.trim() : ''
   const descriptionRaw = typeof rawEventWithAll.rawFullDescription === 'string' ? rawEventWithAll.rawFullDescription : ''
@@ -268,7 +275,7 @@ export async function formatPublisherEvent(rawEventWithAll, categoriesList, opti
       wazeNavLink: navLinks.wazeNavLink ?? null,
       gmapsNavLink: navLinks.gmapsNavLink ?? null,
     },
-    occurrences: aiResult.occurrences,
+    occurrences: normalizedOccurrences,
     price: aiResult.price,
     media: Array.isArray(rawEventWithAll.rawMedia) ? rawEventWithAll.rawMedia : [],
     urls: Array.isArray(aiResult.urls)
@@ -741,4 +748,76 @@ export async function normalizeCityToListedOrCustom(userText, citiesList, option
   return { type: 'custom', value: customValue }
 }
 
+const VERIFY_CITY_SCHEMA = {
+  name: 'verify_city_region',
+  strict: true,
+  schema: {
+    type: 'object',
+    required: ['inRegion', 'certain'],
+    additionalProperties: false,
+    properties: {
+      inRegion: { type: 'boolean' },
+      certain: { type: 'boolean' },
+    },
+  },
+}
+
+const VERIFY_CITY_SYSTEM_PROMPT = `You determine if an Israeli city/place is in Northern Israel. Northern Israel = הגליל העליון, רמת הגולן, אצבע הגליל (Upper Galilee, Golan Heights, Finger of Galilee). Cities like תל אביב, ירושלים, באר שבע, נתניה, ראשון לציון are NOT in Northern Israel.
+Output: inRegion (true if the city IS in Northern Israel, false if not), certain (true only when you have NO DOUBT; when unsure, set certain=false so we accept the city).
+When in doubt, set certain=false.`
+
+/**
+ * Verify if a city is in Northern Israel. Used when user enters custom city (not in listed cities).
+ * @param {string} cityName - City name to verify
+ * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string }} [options]
+ * @returns {Promise<{ inRegion: boolean, certain: boolean } | { inRegion: boolean, certain: boolean, errorReason: string }>}
+ */
+export async function verifyCityInNorthernIsrael(cityName, options = {}) {
+  const apiKey = (options.openaiApiKey ?? process.env.OPENAI_API_KEY ?? '').trim()
+  const model = (options.openaiModel ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL).trim() || DEFAULT_MODEL
+  const correlationId = options.correlationId
+
+  if (!apiKey) {
+    log(correlationId, 'warn', 'verifyCityInNorthernIsrael: no OpenAI API key')
+    return { inRegion: true, certain: false }
+  }
+
+  const userContent = typeof cityName === 'string' ? cityName.trim() : ''
+  if (!userContent) {
+    return { inRegion: true, certain: false }
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey, timeout: 15_000 })
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: VERIFY_CITY_SYSTEM_PROMPT },
+        { role: 'user', content: `Is this city in Northern Israel?\n\n${userContent}` },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: VERIFY_CITY_SCHEMA,
+      },
+      max_tokens: 50,
+      temperature: 0.1,
+    })
+    const content = response.choices[0]?.message?.content
+    if (!content) {
+      log(correlationId, 'warn', 'verifyCityInNorthernIsrael: empty content')
+      return { inRegion: true, certain: false }
+    }
+    const parsed = JSON.parse(content)
+    const inRegion = parsed.inRegion === true
+    const certain = parsed.certain === true
+    log(correlationId, 'info', 'verifyCityInNorthernIsrael: ok', { cityName: userContent, inRegion, certain })
+    return { inRegion, certain }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log(correlationId, 'error', 'verifyCityInNorthernIsrael failed', { error: msg })
+    return { inRegion: true, certain: false }
+  }
+}
+
 export { extractNavLinksFromRaw, htmlToWhatsAppMessage, parseFreeLanguageEditRequest }
+export { detectEventFromFreeText, extractEventFromFreeText } from './freeLanguageExtract.js'

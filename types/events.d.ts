@@ -23,6 +23,8 @@ export interface PublisherRawEvent {
   rawMainCategory?: string
   rawCategories?: string[]
   rawMedia?: unknown[]
+  /** Original free-language message when event was created via AI add flow */
+  freeLanguageDescription?: string
   publisher?: { phone?: string; name?: string; waId?: string }
 }
 

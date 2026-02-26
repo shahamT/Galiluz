@@ -6,6 +6,10 @@ import {
   EVENT_ADD_ASK_TITLE,
   EVENT_ADD_ASK_DATETIME,
   EVENT_ADD_ASK_DATETIME_FOOTER,
+  EVENT_ADD_ASK_PLACE_NAME,
+  EVENT_ADD_ASK_ADDRESS,
+  EVENT_ADD_ASK_ADDRESS_FOOTER,
+  EVENT_ADD_SKIP_BUTTON,
   EVENT_ADD_ASK_CITY,
   EVENT_ADD_ASK_WAZE_GMAPS,
   EVENT_ADD_ASK_PRICE,
@@ -13,8 +17,12 @@ import {
   EVENT_ADD_ASK_DESCRIPTION,
   EVENT_ADD_ASK_LINKS,
   EVENT_ADD_ASK_LINKS_FOOTER,
+  EVENT_ADD_ASK_MAIN_CATEGORY,
   EVENT_ADD_VALIDATE_TITLE,
   EVENT_ADD_VALIDATE_DATETIME,
+  EVENT_ADD_VALIDATE_PLACE_NAME,
+  EVENT_ADD_VALIDATE_ADDRESS,
+  EVENT_ADD_VALIDATE_MAIN_CATEGORY,
   EVENT_ADD_VALIDATE_CITY,
   EVENT_ADD_VALIDATE_WAZE_GMAPS,
   EVENT_ADD_VALIDATE_PRICE,
@@ -29,6 +37,8 @@ import {
   EVENT_ADD_DESCRIPTION_MIN,
   EVENT_ADD_DESCRIPTION_MAX,
   EVENT_ADD_LINKS_MAX,
+  EVENT_ADD_PLACE_NAME_MAX,
+  EVENT_ADD_ADDRESS_MAX,
 } from './index.js'
 
 /** Canonical order of flaggable field keys (only those the AI may flag). */
@@ -36,15 +46,18 @@ export const FLAG_FIELD_ORDER = [
   'rawTitle',
   'rawOccurrences',
   'rawCity',
+  'rawLocation',
   'rawNavLinks',
   'rawPrice',
   'rawFullDescription',
   'rawUrls',
+  'rawMainCategory',
 ]
 
 /**
- * @typedef {'text' | 'text_skip' | 'list'} FlagInputType
+ * @typedef {'text' | 'text_skip' | 'list' | 'compound_category'} FlagInputType
  * text = required text, text_skip = text or skip button, list = interactive list (category)
+ * compound_category = group choice then category choice (same as regular add flow)
  */
 
 /**
@@ -86,6 +99,20 @@ export const FLAG_FIELD_CONFIGS = {
     inputType: 'text_skip',
     lengthLimits: { max: EVENT_ADD_CITY_MAX },
   },
+  /** Compound: place name (can skip) then address (required if place skipped, can skip if place filled). */
+  rawLocation: {
+    label: 'מיקום',
+    stateKeys: ['eventAddPlaceName', 'eventAddAddressLine1', 'eventAddAddressLine2'],
+    ask: EVENT_ADD_ASK_PLACE_NAME,
+    askAddress: EVENT_ADD_ASK_ADDRESS,
+    footerAddress: EVENT_ADD_ASK_ADDRESS_FOOTER,
+    validate: EVENT_ADD_VALIDATE_PLACE_NAME,
+    validateAddress: EVENT_ADD_VALIDATE_ADDRESS,
+    inputType: 'compound_location',
+    skipButton: EVENT_ADD_SKIP_BUTTON,
+    lengthLimits: { max: EVENT_ADD_PLACE_NAME_MAX },
+    lengthLimitsAddress: { max: EVENT_ADD_ADDRESS_MAX },
+  },
   rawNavLinks: {
     label: 'לינקי ניווט',
     stateKeys: ['eventAddNavLinks'],
@@ -119,6 +146,14 @@ export const FLAG_FIELD_CONFIGS = {
     validate: EVENT_ADD_VALIDATE_LINKS,
     inputType: 'text_skip',
     lengthLimits: { max: EVENT_ADD_LINKS_MAX },
+  },
+  rawMainCategory: {
+    label: 'קטגוריה',
+    stateKeys: ['eventAddMainCategory'],
+    ask: EVENT_ADD_ASK_MAIN_CATEGORY,
+    validate: EVENT_ADD_VALIDATE_MAIN_CATEGORY,
+    inputType: 'compound_category',
+    lengthLimits: {},
   },
 }
 
