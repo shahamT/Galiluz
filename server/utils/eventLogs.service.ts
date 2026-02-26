@@ -26,6 +26,8 @@ export interface EventLogEditPayload {
   changedFields: string[]
   previous: { raw: Record<string, unknown>; final: Record<string, unknown> }
   new: { raw: Record<string, unknown>; final: Record<string, unknown> }
+  /** e.g. 'free_language' when edit was triggered by wa-bot free-language flow */
+  editSource?: string
   publisherId?: string
   waId?: string
   correlationId?: string
@@ -93,6 +95,7 @@ export async function logEventEdit(payload: EventLogEditPayload): Promise<void> 
       changedFields: payload.changedFields,
       previous: payload.previous,
       new: payload.new,
+      ...(payload.editSource !== undefined && { editSource: payload.editSource }),
       ...(payload.publisherId !== undefined && { publisherId: payload.publisherId }),
       ...(payload.waId !== undefined && { waId: payload.waId }),
       ...(payload.correlationId !== undefined && { correlationId: payload.correlationId }),

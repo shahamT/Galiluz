@@ -15,6 +15,10 @@
  *       eventAddFlagIndex (index into eventAddFlagFieldOrder for current field being collected).
  *       eventAddEditMenu / eventAddEditField / eventAddEditMainCategoryGroup / eventAddEditMainCategory (edit-details flow).
  *       eventEditFieldKey (when step is event_add_edit_field: 'title' | 'description' | 'mainCategory' | ...).
+ *       eventUpdateMode (true when edit flow was entered from "עדכון אירוע" — on done show update-success + link instead of activate).
+ *       eventUpdateList, eventUpdateListOffset (events list and pagination for update flow).
+ *       eventDeleteList, eventDeleteListOffset (events list and pagination for delete flow).
+ *       eventDeleteSelectedId (event id selected for deletion, set before EVENT_DELETE_CONFIRM).
  *
  * State is in-memory only and is lost on process restart or deploy. Users in the middle of a flow
  * will see the welcome menu on their next message after a restart.
@@ -33,6 +37,9 @@ const STEPS = {
   PUBLISH_ASK_COMMITMENT: 'publish_ask_commitment',
   APPROVER_WAITING_REASON: 'approver_waiting_reason',
   PUBLISHER_CHOOSE_ACTION: 'publisher_choose_action',
+  EVENT_UPDATE_SELECT_EVENT: 'event_update_select_event',
+  EVENT_DELETE_SELECT_EVENT: 'event_delete_select_event',
+  EVENT_DELETE_CONFIRM: 'event_delete_confirm',
   EVENT_ADD_INITIAL: 'event_add_initial',
   EVENT_ADD_TITLE: 'event_add_title',
   EVENT_ADD_DATETIME: 'event_add_datetime',
@@ -65,6 +72,7 @@ const STEPS = {
   EVENT_ADD_EDIT_LOCATION_MENU: 'event_add_edit_location_menu',
   EVENT_ADD_EDIT_LOCATION_FIELD: 'event_add_edit_location_field',
   EVENT_ADD_EDIT_MEDIA_INTRO: 'event_add_edit_media_intro',
+  EVENT_ADD_EDIT_FREE_LANG_CONFIRM: 'event_add_edit_freelang_confirm',
 }
 
 function get(waId) {

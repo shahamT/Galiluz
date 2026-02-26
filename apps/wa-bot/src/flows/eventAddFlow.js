@@ -13,7 +13,7 @@ import { createDraft, processDraft, activateEvent, createEvent } from '../servic
 import { patchDraft } from '../services/eventDraftPatch.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { config, normalizePhone } from '../config.js'
-import { generateShortDescription, normalizeCityForEdit, extractNavLinksFromRaw, parseOccurrencesFromText, parsePriceFromText, parseUrlsFromText } from 'event-format'
+import { generateShortDescription, normalizeCityForEdit, extractNavLinksFromRaw, parseOccurrencesFromText, parsePriceFromText, parseUrlsFromText, parseFreeLanguageEditRequest, htmlToWhatsAppMessage } from 'event-format'
 import { getDateInIsraelFromIso, getTimeInIsraelFromIso } from '../utils/date.helpers.js'
 import { logger } from '../utils/logger.js'
 import {
@@ -102,6 +102,13 @@ import {
   EVENT_EDIT_SUCCESS_MORE_LOCATION_BUTTON,
   EVENT_EDIT_SUCCESS_CHOOSE_BODY,
   EVENT_EDIT_PATCH_ERROR,
+  EVENT_EDIT_FREE_LANG_UNCLEAR,
+  EVENT_EDIT_FREE_LANG_CONFIRM_BUTTON,
+  EVENT_EDIT_FREE_LANG_CANCEL_BUTTON,
+  EVENT_EDIT_FREE_LANG_SUGGESTED_INTRO,
+  EVENT_EDIT_FREE_LANG_SUCCESS_PROMPT,
+  EVENT_EDIT_FREE_LANG_SUCCESS_MORE_BUTTON,
+  EVENT_EDIT_FREE_LANG_SUCCESS_DONE_BUTTON,
   EVENT_EDIT_EXTRA_CANNOT_REMOVE_LAST,
   EVENT_EDIT_LOCATION_CITY_UNRECOGNIZED,
   EVENT_ADD_MAX_CATEGORIES,
@@ -130,10 +137,12 @@ import {
   EVENT_ADD_FLAGS_INTRO,
   EVENT_ADD_FLAGS_FILL_AGAIN,
   LOG_PREFIXES,
+  WELCOME_INTERACTIVE,
+  EVENT_EDIT_DONE_ROW,
+  EVENT_EDIT_MENU_ROWS,
 } from '../consts/index.js'
-import { WELCOME_INTERACTIVE } from '../consts/index.js'
 import { getFlagFieldOrder, FLAG_FIELD_CONFIGS } from '../consts/eventAddFields.config.js'
-import { buildEditMenuListPayload, buildLocationEditMenuPayload, EDIT_DONE_ID } from './eventEditFlow.js'
+import { buildEditMenuFirstMessagePayload, buildEditMenuUnclearPayload, buildLocationEditMenuPayload, EDIT_DONE_ID } from './eventEditFlow.js'
 import { CATEGORY_GROUPS, EVENT_CATEGORIES } from '../consts/categories.const.js'
 
 const VALID_CATEGORY_IDS = new Set(Object.keys(EVENT_CATEGORIES))
@@ -173,6 +182,7 @@ const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_FLAG_INPUT,
   STEPS.EVENT_ADD_CONFIRM,
   STEPS.EVENT_ADD_EDIT_MENU,
+  STEPS.EVENT_ADD_EDIT_FREE_LANG_CONFIRM,
   STEPS.EVENT_ADD_EDIT_FIELD,
   STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP,
   STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY,
@@ -223,7 +233,7 @@ export function sendMediaMoreMessageIfNeeded(phoneNumberId, from) {
   }
 }
 
-// DEV: test mode – remove when no longer needed
+// Dev-only: test mode – gated by !config.isProduction && textBody === 'טסט'. Remove when no longer needed.
 const EVENT_ADD_TEST_MODE_STATE = {
   eventAddTitle: 'סדנה איטלקית - מסע בדרום איטליה',
   eventAddDateTime: '5 עד ה6 במרץ משמונה עד 10 בערב',
@@ -269,7 +279,7 @@ const EVENT_ADD_TEST_MODE_STATE = {
 }
 
 /**
- * DEV: Apply test-mode state (fixed raw event) and send media step. Remove when no longer needed.
+ * Dev-only: apply test-mode state (fixed raw event) and send media step. Gated by !config.isProduction.
  * @param {string} phoneNumberId
  * @param {string} from
  * @returns {Promise<object>}
@@ -413,9 +423,10 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
  * @param {'title' | 'description' | 'mainCategory' | 'location' | 'datetime' | 'price' | 'links'} fieldKey
  * @param {Record<string, unknown>} formattedEvent - result.event or eventAddFormattedPreview
  * @param {Record<string, { label: string }>} eventCategories - id → { label }
+ * @param {{ includeNavLinks?: boolean }} [options] - for location block, include Waze/Gmaps lines (default true)
  * @returns {string}
  */
-function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories) {
+function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, options = {}) {
   const empty = EVENT_EDIT_SUCCESS_VALUE_EMPTY
   const catLabel = (id) => (eventCategories[id]?.label ?? id)
   const ev = formattedEvent && typeof formattedEvent === 'object' ? formattedEvent : {}
@@ -444,7 +455,8 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories) {
     if (loc.addressLine1) locLines.push(String(loc.addressLine1))
     if (loc.addressLine2) locLines.push(String(loc.addressLine2))
     if (loc.locationDetails) locLines.push(String(loc.locationDetails))
-    if (loc.wazeNavLink || loc.gmapsNavLink) {
+    const includeNavLinks = options.includeNavLinks !== false
+    if (includeNavLinks && (loc.wazeNavLink || loc.gmapsNavLink)) {
       locLines.push('')
       if (loc.wazeNavLink) locLines.push(`ניווט בוויז - ${loc.wazeNavLink}`)
       if (loc.gmapsNavLink) locLines.push(`ניווט בגוגל מפות - ${loc.gmapsNavLink}`)
@@ -488,6 +500,118 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories) {
   return empty
 }
 
+const LOCATION_SUB_KEYS = new Set(['locationName', 'City', 'addressLine1', 'addressLine2', 'locationDetails', 'wazeNavLink', 'gmapsNavLink'])
+
+/**
+ * Merge free-language edits into a copy of the current event (for display and for patch).
+ * Location sub-field edits are merged into a single location object.
+ * @param {Array<{ fieldKey: string, newValue: unknown }>} edits
+ * @param {Record<string, unknown>} currentEvent
+ * @returns {Record<string, unknown>}
+ */
+function mergeFreeLangEditsIntoEvent(edits, currentEvent) {
+  const merged = JSON.parse(JSON.stringify(currentEvent || {}))
+  if (!merged.location || typeof merged.location !== 'object') merged.location = {}
+  for (const { fieldKey, newValue } of edits) {
+    if (fieldKey === 'title') merged.Title = newValue
+    else if (fieldKey === 'shortDescription') merged.shortDescription = newValue
+    else if (fieldKey === 'fullDescription') merged.fullDescription = newValue
+    else if (fieldKey === 'mainCategory') merged.mainCategory = newValue
+    else if (fieldKey === 'categories') merged.categories = Array.isArray(newValue) ? newValue : merged.categories
+    else if (fieldKey === 'location' && newValue && typeof newValue === 'object') Object.assign(merged.location, newValue)
+    else if (LOCATION_SUB_KEYS.has(fieldKey)) merged.location[fieldKey] = newValue
+    else if (fieldKey === 'datetime') merged.occurrences = Array.isArray(newValue) ? newValue : merged.occurrences
+    else if (fieldKey === 'price') merged.price = newValue
+    else if (fieldKey === 'links') merged.urls = Array.isArray(newValue) ? newValue : merged.urls
+    else if (fieldKey === 'media') merged.media = Array.isArray(newValue) ? newValue : merged.media
+  }
+  return merged
+}
+
+/**
+ * Build suggested-edits confirmation body (only edited fields). Location as one block; fullDescription via htmlToWhatsAppMessage.
+ * @param {Array<{ fieldKey: string, newValue: unknown }>} edits
+ * @param {Record<string, unknown>} currentEvent - eventAddFormattedPreview
+ * @returns {string}
+ */
+function buildSuggestedEditsBody(edits, currentEvent) {
+  const merged = mergeFreeLangEditsIntoEvent(edits, currentEvent)
+  const hasLocationEdit = edits.some((e) => e.fieldKey === 'location' || LOCATION_SUB_KEYS.has(e.fieldKey))
+  const displayKeys = []
+  if (edits.some((e) => e.fieldKey === 'title')) displayKeys.push('title')
+  if (edits.some((e) => e.fieldKey === 'shortDescription')) displayKeys.push('description')
+  if (edits.some((e) => e.fieldKey === 'fullDescription')) displayKeys.push('fullDescription')
+  if (edits.some((e) => e.fieldKey === 'mainCategory' || e.fieldKey === 'categories')) displayKeys.push('mainCategory')
+  if (hasLocationEdit) displayKeys.push('location')
+  if (edits.some((e) => e.fieldKey === 'datetime')) displayKeys.push('datetime')
+  if (edits.some((e) => e.fieldKey === 'price')) displayKeys.push('price')
+  if (edits.some((e) => e.fieldKey === 'links')) displayKeys.push('links')
+  if (edits.some((e) => e.fieldKey === 'media')) displayKeys.push('media')
+  const hasNavLinkEdit = edits.some((e) => e.fieldKey === 'wazeNavLink' || e.fieldKey === 'gmapsNavLink')
+  const blocks = []
+  for (const key of displayKeys) {
+    if (key === 'fullDescription') {
+      const html = merged.fullDescription
+      const plain = htmlToWhatsAppMessage(typeof html === 'string' ? html : '')
+      const truncated = plain.length > 800 ? plain.slice(0, 797) + '...' : plain
+      blocks.push(`*תיאור מלא:*\n${truncated || EVENT_EDIT_SUCCESS_VALUE_EMPTY}`)
+    } else if (key === 'location') {
+      blocks.push(buildEditSuccessValueBlock(key, merged, EVENT_CATEGORIES, { includeNavLinks: hasNavLinkEdit }))
+    } else {
+      blocks.push(buildEditSuccessValueBlock(key, merged, EVENT_CATEGORIES))
+    }
+  }
+  return blocks.join('\n\n')
+}
+
+/**
+ * Send suggested-edits message and confirm/cancel buttons (free-language edit flow).
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @param {Record<string, unknown>} currentEvent - eventAddFormattedPreview
+ * @param {Array<{ fieldKey: string, justification: string, newValue: unknown }>} edits
+ * @returns {Promise<object>}
+ */
+async function sendFreeLangSuggestedEdits(phoneNumberId, from, currentEvent, edits) {
+  const body = buildSuggestedEditsBody(edits, currentEvent)
+  const intro = EVENT_EDIT_FREE_LANG_SUGGESTED_INTRO + '\n\n'
+  const fullBody = intro + body
+  if (fullBody.length <= WHATSAPP_INTERACTIVE_BODY_MAX) {
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: fullBody,
+      buttons: [EVENT_EDIT_FREE_LANG_CONFIRM_BUTTON, EVENT_EDIT_FREE_LANG_CANCEL_BUTTON],
+    })
+  }
+  await sendText(phoneNumberId, from, fullBody)
+  return sendInteractiveButtons(phoneNumberId, from, {
+    body: 'לאשר את העדכון או לבטל?',
+    buttons: [EVENT_EDIT_FREE_LANG_CONFIRM_BUTTON, EVENT_EDIT_FREE_LANG_CANCEL_BUTTON],
+  })
+}
+
+/**
+ * Build patch payload from free-language edits (for patchDraft).
+ * Maps field keys to API keys; merges location sub-fields into one location object.
+ * @param {Array<{ fieldKey: string, newValue: unknown }>} edits
+ * @param {Record<string, unknown>} currentEvent
+ * @returns {Record<string, unknown>}
+ */
+function buildPatchPayloadFromFreeLangEdits(edits, currentEvent) {
+  const merged = mergeFreeLangEditsIntoEvent(edits, currentEvent)
+  const payload = {}
+  if (edits.some((e) => e.fieldKey === 'title')) payload.title = merged.Title
+  if (edits.some((e) => e.fieldKey === 'shortDescription')) payload.shortDescription = merged.shortDescription
+  if (edits.some((e) => e.fieldKey === 'fullDescription')) payload.fullDescription = merged.fullDescription
+  if (edits.some((e) => e.fieldKey === 'mainCategory')) payload.mainCategory = merged.mainCategory
+  if (edits.some((e) => e.fieldKey === 'categories')) payload.categories = merged.categories
+  if (edits.some((e) => e.fieldKey === 'location' || LOCATION_SUB_KEYS.has(e.fieldKey))) payload.location = merged.location
+  if (edits.some((e) => e.fieldKey === 'datetime')) payload.occurrences = merged.occurrences
+  if (edits.some((e) => e.fieldKey === 'price')) payload.price = merged.price
+  if (edits.some((e) => e.fieldKey === 'links')) payload.urls = merged.urls
+  if (edits.some((e) => e.fieldKey === 'media')) payload.media = merged.media
+  return payload
+}
+
 /**
  * Send confirm step message (summary + אישור ושמירה / עריכת פרטים). Used when entering confirm or returning from edit flow.
  * @param {string} phoneNumberId
@@ -509,6 +633,17 @@ async function sendConfirmSummary(phoneNumberId, from, formattedPreview) {
     body: EVENT_EDIT_SUCCESS_CHOOSE_BODY,
     buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
   })
+}
+
+/**
+ * After update-event flow: clear state and send main menu. No success message (user just chose "סיימתי לעדכון פרטים").
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @returns {Promise<object>}
+ */
+function sendUpdateSuccessAndClear(phoneNumberId, from) {
+  conversationState.clear(from)
+  return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }
 
 /**
@@ -788,6 +923,21 @@ function sendEditSuccessQuickReplies(phoneNumberId, from, body) {
   return sendInteractiveButtons(phoneNumberId, from, {
     body: body || EVENT_EDIT_SUCCESS_CHOOSE_BODY,
     buttons: [EVENT_EDIT_SUCCESS_DONE_BUTTON, EVENT_EDIT_SUCCESS_MORE_BUTTON],
+  })
+}
+
+/**
+ * After free-language confirm success: prompt (e.g. "איך תרצו להמשיך?") with לעדכון עוד פרטים / לסיום.
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @param {string} body - Success message (e.g. "העדכון בוצע בהצלחה.")
+ * @returns {Promise<object>}
+ */
+function sendFreeLangSuccessQuickReplies(phoneNumberId, from, body) {
+  const fullBody = (body ? body + '\n\n' : '') + EVENT_EDIT_FREE_LANG_SUCCESS_PROMPT
+  return sendInteractiveButtons(phoneNumberId, from, {
+    body: fullBody.length > WHATSAPP_INTERACTIVE_BODY_MAX ? EVENT_EDIT_FREE_LANG_SUCCESS_PROMPT : fullBody,
+    buttons: [EVENT_EDIT_FREE_LANG_SUCCESS_MORE_BUTTON, EVENT_EDIT_FREE_LANG_SUCCESS_DONE_BUTTON],
   })
 }
 
@@ -1154,19 +1304,22 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     }
     if (buttonId === EVENT_ADD_CONFIRM_EDIT_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddLastActivityAt: Date.now() })
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     return Promise.resolve()
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_MENU) {
     if (listReplyId === EDIT_DONE_ID) {
+      if (state.eventUpdateMode && state.eventAddDraftId) {
+        return sendUpdateSuccessAndClear(phoneNumberId, from)
+      }
       conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
       const preview = state.eventAddFormattedPreview
       if (preview && typeof preview === 'object') {
         return sendConfirmSummary(phoneNumberId, from, preview)
       }
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if (listReplyId === 'edit_title') {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_FIELD, eventEditFieldKey: 'title' })
@@ -1212,7 +1365,92 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         buttons: [EVENT_EDIT_MEDIA_CANCEL_BUTTON],
       })
     }
-    return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+    if (msg.type === 'text' && textBody) {
+      const donePhrases = ['סיימתי לעדכן', 'סיימתי לעדכן פרטים']
+      const isDone = donePhrases.some((p) => textBody === p || textBody.startsWith(p + ' ') || textBody.replace(/\s+/g, ' ').trim() === p)
+      if (isDone) {
+        if (state.eventUpdateMode && state.eventAddDraftId) {
+          return sendUpdateSuccessAndClear(phoneNumberId, from)
+        }
+        conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
+        const preview = state.eventAddFormattedPreview
+        if (preview && typeof preview === 'object') {
+          return sendConfirmSummary(phoneNumberId, from, preview)
+        }
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+      }
+      const menuOptions = [EVENT_EDIT_DONE_ROW, ...EVENT_EDIT_MENU_ROWS]
+      logger.info(LOG_PREFIXES.EVENT_ADD, 'Free-lang edit: calling LLM', from)
+      const parseResult = await parseFreeLanguageEditRequest(textBody, menuOptions, state.eventAddFormattedPreview || {}, {
+        openaiApiKey: config.openaiApiKey,
+        openaiModel: config.openaiModel,
+        correlationId: from,
+      })
+      logger.info(LOG_PREFIXES.EVENT_ADD, 'Free-lang edit: LLM result', from, {
+        type: parseResult.type,
+        editCount: parseResult.edits?.length ?? 0,
+        ...(parseResult.type === 'unclear' && parseResult.message ? { message: parseResult.message.slice(0, 80) } : {}),
+      })
+      if (parseResult.type === 'unclear') {
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuUnclearPayload(parseResult.message || EVENT_EDIT_FREE_LANG_UNCLEAR))
+      }
+      if (parseResult.type === 'complete_update') {
+        conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
+        const preview = state.eventAddFormattedPreview
+        if (preview && typeof preview === 'object') {
+          return sendConfirmSummary(phoneNumberId, from, preview)
+        }
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+      }
+      if (parseResult.type === 'edits' && Array.isArray(parseResult.edits) && parseResult.edits.length > 0) {
+        if (parseResult.edits.some((e) => e.fieldKey === 'media')) {
+          conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MEDIA_INTRO })
+          return sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_EDIT_ASK_MEDIA,
+            footer: EVENT_EDIT_ASK_MEDIA_FOOTER,
+            buttons: [EVENT_EDIT_MEDIA_CANCEL_BUTTON],
+          })
+        }
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_FREE_LANG_CONFIRM,
+          eventAddFreeLangEdits: parseResult.edits,
+          eventAddLastActivityAt: Date.now(),
+        })
+        return sendFreeLangSuggestedEdits(phoneNumberId, from, state.eventAddFormattedPreview || {}, parseResult.edits)
+      }
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuUnclearPayload(EVENT_EDIT_FREE_LANG_UNCLEAR))
+    }
+    return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+  }
+
+  if (step === STEPS.EVENT_ADD_EDIT_FREE_LANG_CONFIRM) {
+    const draftId = state.eventAddDraftId
+    const edits = Array.isArray(state.eventAddFreeLangEdits) ? state.eventAddFreeLangEdits : []
+    if (buttonId === EVENT_EDIT_FREE_LANG_CANCEL_BUTTON.id) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddFreeLangEdits: undefined })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+    }
+    if (buttonId === EVENT_EDIT_FREE_LANG_CONFIRM_BUTTON.id && draftId && edits.length > 0) {
+      const payload = buildPatchPayloadFromFreeLangEdits(edits, state.eventAddFormattedPreview || {})
+      payload._meta = { editSource: 'free_language' }
+      const result = await patchDraft(draftId, payload)
+      if (!result.success) {
+        logger.error(LOG_PREFIXES.EVENT_ADD, 'Free-lang confirm patch failed', from, result.reason)
+        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddFreeLangEdits: undefined })
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+      }
+      conversationState.set(from, {
+        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
+        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+        eventAddFreeLangEdits: undefined,
+        eventAddFromFreeLangSuccess: true,
+      })
+      const body = 'העדכון בוצע בהצלחה.'
+      return sendFreeLangSuccessQuickReplies(phoneNumberId, from, body)
+    }
+    conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddFreeLangEdits: undefined })
+    return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_FIELD) {
@@ -1224,7 +1462,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (fieldKey === 'datetime') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
       if (fieldKey === 'price') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER)
       if (fieldKey === 'links') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_LINKS + '\n' + EVENT_EDIT_ASK_LINKS_FOOTER)
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if (!textBody) {
       if (fieldKey === 'title') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_TITLE)
@@ -1232,7 +1470,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (fieldKey === 'datetime') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
       if (fieldKey === 'price') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER)
       if (fieldKey === 'links') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_LINKS + '\n' + EVENT_EDIT_ASK_LINKS_FOOTER)
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if (fieldKey === 'title') {
       const len = textBody.length
@@ -1245,7 +1483,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (!result.success) {
         await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
       conversationState.set(from, {
         eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
@@ -1276,7 +1514,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (!result.success) {
         await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
       conversationState.set(from, {
         eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
@@ -1311,7 +1549,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (!result.success) {
         await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
       conversationState.set(from, {
         eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
@@ -1342,7 +1580,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (!result.success) {
         await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
       conversationState.set(from, {
         eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
@@ -1369,7 +1607,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (!result.success) {
         await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
       conversationState.set(from, {
         eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
@@ -1382,19 +1620,19 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return sendEditSuccessQuickReplies(phoneNumberId, from, body)
     }
     conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventEditFieldKey: undefined })
-    return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+    return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_MEDIA_INTRO) {
     const draftId = state.eventAddDraftId
     if (buttonId === EVENT_EDIT_MEDIA_CANCEL_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if ((msg.type === 'image' || msg.type === 'video') && mediaId) {
       if (!draftId) {
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
       const preview = state.eventAddFormattedPreview
       const currentMedia = Array.isArray(preview?.media) ? preview.media : []
@@ -1415,7 +1653,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (!patchResult.success) {
         await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
       conversationState.set(from, {
         eventAddMedia: [],
@@ -1495,7 +1733,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     if (!result.success) {
       await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     conversationState.set(from, {
       eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
@@ -1519,7 +1757,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES) {
     if (buttonId === EVENT_EDIT_EXTRA_BACK_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if (buttonId === EVENT_EDIT_EXTRA_ADD_BUTTON.id) {
       const preview = state.eventAddFormattedPreview
@@ -1650,7 +1888,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     }
     if (listReplyId === EVENT_EDIT_LOCATION_BACK_ROW.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     const fieldConfig = LOCATION_FIELD_MAP[listReplyId]
     if (fieldConfig) {
@@ -1728,17 +1966,34 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_SUCCESS) {
+    if (state.eventAddFromFreeLangSuccess && buttonId === EVENT_EDIT_FREE_LANG_SUCCESS_MORE_BUTTON.id) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddFromFreeLangSuccess: undefined })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+    }
+    if (state.eventAddFromFreeLangSuccess && buttonId === EVENT_EDIT_FREE_LANG_SUCCESS_DONE_BUTTON.id) {
+      conversationState.set(from, { eventAddFromFreeLangSuccess: undefined })
+      if (state.eventUpdateMode) {
+        conversationState.clear(from)
+        return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+      }
+      conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
+      const preview = state.eventAddFormattedPreview
+      if (preview && typeof preview === 'object') {
+        return sendConfirmSummary(phoneNumberId, from, preview)
+      }
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+    }
     if (buttonId === EVENT_EDIT_SUCCESS_DONE_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
       const preview = state.eventAddFormattedPreview
       if (preview && typeof preview === 'object') {
         return sendConfirmSummary(phoneNumberId, from, preview)
       }
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if (buttonId === EVENT_EDIT_SUCCESS_MORE_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuListPayload())
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if (buttonId === EVENT_EDIT_SUCCESS_MORE_LOCATION_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })

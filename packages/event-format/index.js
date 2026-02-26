@@ -9,6 +9,8 @@ import { getCurrentIsraelUtcOffset } from './israelDate.js'
 import { sanitizeRawEventForPrompt } from './promptSanitize.js'
 import { extractNavLinksFromRaw } from './navLinks.js'
 import { convertMessageToHtml } from './whatsappFormatToHtml.js'
+import { htmlToWhatsAppMessage } from './htmlToWhatsAppMessage.js'
+import { parseFreeLanguageEditRequest } from './parseFreeLanguageEditRequest.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
@@ -701,4 +703,4 @@ export async function parseUrlsFromText(text, options = {}) {
   }
 }
 
-export { extractNavLinksFromRaw }
+export { extractNavLinksFromRaw, htmlToWhatsAppMessage, parseFreeLanguageEditRequest }

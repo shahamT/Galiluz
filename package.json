@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev.js",
     "dev:web": "nuxt dev",
+    "dev:ngrok": "ngrok http 3001",
     "dev:wa": "npm --prefix apps/wa-listener run dev",
     "dev:wa-bot": "npm --prefix apps/wa-bot run dev",
     "list-groups:wa": "npm --prefix apps/wa-listener run list-groups",

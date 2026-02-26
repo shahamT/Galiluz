@@ -142,6 +142,48 @@ export const PUBLISHER_HOW_TO_CONTINUE = {
 export const PUBLISHER_ACTION_COMING_SOON =
   'האפשרות הזו תגיע בקרוב. בינתיים אפשר לפרסם אירוע חדש או לחזור לתפריט.'
 
+// --- Publisher event list (update / delete flow) ---
+
+/** Shown when user has no future events (update or delete). */
+export const EVENT_LIST_NO_FUTURE_EVENTS = 'לא נמצאו אירועים עתידיים שמשוייכים לך.'
+
+/** List body when selecting which event to update. */
+export const EVENT_UPDATE_SELECT_BODY = 'איזה אירוע תרצו לעדכן?'
+
+/** List body when selecting which event to delete. */
+export const EVENT_DELETE_SELECT_BODY = 'איזה אירוע תרצו למחוק?'
+
+/** Publisher event list: list button label (update/delete – "איזה אירוע תרצו למחוק/לעדכן"). */
+export const EVENT_SELECT_EVENT_LIST_BUTTON = 'בחרו אירוע מהרשימה'
+
+/** "More events" row title; id is built as event_list_more_${offset}. */
+export const EVENT_LIST_MORE_ROW_TITLE = 'אירועים נוספים'
+
+/** WhatsApp list row title max length (crop + ellipsis). */
+export const EVENT_LIST_ROW_TITLE_MAX = 24
+
+/** Delete confirmation: prompt before user sends keyword. */
+export const EVENT_DELETE_CONFIRM_PROMPT =
+  "אתם בטוחים?\nלמחיקת האירוע באופן סופי שלחו 'מחיקה'"
+
+/** Delete confirmation: exact text user must send to confirm. */
+export const EVENT_DELETE_CONFIRM_KEYWORD = 'מחיקה'
+
+/** After successful delete. */
+export const EVENT_DELETE_SUCCESS = 'האירוע נמחק בהצלחה'
+
+/** Buttons after no events: back to main menu, add new event. */
+export const EVENT_LIST_NO_EVENTS_BUTTONS = [
+  { id: 'back_to_main', title: 'חזרה לתפריט הראשי' },
+  { id: 'event_add_new', title: 'פרסום אירוע 📅' },
+]
+
+/** Buttons after delete success: back to publisher choice, main menu. */
+export const EVENT_DELETE_SUCCESS_BUTTONS = [
+  { id: 'publish', title: 'פרסום/עדכון אירוע' },
+  { id: 'back_to_main', title: 'חזרה לתפריט הראשי' },
+]
+
 /** To publisher: rejected. Body without reason; append PUBLISHER_REJECTED_REASON_LINE + reason only when relevant. */
 export const PUBLISHER_REJECTED_BODY =
   '*לצערנו* הבקשה שלך לפרסום בגלילו"ז נדחתה... 😣'
@@ -258,10 +300,16 @@ export const EVENT_ADD_CONFIRM_EDIT_RESTART = 'מתחילים מחדש. הזן �
 // --- Event edit flow (shared with future update flow) ---
 export const EVENT_EDIT_MENU_BODY = 'אילו פרטים תרצו לשנות?'
 export const EVENT_EDIT_MENU_FOOTER = "לסיום העריכה יש לבחור בתפריט ב'סיימתי לעדכן פרטים'"
+/** First message when entering edit (free-language or menu). */
+export const EVENT_EDIT_MENU_FIRST_BODY =
+  'ניתן להשתמש בשפה חופשית כדי לעדכן פרטים, מה ברצונך לעדכן?\nלחילופין, ניתן לבחור שדה לעדכון מהתפריט'
+/** First message footer (max 60 chars). */
+export const EVENT_EDIT_MENU_FIRST_FOOTER =
+  "לסיום העדכון - כתבו 'סיימתי לעדכן' או בחרו אפשרות זו מהרשימה"
 export const EVENT_EDIT_DONE_ID = 'edit_done'
 export const EVENT_EDIT_DONE_LABEL = 'סיימתי לעדכן פרטים'
 /** Edit menu: list button label (WhatsApp interactive list). */
-export const EVENT_EDIT_LIST_BUTTON = 'בחר'
+export const EVENT_EDIT_LIST_BUTTON = 'בחירת שדה לעריכה'
 /** Edit menu: section title for "done updating" row. */
 export const EVENT_EDIT_SECTION_DONE = 'סיום עריכה'
 /** Edit menu: section title for field rows. */
@@ -333,6 +381,22 @@ export const EVENT_EDIT_SUCCESS_CHOOSE_BODY = 'בחר/י:'
 
 /** Shown when patch (draft update) fails. */
 export const EVENT_EDIT_PATCH_ERROR = 'שגיאה בעדכון. נסה שוב.'
+
+/** Free-language edit: LLM could not understand the request. */
+export const EVENT_EDIT_FREE_LANG_UNCLEAR =
+  'לא הצלחתי להבין מה בדיוק אתם מבקשים לעדכן, אשמח אם תכתבו בצורה ברורה יותר או תבחרו שדה מתוך הרשימה'
+
+/** Free-language suggested edits: confirm / cancel buttons (max 20 chars). */
+export const EVENT_EDIT_FREE_LANG_CONFIRM_BUTTON = { id: 'edit_freelang_confirm', title: 'מאשר/ת עדכון! 👍' }
+export const EVENT_EDIT_FREE_LANG_CANCEL_BUTTON = { id: 'edit_freelang_cancel', title: 'לא מאשר/ת עדכון 👎' }
+
+/** Free-language suggested-edits intro (body before the changes list). */
+export const EVENT_EDIT_FREE_LANG_SUGGESTED_INTRO = 'אלו השינויים שזיהינו שברצונך לבצע:'
+
+/** After free-language confirm success: prompt and quick replies. */
+export const EVENT_EDIT_FREE_LANG_SUCCESS_PROMPT = 'איך תרצו להמשיך?'
+export const EVENT_EDIT_FREE_LANG_SUCCESS_MORE_BUTTON = { id: 'edit_freelang_success_more', title: 'לעדכון עוד פרטים' }
+export const EVENT_EDIT_FREE_LANG_SUCCESS_DONE_BUTTON = { id: 'edit_freelang_success_done', title: 'לסיום' }
 
 /** Extra categories: cannot remove last remaining category. */
 export const EVENT_EDIT_EXTRA_CANNOT_REMOVE_LAST = 'לא ניתן להסיר את הקטגוריה היחידה.'

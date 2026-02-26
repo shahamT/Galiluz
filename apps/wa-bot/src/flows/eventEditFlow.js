@@ -18,6 +18,11 @@ import {
   EVENT_EDIT_LOCATION_FIELD_ROWS,
   EVENT_EDIT_SECTION_NAV,
   EVENT_EDIT_SECTION_LOCATION_FIELDS,
+  EVENT_EDIT_MENU_FIRST_BODY,
+  EVENT_EDIT_MENU_FIRST_FOOTER,
+  EVENT_LIST_ROW_TITLE_MAX,
+  EVENT_LIST_MORE_ROW_TITLE,
+  EVENT_SELECT_EVENT_LIST_BUTTON,
 } from '../consts/index.js'
 
 /** Row id for "סיימתי לעדכן פרטים" — exit edit flow. */
@@ -54,6 +59,53 @@ export function buildEditMenuListPayload() {
 }
 
 /**
+ * Build interactive list payload for the edit menu first message (free-language intro + same list).
+ * Use when user first clicks "עריכת פרטים"; use buildEditMenuListPayload() for re-displays.
+ * @returns {{ body: string, footer: string, button: string, sections: Array<{ title: string, rows: Array<{ id: string, title: string }> }> }}
+ */
+export function buildEditMenuFirstMessagePayload() {
+  return {
+    body: EVENT_EDIT_MENU_FIRST_BODY,
+    footer: EVENT_EDIT_MENU_FIRST_FOOTER,
+    button: EVENT_EDIT_LIST_BUTTON,
+    sections: [
+      {
+        title: EVENT_EDIT_SECTION_DONE,
+        rows: [EVENT_EDIT_DONE_ROW],
+      },
+      {
+        title: EVENT_EDIT_SECTION_FIELDS,
+        rows: EVENT_EDIT_MENU_ROWS,
+      },
+    ],
+  }
+}
+
+/**
+ * Build interactive list payload for the edit menu when free-language was unclear.
+ * Same list as edit menu, but body = unclear message and footer = first message footer.
+ * @param {string} body - Unclear message (e.g. EVENT_EDIT_FREE_LANG_UNCLEAR or LLM message)
+ * @returns {{ body: string, footer: string, button: string, sections: Array<{ title: string, rows: Array<{ id: string, title: string }> }> }}
+ */
+export function buildEditMenuUnclearPayload(body) {
+  return {
+    body: typeof body === 'string' ? body : EVENT_EDIT_MENU_BODY,
+    footer: EVENT_EDIT_MENU_FIRST_FOOTER,
+    button: EVENT_EDIT_LIST_BUTTON,
+    sections: [
+      {
+        title: EVENT_EDIT_SECTION_DONE,
+        rows: [EVENT_EDIT_DONE_ROW],
+      },
+      {
+        title: EVENT_EDIT_SECTION_FIELDS,
+        rows: EVENT_EDIT_MENU_ROWS,
+      },
+    ],
+  }
+}
+
+/**
  * Build interactive list payload for the location edit sub-menu.
  * Two sections: back/done, then the six location fields.
  * @returns {{ body: string, footer: string, button: string, sections: Array<{ title: string, rows: Array<{ id: string, title: string }> }> }}
@@ -73,5 +125,47 @@ export function buildLocationEditMenuPayload() {
         rows: EVENT_EDIT_LOCATION_FIELD_ROWS,
       },
     ],
+  }
+}
+
+/**
+ * Crop event title for list row (WhatsApp row title limit).
+ * @param {string} title
+ * @param {number} maxLen
+ * @returns {string}
+ */
+function cropEventTitleForRow(title, maxLen = EVENT_LIST_ROW_TITLE_MAX) {
+  const s = typeof title === 'string' ? title.trim() : ''
+  if (s.length <= maxLen) return s
+  return s.slice(0, maxLen - 1) + '…'
+}
+
+/**
+ * Build interactive list payload for publisher event selection (update or delete flow).
+ * Shows up to 10 event rows; if more events exist, shows 9 + "אירועים נוספים" row (id = event_list_more_${nextOffset}).
+ * @param {Array<{ id: string, title: string }>} events - Full sorted list
+ * @param {number} offset - Current page start index
+ * @param {string} bodyText - List body (e.g. EVENT_UPDATE_SELECT_BODY)
+ * @param {string} rowIdPrefix - Prefix for event row ids (e.g. 'ev_up_' or 'ev_del_')
+ * @returns {{ body: string, button: string, sections: Array<{ title: string, rows: Array<{ id: string, title: string }> }> }}
+ */
+export function buildPublisherEventListPayload(events, offset, bodyText, rowIdPrefix) {
+  const list = Array.isArray(events) ? events : []
+  const off = Math.max(0, Number(offset) || 0)
+  const hasMore = list.length > off + 10
+  const pageSize = hasMore ? 9 : 10
+  const page = list.slice(off, off + pageSize)
+  const rows = page.map((ev) => ({
+    id: rowIdPrefix + ev.id,
+    title: cropEventTitleForRow(ev.title),
+  }))
+  if (hasMore) {
+    const nextOffset = off + 9
+    rows.push({ id: `event_list_more_${nextOffset}`, title: EVENT_LIST_MORE_ROW_TITLE })
+  }
+  return {
+    body: typeof bodyText === 'string' ? bodyText : 'איזה אירוע?',
+    button: EVENT_SELECT_EVENT_LIST_BUTTON,
+    sections: [{ title: 'אירועים', rows }],
   }
 }

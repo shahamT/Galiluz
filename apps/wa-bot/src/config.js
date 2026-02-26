@@ -16,12 +16,14 @@ function loadConfig() {
   const verifyToken = process.env.WEBHOOK_VERIFY_TOKEN || ''
   const accessToken = process.env.WA_CLOUD_ACCESS_TOKEN || ''
   const phoneNumberId = process.env.WA_PHONE_NUMBER_ID || ''
+  const webhookAppSecret = (process.env.APP_SECRET || '').trim()
 
   if (isProduction) {
     const missing = []
     if (!verifyToken) missing.push('WEBHOOK_VERIFY_TOKEN')
     if (!accessToken) missing.push('WA_CLOUD_ACCESS_TOKEN')
     if (!phoneNumberId) missing.push('WA_PHONE_NUMBER_ID')
+    if (!webhookAppSecret) missing.push('APP_SECRET')
     const openaiKey = (process.env.OPENAI_API_KEY || '').trim()
     if (!openaiKey) missing.push('OPENAI_API_KEY')
     if (missing.length > 0) {
@@ -37,6 +39,7 @@ function loadConfig() {
     port,
     webhook: {
       verifyToken,
+      appSecret: webhookAppSecret,
     },
     whatsapp: {
       accessToken,

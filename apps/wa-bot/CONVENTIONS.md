@@ -42,3 +42,8 @@ Single source of truth for wa-bot production code standards.
 ## 7. JSDoc
 
 - Public/service functions: brief JSDoc with `@param`, `@returns` where it helps. Keep existing JSDoc; add for new exports.
+
+## 8. Webhook security
+
+- **APP_SECRET** (required in production): Meta App Secret from the Meta for Developers app settings. Used to verify webhook POST requests via `X-Hub-Signature-256` (HMAC-SHA256 of raw body). When set, only requests signed by Meta are processed; without it, the server logs a warning and skips verification (dev only).
+- Sender id (`from`) is trusted for access control only after signature verification passes.

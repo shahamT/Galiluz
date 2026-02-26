@@ -38,8 +38,18 @@ import {
   PUBLISHER_REJECTED_BUTTON,
   APPROVER_CONFIRM_APPROVED,
   APPROVER_CONFIRM_REJECTED,
+  EVENT_LIST_NO_FUTURE_EVENTS,
+  EVENT_UPDATE_SELECT_BODY,
+  EVENT_DELETE_SELECT_BODY,
+  EVENT_LIST_NO_EVENTS_BUTTONS,
+  EVENT_DELETE_CONFIRM_PROMPT,
+  EVENT_DELETE_CONFIRM_KEYWORD,
+  EVENT_DELETE_SUCCESS,
+  EVENT_DELETE_SUCCESS_BUTTONS,
 } from '../consts/index.js'
 import { sendInitialMessage, handleEventAddFlow, isEventAddStep, sendMediaMoreMessageIfNeeded } from '../flows/eventAddFlow.js'
+import { buildEditMenuFirstMessagePayload, buildPublisherEventListPayload } from '../flows/eventEditFlow.js'
+import { getEventsByPublisher, getEventById, deleteEvent } from '../services/eventsCreate.service.js'
 import {
   checkPublisher,
   registerPublisher,
@@ -52,6 +62,7 @@ import {
   shouldForwardToDev,
   forwardToDev,
 } from '../utils/whatsappWebhookRouter.js'
+import { verifyWebhookSignature } from '../utils/webhookSignature.js'
 
 /** In-memory: approver waId -> (publisher waId -> fullName) for confirmation messages */
 const pendingPublisherNamesByApprover = new Map()
@@ -96,6 +107,24 @@ function isPrivateMessage(message) {
   return typeof ctxId !== 'string' || !ctxId.endsWith('@g.us')
 }
 
+/**
+ * Normalize event from GET /api/events/[id] (frontend shape) to edit-flow shape (Title, location.City).
+ * @param {Record<string, unknown>} loaded
+ * @returns {Record<string, unknown>}
+ */
+function normalizeLoadedEventForEdit(loaded) {
+  if (!loaded || typeof loaded !== 'object') return {}
+  const loc = loaded.location && typeof loaded.location === 'object' ? loaded.location : {}
+  return {
+    ...loaded,
+    Title: loaded.Title ?? loaded.title ?? '',
+    location: {
+      ...loc,
+      City: loc.City ?? loc.city ?? '',
+    },
+  }
+}
+
 /** Category list for discover flow: הכל first, then 4 groups */
 const DISCOVER_CATEGORY_LIST = {
   body: DISCOVER_ASK_CATEGORY,
@@ -138,6 +167,42 @@ function handleDiscoverTimeChoice(phoneNumberId, from, timeChoice) {
       }
       return result
     })
+}
+
+async function handleEventUpdateChoice(phoneNumberId, from) {
+  const { events } = await getEventsByPublisher(from)
+  if (!events || events.length === 0) {
+    conversationState.clear(from)
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_LIST_NO_FUTURE_EVENTS,
+      buttons: EVENT_LIST_NO_EVENTS_BUTTONS,
+    })
+  }
+  conversationState.set(from, {
+    step: conversationState.STEPS.EVENT_UPDATE_SELECT_EVENT,
+    eventUpdateList: events,
+    eventUpdateListOffset: 0,
+  })
+  const payload = buildPublisherEventListPayload(events, 0, EVENT_UPDATE_SELECT_BODY, 'ev_up_')
+  return sendInteractiveList(phoneNumberId, from, payload)
+}
+
+async function handleEventDeleteChoice(phoneNumberId, from) {
+  const { events } = await getEventsByPublisher(from)
+  if (!events || events.length === 0) {
+    conversationState.clear(from)
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_LIST_NO_FUTURE_EVENTS,
+      buttons: EVENT_LIST_NO_EVENTS_BUTTONS,
+    })
+  }
+  conversationState.set(from, {
+    step: conversationState.STEPS.EVENT_DELETE_SELECT_EVENT,
+    eventDeleteList: events,
+    eventDeleteListOffset: 0,
+  })
+  const payload = buildPublisherEventListPayload(events, 0, EVENT_DELETE_SELECT_BODY, 'ev_del_')
+  return sendInteractiveList(phoneNumberId, from, payload)
 }
 
 async function handlePublishButton(phoneNumberId, from, profileName) {
@@ -343,7 +408,7 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }
 
-function processOneMessage(phoneNumberId, from, msg, context = {}) {
+async function processOneMessage(phoneNumberId, from, msg, context = {}) {
   const approverWaId = config.publishersApproverWaNumber
     ? normalizePhone(config.publishersApproverWaNumber)
     : ''
@@ -377,12 +442,11 @@ function processOneMessage(phoneNumberId, from, msg, context = {}) {
       if (id === 'event_add_new') {
         return sendInitialMessage(phoneNumberId, from)
       }
-      if (id === 'event_update' || id === 'event_delete') {
-        conversationState.clear(from)
-        return sendText(phoneNumberId, from, PUBLISHER_ACTION_COMING_SOON).then((r) => {
-          if (r && !r.success) return r
-          return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
-        })
+      if (id === 'event_update') {
+        return handleEventUpdateChoice(phoneNumberId, from)
+      }
+      if (id === 'event_delete') {
+        return handleEventDeleteChoice(phoneNumberId, from)
       }
     }
     if (id === 'publish_sign_me_up') {
@@ -408,8 +472,74 @@ function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if (listReplyId) return handleDiscoverListReply(phoneNumberId, from, listReplyId)
   }
 
+  if (interactive?.type === 'list_reply') {
+    const listReplyId = interactive.list_reply?.id || ''
+    if (state.step === conversationState.STEPS.EVENT_UPDATE_SELECT_EVENT) {
+      if (listReplyId.startsWith('event_list_more_')) {
+        const nextOffset = parseInt(listReplyId.slice('event_list_more_'.length), 10)
+        if (!Number.isNaN(nextOffset)) {
+          conversationState.set(from, { eventUpdateListOffset: nextOffset })
+          const list = state.eventUpdateList || []
+          const payload = buildPublisherEventListPayload(list, nextOffset, EVENT_UPDATE_SELECT_BODY, 'ev_up_')
+          return sendInteractiveList(phoneNumberId, from, payload)
+        }
+      }
+      if (listReplyId.startsWith('ev_up_')) {
+        const eventId = listReplyId.slice(6)
+        const loaded = await getEventById(eventId, from)
+        if (!loaded) {
+          conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
+          return sendInteractiveButtons(phoneNumberId, from, PUBLISHER_HOW_TO_CONTINUE)
+        }
+        const normalized = normalizeLoadedEventForEdit(loaded)
+        conversationState.set(from, {
+          step: conversationState.STEPS.EVENT_ADD_EDIT_MENU,
+          eventAddDraftId: eventId,
+          eventAddFormattedPreview: normalized,
+          eventUpdateMode: true,
+          eventUpdateList: undefined,
+          eventUpdateListOffset: undefined,
+        })
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+      }
+    }
+    if (state.step === conversationState.STEPS.EVENT_DELETE_SELECT_EVENT) {
+      if (listReplyId.startsWith('event_list_more_')) {
+        const nextOffset = parseInt(listReplyId.slice('event_list_more_'.length), 10)
+        if (!Number.isNaN(nextOffset)) {
+          conversationState.set(from, { eventDeleteListOffset: nextOffset })
+          const list = state.eventDeleteList || []
+          const payload = buildPublisherEventListPayload(list, nextOffset, EVENT_DELETE_SELECT_BODY, 'ev_del_')
+          return sendInteractiveList(phoneNumberId, from, payload)
+        }
+      }
+      if (listReplyId.startsWith('ev_del_')) {
+        const eventId = listReplyId.slice(7)
+        conversationState.set(from, {
+          step: conversationState.STEPS.EVENT_DELETE_CONFIRM,
+          eventDeleteSelectedId: eventId,
+          eventDeleteList: undefined,
+          eventDeleteListOffset: undefined,
+        })
+        return sendText(phoneNumberId, from, EVENT_DELETE_CONFIRM_PROMPT)
+      }
+    }
+  }
+
   if (msg.type === 'text' && msg.text?.body) {
     const textBody = String(msg.text.body).trim()
+    if (state.step === conversationState.STEPS.EVENT_DELETE_CONFIRM) {
+      if (textBody === EVENT_DELETE_CONFIRM_KEYWORD) {
+        const eventId = state.eventDeleteSelectedId
+        const result = await deleteEvent(eventId)
+        conversationState.clear(from)
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_DELETE_SUCCESS,
+          buttons: EVENT_DELETE_SUCCESS_BUTTONS,
+        })
+      }
+      return sendText(phoneNumberId, from, EVENT_DELETE_CONFIRM_PROMPT)
+    }
     if (state.step === conversationState.STEPS.PUBLISH_ASK_FULL_NAME) {
       conversationState.set(from, { fullName: textBody, step: conversationState.STEPS.PUBLISH_ASK_PUBLISHING_AS })
       return sendText(phoneNumberId, from, PUBLISH_ASK_PUBLISHING_AS)
@@ -622,6 +752,20 @@ export function handlePost(req, res) {
   let raw = ''
   req.on('data', (chunk) => { raw += chunk })
   req.on('end', () => {
+    const signatureHeader = req.headers['x-hub-signature-256']
+    const appSecret = config.webhook?.appSecret
+
+    if (appSecret) {
+      if (!verifyWebhookSignature(raw, signatureHeader, appSecret)) {
+        logger.warn(LOG_PREFIXES.WEBHOOK, 'Webhook signature verification failed')
+        res.writeHead(403, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Invalid signature' }))
+        return
+      }
+    } else {
+      logger.warn(LOG_PREFIXES.WEBHOOK, 'Webhook signature verification skipped: APP_SECRET not set')
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ ok: true }))
     try {
@@ -631,14 +775,14 @@ export function handlePost(req, res) {
 
       if (shouldForwardToDev(config, phoneNumberId, forwardedHeader)) {
         forwardToDev(raw, config, logger, LOG_PREFIXES.WEBHOOK)
-        logger.info(LOG_PREFIXES.WEBHOOK, '[DEV FORWARD] test payload -> ngrok')
+        if (!config.isProduction) logger.info(LOG_PREFIXES.WEBHOOK, '[DEV FORWARD] test payload -> ngrok')
         return
       }
 
       if (forwardedHeader === '1') {
         const value = body.entry?.[0]?.changes?.[0]?.value
         const messages = value?.messages ?? []
-        if (messages.length > 0) {
+        if (!config.isProduction && messages.length > 0) {
           const firstMsg = messages[0]
           const summary = firstMsg
             ? `from=${firstMsg.from} type=${firstMsg.type || 'unknown'}`

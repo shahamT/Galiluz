@@ -43,11 +43,14 @@ interface PatchBody {
   price?: number | null
   urls?: PatchUrl[]
   media?: unknown[]
+  /** Meta for logging only; not applied to event. */
+  _meta?: { editSource?: string }
 }
 
 /**
- * PATCH draft: merge partial event updates into doc.event.
- * Only for non-active drafts. Returns updated event for preview refresh.
+ * PATCH event: merge partial event updates into doc.event.
+ * Allowed for both non-active drafts (edit before save) and active events (update-event flow).
+ * Returns updated event for preview refresh.
  */
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
@@ -64,6 +67,10 @@ export default defineEventHandler(async (event) => {
       message: 'body must be an object',
     })
   }
+
+  const _meta = body._meta && typeof body._meta === 'object' ? body._meta : undefined
+  const editSource = _meta?.editSource && typeof _meta.editSource === 'string' ? _meta.editSource : undefined
+  delete (body as Record<string, unknown>)._meta
 
   let objectId: ObjectId
   try {
@@ -99,13 +106,7 @@ export default defineEventHandler(async (event) => {
       message: 'draft not yet processed',
     })
   }
-  if (doc.isActive === true) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Bad Request',
-      message: 'cannot patch active event',
-    })
-  }
+  // Allow patch for both drafts (edit before save) and active events (update-event flow).
 
   const currentEvent = doc.event as Record<string, unknown>
   const updates: Record<string, unknown> = {}
@@ -326,6 +327,7 @@ export default defineEventHandler(async (event) => {
       changedFields,
       previous: { raw: previousRaw, final: previousFinal },
       new: { raw: newRaw, final: newFinal },
+      ...(editSource !== undefined && { editSource }),
       publisherId: typeof publisherIdStr === 'string' ? publisherIdStr : undefined,
       waId: typeof waIdStr === 'string' ? waIdStr : undefined,
       correlationId,
