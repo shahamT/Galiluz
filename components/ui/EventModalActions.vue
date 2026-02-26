@@ -89,10 +89,42 @@ const props = defineProps({
   },
 })
 
+const route = useRoute()
+
 const isCalendarPopupOpen = ref(false)
 const calendarButtonRef = ref(null)
 const isNavigationPopupOpen = ref(false)
 const navigateButtonRef = ref(null)
+
+const EVENT_PAGE_LABEL = 'לעמוד האירוע בגלילו"ז:'
+
+function getEventPageUrl() {
+  if (!import.meta.client || !props.event?.id) return ''
+  const params = new URLSearchParams({ ...route.query, event: props.event.id })
+  return `${window.location.origin}${route.path}?${params.toString()}`
+}
+
+function stripHtml(html) {
+  if (!html) return ''
+  if (import.meta.client) {
+    const div = document.createElement('div')
+    div.innerHTML = html
+    return div.textContent?.trim() || ''
+  }
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function buildCalendarDescription() {
+  const eventPageUrl = getEventPageUrl()
+  const prefix = eventPageUrl
+    ? `${EVENT_PAGE_LABEL}\n${eventPageUrl}`
+    : ''
+  const body = stripHtml(props.eventDescription)
+  if (!prefix && !body) return ''
+  if (!prefix) return body
+  if (!body) return prefix
+  return `${prefix}\n\n${body}`
+}
 
 const toggleCalendarPopup = () => {
   isNavigationPopupOpen.value = false
@@ -107,7 +139,7 @@ const toggleNavigationPopup = () => {
 const handleCalendarSelect = async (calendarType) => {
   const eventData = {
     title: props.event?.title || '',
-    description: props.eventDescription,
+    description: buildCalendarDescription(),
     location: props.formattedLocation,
     startDate: props.calendarStartDate,
     startTime: props.calendarStartTime,
@@ -190,6 +222,10 @@ const handleNavigationSelect = (navType) => {
       .Icon {
         font-size: var(--icon-size-md);
       }
+
+      @media (max-width: 370px) {
+        font-size: var(--font-size-xs);
+      }
     }
   }
 
@@ -224,6 +260,10 @@ const handleNavigationSelect = (navType) => {
 
       .Icon {
         font-size: var(--icon-size-md);
+      }
+
+      @media (max-width: 370px) {
+        font-size: var(--font-size-xs);
       }
     }
   }

@@ -34,6 +34,7 @@
 
           <!-- Scrollable Body -->
           <div class="EventModal-body">
+            <div class="EventModal-bodyInner">
             <!-- Info Bar (Location, Time, Price) -->
             <UiEventModalInfoBar
               :basic-location="basicLocation"
@@ -81,7 +82,7 @@
                 :rel="link.type === 'phone' ? undefined : 'noopener noreferrer'"
                 class="EventModal-linkButton"
               >
-                {{ link.Title }}
+                <span class="EventModal-linkButtonText">{{ link.Title }}</span>
               </a>
 
               <!-- Contact Publisher Button -->
@@ -93,7 +94,7 @@
                 class="EventModal-linkButton EventModal-linkButton--whatsapp"
               >
                 <img src="/icons/whatsapp-icon.svg" alt="WhatsApp" class="EventModal-whatsappIcon" />
-                {{ MODAL_TEXT.contactPublisher }}
+                <span class="EventModal-linkButtonText">{{ MODAL_TEXT.contactPublisher }}</span>
               </a>
               <button
                 v-else
@@ -101,7 +102,7 @@
                 class="EventModal-linkButton EventModal-linkButton--whatsapp EventModal-linkButton--disabled"
               >
                 <img src="/icons/whatsapp-icon.svg" alt="WhatsApp" class="EventModal-whatsappIcon" />
-                {{ MODAL_TEXT.contactPublisher }}
+                <span class="EventModal-linkButtonText">{{ MODAL_TEXT.contactPublisher }}</span>
               </button>
             </div>
 
@@ -109,6 +110,7 @@
             <DevOnly>
               <div class="EventModal-devId">id: {{ selectedEvent?.id }}</div>
             </DevOnly>
+            </div>
           </div>
 
           <!-- Actions Bar -->
@@ -263,6 +265,8 @@ watch(isEventModalShowing, (isShowing) => {
   }
 
   &-body {
+    direction: ltr;
+
     @include mobile {
       flex: 1;
       min-height: 0;
@@ -270,6 +274,10 @@ watch(isEventModalShowing, (isShowing) => {
       background-color: var(--color-background);
       padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
     }
+  }
+
+  &-bodyInner {
+    direction: rtl;
   }
 
   &-devId {
@@ -531,6 +539,7 @@ watch(isEventModalShowing, (isShowing) => {
     text-decoration: none;
     transition: all 0.2s ease;
     width: auto;
+    min-width: 0;
     cursor: pointer;
 
     &:hover:not(:disabled) {
@@ -562,6 +571,13 @@ watch(isEventModalShowing, (isShowing) => {
     @include mobile {
       width: 100%;
     }
+  }
+
+  &-linkButtonText {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &-whatsappIcon {
