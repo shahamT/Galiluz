@@ -51,6 +51,8 @@ onClickOutside(
 </script>
 
 <style lang="scss">
+@use '~/assets/css/breakpoints' as *;
+
 .FilterPopup {
   position: absolute;
   top: 100%;
@@ -62,5 +64,17 @@ onClickOutside(
   box-shadow: var(--shadow-lg);
   min-width: var(--popup-min-width);
   z-index: var(--z-index-modal);
+
+  @include desktop {
+    max-height: 540px;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+
+    > * {
+      min-height: 0;
+      min-width: 0;
+    }
+  }
 }
 </style>

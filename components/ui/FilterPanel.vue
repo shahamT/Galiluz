@@ -156,6 +156,10 @@ function handleToggleCategory(categoryId) {
 function handleClearAllFilters() {
   calendarStore.resetFilter()
 }
+
+function handleCategoriesUpdate(newSelectedIds) {
+  selectedCategories.value = newSelectedIds ?? []
+}
 </script>
 
 <style lang="scss">
@@ -216,7 +220,14 @@ function handleClearAllFilters() {
     padding: var(--spacing-lg);
     min-height: 320px;
     overflow-y: auto;
+    overflow-x: hidden;
     direction: ltr;
+
+    @include desktop {
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+    }
 
     @include mobile {
       flex: 1;
@@ -241,20 +252,17 @@ function handleClearAllFilters() {
   }
 
   &-footer {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
     padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md) var(--spacing-lg);
     padding-top: var(--spacing-md);
     border-top: 1px solid var(--color-border);
     flex-shrink: 0;
-
-    @include mobile {
-      display: flex;
-      gap: var(--spacing-sm);
-      align-items: center;
-    }
   }
 
   &-clearAllButton {
-    width: 100%;
+    flex: 1;
     padding: 0 var(--spacing-md);
     height: var(--control-height);
     font-size: var(--font-size-sm);
@@ -282,7 +290,6 @@ function handleClearAllFilters() {
     }
 
     @include mobile {
-      flex: 1;
       height: var(--section-header-height);
       font-size: var(--font-size-md);
     }
@@ -293,35 +300,34 @@ function handleClearAllFilters() {
   }
 
   &-doneButton {
-    display: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    flex: 1;
+    padding: 0 var(--spacing-md);
+    height: var(--control-height);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--chip-text-white);
+    background-color: var(--brand-dark-green);
+    border: 2px solid var(--brand-dark-green);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+      opacity: 0.9;
+    }
 
     @include mobile {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: var(--spacing-xs);
-      flex: 1;
-      padding: 0 var(--spacing-md);
       height: var(--section-header-height);
       font-size: var(--font-size-md);
-      font-weight: 600;
-      color: var(--chip-text-white);
-      background-color: var(--brand-dark-green);
-      border: 2px solid var(--brand-dark-green);
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      transition: opacity 0.2s ease;
-
-      &:hover {
-        opacity: 0.9;
-      }
     }
   }
 
   &-doneButtonIcon {
-    @include mobile {
-      flex-shrink: 0;
-    }
+    flex-shrink: 0;
   }
 }
 </style>
