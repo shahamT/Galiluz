@@ -57,13 +57,13 @@ RULES:
 1. Prefer best-effort interpretation: try to parse and fill every field from the raw data. Only when it is truly impossible to produce any reasonable value should you leave a field minimal or flag it (see FLAGS).
 2. Use the full raw event object only as context (keys: rawTitle, rawOccurrences, rawCity, rawLocationName, rawAddressLine1, rawAddressLine2, rawLocationDetails, rawNavLinks, rawPrice, rawFullDescription, rawUrls, rawMainCategory, rawCategories, rawMedia). Output only the fields defined in the schema.
 3. rawOccurrences: Parse into occurrences. All times are Israel (Asia/Jerusalem). Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, "3 בצהריים" = 15:00, "4 בצהריים" = 16:00, etc. Convert Israel time to UTC (Israel is UTC+2 in winter, UTC+3 in summer/DST — use the offset that applies to the occurrence date). Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (if hasTime: combine date with time in Israel then convert to UTC; if !hasTime: use Israel midnight for that date in UTC), endTime = ISO UTC or null if not given. Interpret flexibly (e.g. "סוף השבוע" → pick a reasonable weekend date from context); only flag when the text contains no date/time at all or an impossible date.
-4. city: The publisher provided a city. Fix common Israeli place name typos (e.g. "קריעת שמונה" → "קריית שמונה", ת"א → תל אביב). Do not change correct names; only normalize obvious misspellings. Do not infer a different city. Example: קריעת שמונה → קריית שמונה.
-5. price: Convert to number or null. Free entry (e.g. חינם, בחינם, free, כניסה חופשית, ללא תשלום, אין תשלום) → 0. Ignore a number only when it is clearly not the event price (e.g. merchandise, food at event). If unclear or not a single number, use null.
+4. city: The publisher may have provided a city, or it may be empty if they skipped. When provided: fix common Israeli place name typos (e.g. "קריעת שמונה" → "קריית שמונה", ת"א → תל אביב). Do not change correct names; only normalize obvious misspellings. Do not infer a different city. When rawCity is empty, output empty string.
+5. price: Convert to number or null. Free entry (e.g. חינם, בחינם, free, כניסה חופשית, ללא תשלום, אין תשלום) → 0. Ignore a number only when it is clearly not the event price (e.g. merchandise, food at event). If unclear or not a single number, use null. For rawPrice: Flag when the text is empty, or when it neither contains a price/number nor any free-entry phrase (e.g. חינם, בחינם, free, כניסה חופשית). Valid only when the raw text implies a specific price or free entry.
 6. shortDescription: Write in Hebrew (1–2 sentences) unless the event description was in English. Base shortDescription ONLY on the event name (rawTitle) and the full description (rawFullDescription). It must NOT contain or paraphrase: location (city, address, place name, nav links), price, or dates and times. Do not include categories or urls. Summarize only what the event is about — the name and the descriptive content of the event itself.
 7. categories: mainCategory is already provided in the raw event — it MUST be included in the categories array. Add up to 3 additional category ids ONLY from the list below when the event clearly fits (e.g. both music and party). Do not add categories the publisher did not intend. Use ONLY these ids:
-8. urls: From rawUrls and any URLs or phone numbers in rawFullDescription, produce an array of {Title, Url, type}. type = "link" for web URLs (https://...), type = "phone" for phone numbers. Title = short Hebrew label (e.g. "כרטיסים", "ניווט Waze", "טלפון להרשמה"). Url = the clean URL or the phone number (digits, optional formatting). Include both links and phone numbers that appear in the text with an appropriate title. If none, return empty array.
+8. urls: Use ONLY rawUrls to produce the urls array. Do NOT include Waze or Google Maps navigation links in urls — those are stored in rawNavLinks and go to location. Do not add Waze/Gmaps URLs from rawNavLinks or rawFullDescription. urls should contain only: event links (tickets, website, registration) and phone numbers from rawUrls. type = "link" for web URLs, type = "phone" for phone numbers. Title = short Hebrew label (e.g. "כרטיסים", "טלפון להרשמה", "אתר האירוע"). If rawUrls is empty, return empty array.
 
-FLAGS: You must always include "flags" (array). Add an entry ONLY when it is truly impossible to output any reasonable value for that field — do NOT flag when a best-effort interpretation is possible. The publisher can edit the processed data afterwards, so prefer filling in your best interpretation over flagging. Flag only when: the raw value is purely irrelevant text (e.g. date/time field contains no date or time at all), logically impossible (e.g. date that does not exist), or completely empty for a required field with no possible inference. Do NOT flag for mere ambiguity, vagueness, or missing details — interpret as well as you can and leave flags empty. Allowed fieldKey values are ONLY: rawTitle, rawOccurrences, rawCity, rawNavLinks, rawPrice, rawFullDescription, rawUrls. Do NOT flag category, location name, address, location details, or media. For "reason" provide a short Hebrew explanation only when you do flag. If you can output any proper data for a field, use empty array [] for flags.
+FLAGS: You must always include "flags" (array). When multiple fields are impossible to parse, add an entry for each — include ALL qualifying fields in flags, not just one. Add an entry ONLY when it is truly impossible to output any reasonable value for that field — do NOT flag when a best-effort interpretation is possible. The publisher can edit the processed data afterwards, so prefer filling in your best interpretation over flagging. Flag only when: the raw value is purely irrelevant text (e.g. date/time field contains no date or time at all), logically impossible (e.g. date that does not exist), or completely empty for a required field with no possible inference. For rawPrice: Flag when empty or when the text neither contains a price/number nor any free-entry phrase (e.g. חינם, בחינם, free, כניסה חופשית). Do NOT flag for mere ambiguity, vagueness, or missing details — interpret as well as you can and leave flags empty. Allowed fieldKey values are ONLY: rawTitle, rawOccurrences, rawCity, rawNavLinks, rawPrice, rawFullDescription, rawUrls. Do NOT flag category, location name, address, location details, or media. For "reason" provide a short Hebrew explanation only when you do flag. If you can output any proper data for a field, use empty array [] for flags.
 
 ${categoriesText}`
 }
@@ -258,6 +258,9 @@ export async function formatPublisherEvent(rawEventWithAll, categoriesList, opti
     categories,
     location: {
       City: aiResult.city ?? rawEventWithAll.rawCity ?? '',
+      region: typeof rawEventWithAll.rawRegion === 'string' && rawEventWithAll.rawRegion.trim() ? rawEventWithAll.rawRegion.trim() : undefined,
+      cityId: typeof rawEventWithAll.rawCityId === 'string' && rawEventWithAll.rawCityId.trim() ? rawEventWithAll.rawCityId.trim() : undefined,
+      cityType: rawEventWithAll.rawCityType === 'listed' || rawEventWithAll.rawCityType === 'custom' ? rawEventWithAll.rawCityType : undefined,
       locationName: typeof rawEventWithAll.rawLocationName === 'string' && rawEventWithAll.rawLocationName.trim() ? rawEventWithAll.rawLocationName.trim() : undefined,
       addressLine1: rawEventWithAll.rawAddressLine1 ?? null,
       addressLine2: rawEventWithAll.rawAddressLine2 ?? null,
@@ -647,7 +650,7 @@ const PARSE_URLS_SCHEMA = {
   },
 }
 
-const PARSE_URLS_SYSTEM_PROMPT = `You extract links and phone numbers from free text (Hebrew/English). Output array of {Title, Url, type}. type = "link" for web URLs (https://...), type = "phone" for phone numbers. Title = short Hebrew label (e.g. "כרטיסים", "טלפון להרשמה"). Url = clean URL or digits. If none found, return empty array. Output valid JSON only.`
+const PARSE_URLS_SYSTEM_PROMPT = `You extract links and phone numbers from free text (Hebrew/English). Output array of {Title, Url, type}. type = "link" for web URLs (https://...), type = "phone" for phone numbers. Title = short Hebrew label (e.g. "כרטיסים", "טלפון להרשמה"). Url = clean URL or digits. Exclude Waze and Google Maps URLs — they belong to location, not event links. If none found, return empty array. Output valid JSON only.`
 
 /**
  * Parse free-text links/phones into urls array (edit flow). No flags.
@@ -701,6 +704,41 @@ export async function parseUrlsFromText(text, options = {}) {
     log(correlationId, 'error', 'parseUrlsFromText failed', { error: msg })
     return { urls: [] }
   }
+}
+
+/**
+ * Normalize user city input to either a listed city or custom text.
+ * Used by wa-bot event-add flow when user enters city as free text.
+ * When result is custom, still normalizes the text (fix typos, unofficial names) via AI.
+ * @param {string} userText - Raw city text from user
+ * @param {Array<{ id: string, title: string, region: string }>} citiesList - Cities from CITIES (id, title, region)
+ * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string }} [options] - For AI normalization when custom
+ * @returns {Promise<{ type: 'listed', value: { cityId: string, cityTitle: string, region: string } } | { type: 'custom', value: string }>}
+ */
+export async function normalizeCityToListedOrCustom(userText, citiesList, options = {}) {
+  const trimmed = typeof userText === 'string' ? userText.trim() : ''
+  if (!trimmed) {
+    return { type: 'custom', value: '' }
+  }
+  const normalizedInput = trimmed.replace(/\s+/g, ' ').toLowerCase()
+  for (const city of citiesList) {
+    if (!city || typeof city.title !== 'string') continue
+    const cityTitle = city.title.trim()
+    const normalizedCity = cityTitle.replace(/\s+/g, ' ').toLowerCase()
+    if (normalizedCity === normalizedInput || normalizedCity.startsWith(normalizedInput) || normalizedInput.startsWith(normalizedCity)) {
+      return {
+        type: 'listed',
+        value: {
+          cityId: city.id || cityTitle,
+          cityTitle,
+          region: city.region || '',
+        },
+      }
+    }
+  }
+  const norm = await normalizeCityForEdit(trimmed, options)
+  const customValue = norm.city && norm.city.trim() ? norm.city.trim() : trimmed
+  return { type: 'custom', value: customValue }
 }
 
 export { extractNavLinksFromRaw, htmlToWhatsAppMessage, parseFreeLanguageEditRequest }

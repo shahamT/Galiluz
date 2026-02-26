@@ -81,8 +81,9 @@ export const FLAG_FIELD_CONFIGS = {
     label: 'יישוב',
     stateKeys: ['eventAddCity'],
     ask: EVENT_ADD_ASK_CITY,
+    footer: 'ניתן לדלג ולבחור אזור בלחיצה',
     validate: EVENT_ADD_VALIDATE_CITY,
-    inputType: 'text',
+    inputType: 'text_skip',
     lengthLimits: { max: EVENT_ADD_CITY_MAX },
   },
   rawNavLinks: {
@@ -99,7 +100,7 @@ export const FLAG_FIELD_CONFIGS = {
     ask: EVENT_ADD_ASK_PRICE,
     footer: EVENT_ADD_ASK_PRICE_FOOTER,
     validate: EVENT_ADD_VALIDATE_PRICE,
-    inputType: 'text_skip',
+    inputType: 'text',
     lengthLimits: { max: EVENT_ADD_PRICE_MAX },
   },
   rawFullDescription: {

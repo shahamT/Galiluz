@@ -2,8 +2,6 @@ import { config } from '../config.js'
 import { logger } from '../utils/logger.js'
 import { LOG_PREFIXES } from '../consts/index.js'
 
-const GALILUZ_BASE_URL = 'https://galiluz.co.il'
-
 /**
  * Upload media buffer to Nuxt upload-media API (which uploads to Cloudinary).
  * @param {Buffer} buffer
@@ -12,7 +10,7 @@ const GALILUZ_BASE_URL = 'https://galiluz.co.il'
  * @returns {Promise<{ url: string, secure_url: string, public_id: string, [key: string]: unknown }|null>}
  */
 export async function uploadMediaToApp(buffer, mimetype, filename) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/internal/upload-media`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
@@ -47,7 +45,7 @@ export async function uploadMediaToApp(buffer, mimetype, filename) {
  */
 export async function deleteMediaOnApp(items) {
   if (!Array.isArray(items) || items.length === 0) return true
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/internal/delete-media`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey

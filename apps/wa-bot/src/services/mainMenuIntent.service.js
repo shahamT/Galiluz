@@ -39,7 +39,7 @@ const SYSTEM_PROMPT = `You are an intent classifier for a Hebrew WhatsApp bot (G
 
 The user sent a message from the main menu. Classify into exactly ONE intent:
 
-- discover: User wants to look up / search / find events. E.g. "מה קורה בצפון", "אילו אירועים יש", "חיפוש אירועים", "מה על today/tomorrow", "מה קורה היום/מחר".
+- discover: User wants to look up / search / find events. E.g. "מה קורה בצפון", "אילו אירועים יש", "חיפוש אירועים", "מה קורה היום/מחר".
 - publish: User wants to register as a publisher or sign up to publish (not yet "add one event now"). E.g. "רוצה להפוך למפרסם", "הרשמה לפרסום", "להצטרף כמפרסם".
 - event_add_new: User wants to add / publish / post a new event now. E.g. "לפרסם אירוע", "להוסיף אירוע", "אירוע חדש", "להעלות אירוע".
 - event_update: User wants to update / edit / change an existing event. E.g. "לעדכן אירוע", "עריכת אירוע", "לשנות אירוע קיים".

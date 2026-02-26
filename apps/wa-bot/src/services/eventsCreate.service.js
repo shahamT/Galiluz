@@ -3,8 +3,6 @@ import { logger } from '../utils/logger.js'
 import { LOG_PREFIXES } from '../consts/index.js'
 import { formatPublisherEvent } from 'event-format'
 
-const GALILUZ_BASE_URL = 'https://galiluz.co.il'
-
 /** TTL for in-memory categories cache (ms). After this, next getCategories() refetches. */
 const CATEGORIES_CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
 
@@ -20,7 +18,7 @@ export async function getCategories() {
   if (Array.isArray(categoriesCache) && categoriesCache.length > 0 && now < categoriesCacheExpiry) {
     return categoriesCache
   }
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/categories`
   const headers = { Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
@@ -65,7 +63,7 @@ export async function getCategories() {
  * @returns {Promise<{ success: boolean, id?: string }>}
  */
 export async function createDraft(body) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/events/draft`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
@@ -91,7 +89,7 @@ export async function createDraft(body) {
  * @returns {Promise<{ success: boolean, formattedEvent?: object, flags?: Array<{ fieldKey: string, reason: string }>, reason?: string }>}
  */
 export async function processDraft(draftId, body) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const correlationId = `${Date.now().toString(36)}-${draftId.slice(-4)}`
   const rawEvent = body?.rawEvent
   const media = Array.isArray(body?.media) ? body.media : []
@@ -171,7 +169,7 @@ export async function processDraft(draftId, body) {
  * @returns {Promise<{ success: boolean }>}
  */
 export async function activateEvent(draftId) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/events/${encodeURIComponent(draftId)}/activate`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
@@ -196,7 +194,7 @@ export async function activateEvent(draftId) {
  * @returns {Promise<{ success: boolean, id?: string, reason?: string }>}
  */
 export async function createEvent(body) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/events/create`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
@@ -240,10 +238,10 @@ export async function createEvent(body) {
  * Fetch events by publisher (waId) with at least one occurrence today or in the future (Israel).
  * Used for update/delete event selection in wa-bot.
  * @param {string} waId - WhatsApp user id (from)
- * @returns {Promise<{ events: Array<{ id: string, title: string, occurrences: Array }> }>}
+ * @returns {Promise<{ events: Array<{ id: string, title: string, occurrences: Array }>, error?: boolean }>}
  */
 export async function getEventsByPublisher(waId) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/events/by-publisher?waId=${encodeURIComponent(String(waId))}`
   const headers = { Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
@@ -251,13 +249,13 @@ export async function getEventsByPublisher(waId) {
     const res = await fetch(url, { method: 'GET', headers })
     if (!res.ok) {
       logger.error(LOG_PREFIXES.CLOUD_API, 'Events by-publisher failed', res.status)
-      return { events: [] }
+      return { events: [], error: true }
     }
     const data = await res.json()
     return { events: Array.isArray(data.events) ? data.events : [] }
   } catch (err) {
     logger.error(LOG_PREFIXES.CLOUD_API, 'Events by-publisher error', err)
-    return { events: [] }
+    return { events: [], error: true }
   }
 }
 
@@ -268,7 +266,7 @@ export async function getEventsByPublisher(waId) {
  * @returns {Promise<object|null>} Transformed event or null if not found / not owner
  */
 export async function getEventById(eventId, waId) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   let url = `${baseUrl}/api/events/${encodeURIComponent(String(eventId))}`
   if (waId) url += `?waId=${encodeURIComponent(String(waId))}`
   const headers = { Accept: 'application/json' }
@@ -289,7 +287,7 @@ export async function getEventById(eventId, waId) {
  * @returns {Promise<{ success: boolean }>}
  */
 export async function deleteEvent(eventId) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/events/${encodeURIComponent(String(eventId))}/delete`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey

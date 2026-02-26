@@ -2,15 +2,13 @@ import { config } from '../config.js'
 import { logger } from '../utils/logger.js'
 import { LOG_PREFIXES } from '../consts/index.js'
 
-const GALILUZ_BASE_URL = 'https://galiluz.co.il'
-
 /**
  * Check publisher status by WhatsApp user id.
  * @param {string} waId - WhatsApp user id (msg.from)
  * @returns {Promise<{ status: 'not_found' | 'pending' | 'approved' }>}
  */
 export async function checkPublisher(waId) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/publishers/check?waId=${encodeURIComponent(String(waId))}`
   const headers = { Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
@@ -36,7 +34,7 @@ export async function checkPublisher(waId) {
  * @returns {Promise<{ success: boolean }>}
  */
 export async function registerPublisher(payload) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/publishers/register`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
@@ -65,7 +63,7 @@ export async function registerPublisher(payload) {
  * @returns {Promise<{ success: boolean }>}
  */
 export async function approvePublisher(waId) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/publishers/approve`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
@@ -94,7 +92,7 @@ export async function approvePublisher(waId) {
  * @returns {Promise<{ success: boolean }>}
  */
 export async function rejectPublisher(waId, reason) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/publishers/reject`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey

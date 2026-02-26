@@ -15,6 +15,9 @@ const LOG_PREFIX = '[EventsAPI] Patch'
 /** Partial location update (wa-bot edit flow). All fields optional. */
 interface PatchLocation {
   City?: string
+  region?: string
+  cityId?: string
+  cityType?: 'listed' | 'custom'
   locationName?: string
   addressLine1?: string | null
   addressLine2?: string | null
@@ -133,6 +136,9 @@ export default defineEventHandler(async (event) => {
     const loc = body.location as Record<string, unknown>
     const locationUpdate: Record<string, unknown> = {}
     if (loc.City !== undefined) locationUpdate.City = typeof loc.City === 'string' ? loc.City.trim() : ''
+    if (loc.region !== undefined) locationUpdate.region = typeof loc.region === 'string' && loc.region.trim() ? loc.region.trim() : undefined
+    if (loc.cityId !== undefined) locationUpdate.cityId = typeof loc.cityId === 'string' && loc.cityId.trim() ? loc.cityId.trim() : undefined
+    if (loc.cityType === 'listed' || loc.cityType === 'custom') locationUpdate.cityType = loc.cityType
     if (loc.locationName !== undefined) locationUpdate.locationName = typeof loc.locationName === 'string' ? loc.locationName.trim() : undefined
     if (loc.addressLine1 !== undefined) locationUpdate.addressLine1 = typeof loc.addressLine1 === 'string' ? loc.addressLine1 : null
     if (loc.addressLine2 !== undefined) locationUpdate.addressLine2 = typeof loc.addressLine2 === 'string' ? loc.addressLine2 : null
@@ -225,6 +231,9 @@ export default defineEventHandler(async (event) => {
     const loc = mergedEvent.location && typeof mergedEvent.location === 'object' ? mergedEvent.location as Record<string, unknown> : {}
     const locBody = body.location && typeof body.location === 'object' ? body.location as Record<string, unknown> : {}
     if (locBody.City !== undefined) rawEventUpdates['rawEvent.rawCity'] = typeof loc.City === 'string' ? loc.City : ''
+    if (locBody.region !== undefined) rawEventUpdates['rawEvent.rawRegion'] = typeof loc.region === 'string' ? loc.region : ''
+    if (locBody.cityId !== undefined) rawEventUpdates['rawEvent.rawCityId'] = typeof loc.cityId === 'string' ? loc.cityId : ''
+    if (locBody.cityType === 'listed' || locBody.cityType === 'custom') rawEventUpdates['rawEvent.rawCityType'] = locBody.cityType
     if (locBody.locationName !== undefined) rawEventUpdates['rawEvent.rawLocationName'] = typeof loc.locationName === 'string' ? loc.locationName : ''
     if (locBody.addressLine1 !== undefined) rawEventUpdates['rawEvent.rawAddressLine1'] = loc.addressLine1 != null ? String(loc.addressLine1) : ''
     if (locBody.addressLine2 !== undefined) rawEventUpdates['rawEvent.rawAddressLine2'] = loc.addressLine2 != null ? String(loc.addressLine2) : ''
@@ -291,12 +300,18 @@ export default defineEventHandler(async (event) => {
     }
     if (updates.location !== undefined) {
       previousRaw.rawCity = currentRaw.rawCity
+      previousRaw.rawRegion = currentRaw.rawRegion
+      previousRaw.rawCityId = currentRaw.rawCityId
+      previousRaw.rawCityType = currentRaw.rawCityType
       previousRaw.rawLocationName = currentRaw.rawLocationName
       previousRaw.rawAddressLine1 = currentRaw.rawAddressLine1
       previousRaw.rawAddressLine2 = currentRaw.rawAddressLine2
       previousRaw.rawLocationDetails = currentRaw.rawLocationDetails
       previousRaw.rawNavLinks = currentRaw.rawNavLinks
       newRaw.rawCity = rawEventUpdates['rawEvent.rawCity']
+      newRaw.rawRegion = rawEventUpdates['rawEvent.rawRegion']
+      newRaw.rawCityId = rawEventUpdates['rawEvent.rawCityId']
+      newRaw.rawCityType = rawEventUpdates['rawEvent.rawCityType']
       newRaw.rawLocationName = rawEventUpdates['rawEvent.rawLocationName']
       newRaw.rawAddressLine1 = rawEventUpdates['rawEvent.rawAddressLine1']
       newRaw.rawAddressLine2 = rawEventUpdates['rawEvent.rawAddressLine2']

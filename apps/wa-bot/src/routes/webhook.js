@@ -39,6 +39,7 @@ import {
   APPROVER_CONFIRM_APPROVED,
   APPROVER_CONFIRM_REJECTED,
   EVENT_LIST_NO_FUTURE_EVENTS,
+  EVENT_LIST_FETCH_ERROR,
   EVENT_UPDATE_SELECT_BODY,
   EVENT_DELETE_SELECT_BODY,
   EVENT_LIST_NO_EVENTS_BUTTONS,
@@ -49,6 +50,7 @@ import {
   MAIN_MENU_INTENT_IRRELEVANT,
   MAIN_MENU_INTENT_UNCLEAR,
   MAIN_MENU_PUBLISHER_ONLY,
+  BATCH_FLUSH_MS,
 } from '../consts/index.js'
 import { sendInitialMessage, handleEventAddFlow, isEventAddStep, sendMediaMoreMessageIfNeeded } from '../flows/eventAddFlow.js'
 import { buildEditMenuFirstMessagePayload, buildPublisherEventListPayload } from '../flows/eventEditFlow.js'
@@ -177,11 +179,11 @@ function handleDiscoverTimeChoice(phoneNumberId, from, timeChoice) {
 }
 
 async function handleEventUpdateChoice(phoneNumberId, from) {
-  const { events } = await getEventsByPublisher(from)
-  if (!events || events.length === 0) {
+  const { events, error } = await getEventsByPublisher(from)
+  if (error || !events || events.length === 0) {
     conversationState.clear(from)
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_LIST_NO_FUTURE_EVENTS,
+      body: error ? EVENT_LIST_FETCH_ERROR : EVENT_LIST_NO_FUTURE_EVENTS,
       buttons: EVENT_LIST_NO_EVENTS_BUTTONS,
     })
   }
@@ -195,11 +197,11 @@ async function handleEventUpdateChoice(phoneNumberId, from) {
 }
 
 async function handleEventDeleteChoice(phoneNumberId, from) {
-  const { events } = await getEventsByPublisher(from)
-  if (!events || events.length === 0) {
+  const { events, error } = await getEventsByPublisher(from)
+  if (error || !events || events.length === 0) {
     conversationState.clear(from)
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_LIST_NO_FUTURE_EVENTS,
+      body: error ? EVENT_LIST_FETCH_ERROR : EVENT_LIST_NO_FUTURE_EVENTS,
       buttons: EVENT_LIST_NO_EVENTS_BUTTONS,
     })
   }
@@ -226,6 +228,7 @@ async function handlePublishButton(phoneNumberId, from, profileName) {
 
 function handleBackToMenu(phoneNumberId, from) {
   conversationState.clear(from)
+  conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }
 
@@ -412,6 +415,7 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
     }
   }
 
+  conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }
 
@@ -538,6 +542,10 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     const isWelcome = state.step === conversationState.STEPS.WELCOME
     const isPublisherChoice = state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION
     if ((isWelcome || isPublisherChoice) && config.allowMainMenuFreeLanguage && textBody) {
+      if (isWelcome && !state.welcomeShown) {
+        conversationState.set(from, { welcomeShown: true })
+        return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+      }
       try {
         const { intent } = await classifyMainMenuIntent(textBody, {
           openaiApiKey: config.openaiApiKey,
@@ -634,14 +642,12 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     return sendText(phoneNumberId, from, PUBLISH_EXPECT_TEXT)
   }
 
+  conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }
 
 /** Per-user message queue: process one message at a time per user so state updates correctly (e.g. bulk media). */
 const userMessageQueues = new Map()
-
-/** Idle time (ms) with no new message after which we flush pending into the processing queue. */
-const BATCH_FLUSH_MS = 250
 
 function flushPending(entry) {
   if (entry.flushTimerId != null) {

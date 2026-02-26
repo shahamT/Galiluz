@@ -2,16 +2,14 @@ import { config } from '../config.js'
 import { logger } from '../utils/logger.js'
 import { LOG_PREFIXES } from '../consts/index.js'
 
-const GALILUZ_BASE_URL = 'https://galiluz.co.il'
-
 /**
- * PATCH draft: partial event updates (edit flow). Only for non-active drafts.
+ * PATCH draft/event: partial updates (edit flow). Used for both drafts and active events (update flow).
  * @param {string} draftId - MongoDB draft id
  * @param {Record<string, unknown>} updates - Partial event fields (e.g. { title, fullDescription, shortDescription } or { mainCategory, categories })
  * @returns {Promise<{ success: boolean, event?: object, reason?: string }>} event = updated formatted event for preview refresh
  */
 export async function patchDraft(draftId, updates) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/events/${encodeURIComponent(draftId)}/patch`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey

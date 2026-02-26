@@ -5,8 +5,6 @@ import { CATEGORY_GROUPS, CATEGORY_ALL_ID } from '../consts/categories.const.js'
 import { getDateInIsraelFromIso, getDateIsrael } from '../utils/date.helpers.js'
 import { formatEventsListMessage } from '../utils/eventsMessageFormat.js'
 
-const GALILUZ_BASE_URL = 'https://galiluz.co.il'
-
 function getEventDateString(flatEvent) {
   if (!flatEvent) return null
   if (flatEvent.date && /^\d{4}-\d{2}-\d{2}$/.test(String(flatEvent.date).trim().slice(0, 10))) {
@@ -41,7 +39,7 @@ function getActiveEvents(events) {
 }
 
 function buildEventsApiUrl(dateString, categoryGroupId) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const params = new URLSearchParams()
   params.set('dates', dateString)
   if (categoryGroupId && categoryGroupId !== CATEGORY_ALL_ID) {
@@ -59,7 +57,7 @@ function buildEventsApiUrl(dateString, categoryGroupId) {
  * @returns {Promise<string>} Message body to send
  */
 export async function getEventsMessageForDateAndCategory(dateString, categoryGroupId, timeChoice) {
-  const baseUrl = config.galiluzAppUrl.replace(/\/$/, '') || GALILUZ_BASE_URL
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const apiUrl = buildEventsApiUrl(dateString, categoryGroupId)
   const headers = { Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey

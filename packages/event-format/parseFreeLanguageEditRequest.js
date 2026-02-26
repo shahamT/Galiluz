@@ -83,8 +83,8 @@ Allowed field keys for edits (use exactly these when proposing edits):
 - fullDescription (string) — full description (may contain HTML)
 - mainCategory (string) — main category id
 - categories (array of strings) — category ids
-- location (object) — full location: { City, locationName?, addressLine1?, addressLine2?, locationDetails?, wazeNavLink?, gmapsNavLink? }
-- locationName, City, addressLine1, addressLine2, locationDetails, wazeNavLink, gmapsNavLink (strings) — single location sub-fields
+- location (object) — full location: { City, locationName?, addressLine1?, addressLine2?, locationDetails?, wazeNavLink?, gmapsNavLink?, region?, cityId?, cityType? }. region = center|golan|upper; cityType = listed|custom.
+- locationName, City, addressLine1, addressLine2, locationDetails, wazeNavLink, gmapsNavLink, region (strings) — single location sub-fields
 - datetime or occurrences (array) — the COMPLETE new occurrences array after applying the user's requested changes. Each item: { date: "YYYY-MM-DD", hasTime: true/false, startTime: "YYYY-MM-DDTHH:mm:ssZ", endTime: "YYYY-MM-DDTHH:mm:ssZ" or null }. All times in UTC. See "Date/time (occurrences) edits" below.
 - price (number or null)
 - links (array) — urls and phones: [{ Title: "string", Url: "string", type: "link"|"phone" }]. For phone change use type "phone" and Url as digits (e.g. "0507153850").

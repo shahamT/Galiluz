@@ -154,6 +154,49 @@ export async function downloadMedia(mediaId) {
 }
 
 /**
+ * Send an image message via WhatsApp Cloud API (public URL).
+ * @param {string} phoneNumberId - Business phone number ID
+ * @param {string} to - Recipient wa_id
+ * @param {string} imageUrl - Public URL of the image (must be HTTPS)
+ * @param {string} [caption] - Optional caption
+ * @returns {Promise<{ success: boolean, messageId?: string, error?: string }>}
+ */
+export async function sendImage(phoneNumberId, to, imageUrl, caption) {
+  const url = `${BASE_URL}/${phoneNumberId}/messages`
+  const payload = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: to.replace(/\D/g, ''),
+    type: 'image',
+    image: {
+      link: imageUrl,
+      ...(typeof caption === 'string' && caption.trim() && { caption: caption.trim() }),
+    },
+  }
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.whatsapp.accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      logger.error(LOG_PREFIXES.CLOUD_API, 'Send image failed', data)
+      return { success: false, error: data.error?.message || res.statusText }
+    }
+    const messageId = data.messages?.[0]?.id
+    logger.info(LOG_PREFIXES.CLOUD_API, `Image sent to ${to}, id: ${messageId || 'n/a'}`)
+    return { success: true, messageId }
+  } catch (err) {
+    logger.error(LOG_PREFIXES.CLOUD_API, err)
+    return { success: false, error: err.message }
+  }
+}
+
+/**
  * Send a text message via WhatsApp Cloud API.
  * @param {string} phoneNumberId - Business phone number ID
  * @param {string} to - Recipient wa_id (e.g. phone number without +)

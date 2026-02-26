@@ -39,6 +39,9 @@ export function transformEventForFrontend(doc: any): Record<string, unknown> | n
     urls: backendEvent.urls || [],
     location: {
       city: backendEvent.location?.City || '',
+      region: backendEvent.location?.region || undefined,
+      cityId: backendEvent.location?.cityId || undefined,
+      cityType: backendEvent.location?.cityType || undefined,
       locationName: backendEvent.location?.locationName || undefined,
       addressLine1: backendEvent.location?.addressLine1 || undefined,
       addressLine2: backendEvent.location?.addressLine2 || undefined,

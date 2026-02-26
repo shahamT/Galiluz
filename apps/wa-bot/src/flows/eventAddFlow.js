@@ -6,6 +6,7 @@ import {
   sendText,
   sendInteractiveButtons,
   sendInteractiveList,
+  sendImage,
   downloadMedia,
 } from '../services/cloudApi.service.js'
 import { uploadMediaToApp, deleteMediaOnApp } from '../services/eventAddMedia.service.js'
@@ -13,7 +14,16 @@ import { createDraft, processDraft, activateEvent, createEvent } from '../servic
 import { patchDraft } from '../services/eventDraftPatch.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { config, normalizePhone } from '../config.js'
-import { generateShortDescription, normalizeCityForEdit, extractNavLinksFromRaw, parseOccurrencesFromText, parsePriceFromText, parseUrlsFromText, parseFreeLanguageEditRequest, htmlToWhatsAppMessage } from 'event-format'
+import {
+  generateShortDescription,
+  normalizeCityToListedOrCustom,
+  extractNavLinksFromRaw,
+  parseOccurrencesFromText,
+  parsePriceFromText,
+  parseUrlsFromText,
+  parseFreeLanguageEditRequest,
+  htmlToWhatsAppMessage,
+} from 'event-format'
 import { getDateInIsraelFromIso, getTimeInIsraelFromIso } from '../utils/date.helpers.js'
 import { logger } from '../utils/logger.js'
 import {
@@ -33,6 +43,10 @@ import {
   EVENT_ADD_NO_MEDIA_BUTTON,
   EVENT_ADD_MEDIA_DONE_BUTTON,
   EVENT_ADD_ASK_CITY,
+  EVENT_ADD_ASK_REGION,
+  EVENT_ADD_ASK_REGION_SUBTITLE_CUSTOM,
+  EVENT_ADD_ASK_REGION_IMAGE_PATH,
+  EVENT_ADD_REGION_BUTTONS,
   EVENT_ADD_ASK_ADDRESS,
   EVENT_ADD_ASK_ADDRESS_FOOTER,
   EVENT_ADD_ASK_LOCATION_NOTES,
@@ -90,6 +104,8 @@ import {
   EVENT_EDIT_ASK_DATETIME_FOOTER,
   EVENT_EDIT_ASK_PRICE,
   EVENT_EDIT_ASK_PRICE_FOOTER,
+  EVENT_EDIT_PRICE_PARSE_FAIL_MESSAGE,
+  EVENT_EDIT_PRICE_BACK_TO_MENU_BUTTON,
   EVENT_EDIT_ASK_LINKS,
   EVENT_EDIT_ASK_LINKS_FOOTER,
   EVENT_EDIT_ASK_MEDIA,
@@ -127,6 +143,7 @@ import {
   EVENT_EDIT_LOCATION_FIELD_ROWS,
   EVENT_EDIT_LOCATION_ASK_PLACE_NAME,
   EVENT_EDIT_LOCATION_ASK_CITY,
+  EVENT_EDIT_LOCATION_ASK_REGION,
   EVENT_EDIT_LOCATION_ASK_ADDRESS,
   EVENT_EDIT_LOCATION_ASK_DETAILS,
   EVENT_EDIT_LOCATION_ASK_GMAPS,
@@ -142,6 +159,7 @@ import {
   EVENT_EDIT_MENU_ROWS,
 } from '../consts/index.js'
 import { getFlagFieldOrder, FLAG_FIELD_CONFIGS } from '../consts/eventAddFields.config.js'
+import { CITIES_LIST } from '../consts/cities.const.js'
 import { buildEditMenuFirstMessagePayload, buildEditMenuUnclearPayload, buildLocationEditMenuPayload, EDIT_DONE_ID } from './eventEditFlow.js'
 import { CATEGORY_GROUPS, EVENT_CATEGORIES } from '../consts/categories.const.js'
 
@@ -152,6 +170,7 @@ const VALID_GROUP_IDS = new Set(CATEGORY_GROUPS.map((g) => g.id))
 const LOCATION_FIELD_MAP = {
   loc_place_name: { key: 'locationName', ask: EVENT_EDIT_LOCATION_ASK_PLACE_NAME },
   loc_city: { key: 'City', ask: EVENT_EDIT_LOCATION_ASK_CITY },
+  loc_region: { key: 'region', ask: EVENT_EDIT_LOCATION_ASK_REGION, inputType: 'region_buttons' },
   loc_address: { key: 'addressLine1', ask: EVENT_EDIT_LOCATION_ASK_ADDRESS },
   loc_details: { key: 'locationDetails', ask: EVENT_EDIT_LOCATION_ASK_DETAILS },
   loc_gmaps: { key: 'gmapsNavLink', ask: EVENT_EDIT_LOCATION_ASK_GMAPS },
@@ -170,6 +189,7 @@ const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_MAIN_CATEGORY,
   STEPS.EVENT_ADD_PLACE_NAME,
   STEPS.EVENT_ADD_CITY,
+  STEPS.EVENT_ADD_REGION,
   STEPS.EVENT_ADD_ADDRESS,
   STEPS.EVENT_ADD_LOCATION_NOTES,
   STEPS.EVENT_ADD_WAZE_GMAPS,
@@ -193,6 +213,8 @@ const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_EDIT_EXTRA_REMOVE,
   STEPS.EVENT_ADD_EDIT_LOCATION_MENU,
   STEPS.EVENT_ADD_EDIT_LOCATION_FIELD,
+  STEPS.EVENT_ADD_EDIT_REGION,
+  STEPS.EVENT_ADD_EDIT_FREE_LANG_REGION,
   STEPS.EVENT_ADD_EDIT_MEDIA_INTRO,
 ]
 
@@ -238,7 +260,9 @@ const EVENT_ADD_TEST_MODE_STATE = {
   eventAddTitle: 'סדנה איטלקית - מסע בדרום איטליה',
   eventAddDateTime: '5 עד ה6 במרץ משמונה עד 10 בערב',
   eventAddPlaceName: 'המטבח',
-  eventAddCity: 'יסוד המאלה',
+  eventAddCity: 'יסוד המעלה',
+  eventAddCityResult: { type: 'listed', value: { cityId: 'YesudHaMaala', cityTitle: 'יסוד המעלה', region: 'center' } },
+  eventAddRegion: 'center',
   eventAddAddressLine1: 'רודבסקי יוסף 26',
   eventAddAddressLine2: 'בניין 3',
   eventAddLocationNotes: 'בסוף המדשאה שמאלה',
@@ -341,6 +365,10 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
   const locLines = []
   if (loc.locationName) locLines.push(String(loc.locationName))
   if (loc.City) locLines.push(String(loc.City))
+  if (loc.region) {
+    const regionLabel = EVENT_ADD_REGION_BUTTONS.find((b) => b.id === loc.region)?.title ?? loc.region
+    locLines.push(String(regionLabel))
+  }
   if (loc.addressLine1) locLines.push(String(loc.addressLine1))
   if (loc.addressLine2) locLines.push(String(loc.addressLine2))
   if (loc.locationDetails) locLines.push(String(loc.locationDetails))
@@ -452,6 +480,10 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, o
     const locLines = []
     if (loc.locationName) locLines.push(String(loc.locationName))
     if (loc.City) locLines.push(String(loc.City))
+    if (loc.region) {
+      const regionLabel = EVENT_ADD_REGION_BUTTONS.find((b) => b.id === loc.region)?.title ?? loc.region
+      locLines.push(String(regionLabel))
+    }
     if (loc.addressLine1) locLines.push(String(loc.addressLine1))
     if (loc.addressLine2) locLines.push(String(loc.addressLine2))
     if (loc.locationDetails) locLines.push(String(loc.locationDetails))
@@ -500,7 +532,7 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, o
   return empty
 }
 
-const LOCATION_SUB_KEYS = new Set(['locationName', 'City', 'addressLine1', 'addressLine2', 'locationDetails', 'wazeNavLink', 'gmapsNavLink'])
+const LOCATION_SUB_KEYS = new Set(['locationName', 'City', 'region', 'cityId', 'cityType', 'addressLine1', 'addressLine2', 'locationDetails', 'wazeNavLink', 'gmapsNavLink'])
 
 /**
  * Merge free-language edits into a copy of the current event (for display and for patch).
@@ -643,6 +675,7 @@ async function sendConfirmSummary(phoneNumberId, from, formattedPreview) {
  */
 function sendUpdateSuccessAndClear(phoneNumberId, from) {
   conversationState.clear(from)
+  conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }
 
@@ -959,7 +992,7 @@ function buildCategoryListForGroup(groupId, opts = {}) {
   const categorySection = { title: group.label, rows }
   const sections = opts.addChangeGroupRow
     ? [
-        { title: '', rows: [{ id: EVENT_ADD_CHANGE_GROUP_BUTTON.id, title: EVENT_ADD_CHANGE_GROUP_ROW_TITLE }] },
+        { title: 'אפשרויות', rows: [{ id: EVENT_ADD_CHANGE_GROUP_BUTTON.id, title: EVENT_ADD_CHANGE_GROUP_ROW_TITLE }] },
         categorySection,
       ]
     : [categorySection]
@@ -1009,7 +1042,7 @@ async function sendAskForFlagField(phoneNumberId, from, state, fieldKey) {
     return sendInteractiveList(phoneNumberId, from, listPayload)
   }
   if (config.inputType === 'text_skip') {
-    const canSkip = fieldKey === 'rawAddress' ? !!(state.eventAddPlaceName ?? '').trim() : true
+    const canSkip = fieldKey === 'rawAddress' ? !!(state.eventAddPlaceName ?? '').trim() : fieldKey === 'rawCity' ? true : true
     if (canSkip) {
       return sendInteractiveButtons(phoneNumberId, from, {
         body: config.ask,
@@ -1049,14 +1082,12 @@ function validateAndParseFlagFieldInput(fieldKey, msg, state) {
     if (fieldKey === 'rawAddress') {
       return { ok: true, stateUpdate: { eventAddAddressLine1: '', eventAddAddressLine2: '' } }
     }
-    const update = {}
-    for (const k of config.stateKeys) update[k] = ''
-    return { ok: true, stateUpdate: update }
-  }
-
-  if (config.inputType === 'text_skip' && buttonId === EVENT_ADD_SKIP_BUTTON.id) {
-    if (fieldKey === 'rawAddress') {
-      return { ok: true, stateUpdate: { eventAddAddressLine1: '', eventAddAddressLine2: '' } }
+    if (fieldKey === 'rawCity') {
+      return {
+        ok: true,
+        stateUpdate: { eventAddCity: '', eventAddCityResult: null },
+        requiresRegionFirst: true,
+      }
     }
     const update = {}
     for (const k of config.stateKeys) update[k] = ''
@@ -1112,6 +1143,39 @@ async function sendLocationIntroAndPlaceName(phoneNumberId, from) {
 }
 
 /**
+ * Send region step: image + 3 region buttons.
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @param {boolean} isCustomCity - true when user entered custom city (not from list)
+ * @returns {Promise<object>}
+ */
+/**
+ * Returns a publicly reachable URL for the region map image. WhatsApp fetches media from the URL;
+ * localhost is not reachable by Meta's servers, so we use production URL when in dev.
+ */
+function getRegionMapImageUrl() {
+  const base = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
+  const url = base + EVENT_ADD_ASK_REGION_IMAGE_PATH
+  if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
+    return 'https://galiluz.co.il' + EVENT_ADD_ASK_REGION_IMAGE_PATH
+  }
+  return url
+}
+
+async function sendRegionStep(phoneNumberId, from, isCustomCity) {
+  const imageUrl = getRegionMapImageUrl()
+  const caption = isCustomCity ? EVENT_ADD_ASK_REGION_SUBTITLE_CUSTOM : EVENT_ADD_ASK_REGION
+  const imgRes = await sendImage(phoneNumberId, from, imageUrl, caption)
+  if (imgRes && !imgRes.success) {
+    logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
+  }
+  return sendInteractiveButtons(phoneNumberId, from, {
+    body: EVENT_ADD_ASK_REGION,
+    buttons: [...EVENT_ADD_REGION_BUTTONS],
+  })
+}
+
+/**
  * Send validation requirements message then re-ask (two separate messages). Step does not advance.
  * @param {string} phoneNumberId
  * @param {string} from
@@ -1136,16 +1200,32 @@ function buildRawEvent(state, publisherInfo) {
   const phone = normalizePhone(publisherInfo?.phone ?? '')
   const name = (publisherInfo?.name ?? '').trim()
   const waId = String(publisherInfo?.waId ?? '')
+  const cityResult = state.eventAddCityResult
+  const region = state.eventAddRegion ?? ''
+  let rawCity = ''
+  let rawCityId
+  let rawCityType
+  if (cityResult && typeof cityResult === 'object' && cityResult.type === 'listed') {
+    rawCity = cityResult.value?.cityTitle ?? (state.eventAddCity ?? '').trim()
+    rawCityId = cityResult.value?.cityId
+    rawCityType = 'listed'
+  } else if ((state.eventAddCity ?? '').trim()) {
+    rawCity = (state.eventAddCity ?? '').trim()
+    rawCityType = 'custom'
+  }
   return {
     rawTitle: (state.eventAddTitle ?? '').trim(),
     rawOccurrences: (state.eventAddDateTime ?? '').trim(),
     rawLocationName: (state.eventAddPlaceName ?? '').trim() || undefined,
-    rawCity: (state.eventAddCity ?? '').trim(),
+    rawCity: rawCity || undefined,
+    rawCityId: rawCityId ?? undefined,
+    rawRegion: region || undefined,
+    rawCityType: rawCityType ?? undefined,
     rawAddressLine1: (state.eventAddAddressLine1 ?? '').trim() || undefined,
     rawAddressLine2: (state.eventAddAddressLine2 ?? '').trim() || undefined,
     rawLocationDetails: (state.eventAddLocationNotes ?? '').trim() || undefined,
     rawNavLinks: (state.eventAddNavLinks ?? '').trim() || undefined,
-    rawPrice: (state.eventAddPrice ?? '').trim() || undefined,
+    rawPrice: (state.eventAddPrice ?? '').trim(),
     rawFullDescription: (state.eventAddDescription ?? '').trim(),
     rawUrls: (state.eventAddLinks ?? '').trim() || undefined,
     publisher: { phone, name, waId },
@@ -1175,6 +1255,7 @@ async function killEventAddFlow(phoneNumberId, from, state) {
     }
   }
   conversationState.clear(from)
+  conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }
 
@@ -1236,6 +1317,7 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
       : 'משהו השתבש בשמירה. נסה שוב מאוחר יותר.'
     await sendText(phoneNumberId, from, failMsg)
   }
+  conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
   return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
 }
 
@@ -1299,6 +1381,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       }
       logger.error(LOG_PREFIXES.EVENT_ADD, 'Confirm save but no formatted preview', from)
       conversationState.clear(from)
+      conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
       await sendText(phoneNumberId, from, 'משהו השתבש. נסה להתחיל מחדש.')
       return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
     }
@@ -1411,6 +1494,41 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
             buttons: [EVENT_EDIT_MEDIA_CANCEL_BUTTON],
           })
         }
+        let cityStr = ''
+        for (const e of parseResult.edits) {
+          if (e.fieldKey === 'City' && typeof e.newValue === 'string') {
+            cityStr = e.newValue.trim()
+            break
+          }
+          if (e.fieldKey === 'location' && e.newValue && typeof e.newValue === 'object' && typeof e.newValue.City === 'string') {
+            cityStr = String(e.newValue.City).trim()
+            break
+          }
+        }
+        if (cityStr) {
+          const parsed = await normalizeCityToListedOrCustom(cityStr, CITIES_LIST, {
+            openaiApiKey: config.openaiApiKey,
+            openaiModel: config.openaiModel,
+            correlationId: from,
+          })
+          if (parsed.type === 'custom' && parsed.value) {
+            conversationState.set(from, {
+              step: STEPS.EVENT_ADD_EDIT_FREE_LANG_REGION,
+              eventAddFreeLangEdits: parseResult.edits,
+              eventAddFreeLangPendingCity: parsed.value,
+              eventAddLastActivityAt: Date.now(),
+            })
+            const imageUrl = getRegionMapImageUrl()
+            const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD_ASK_REGION_SUBTITLE_CUSTOM)
+            if (imgRes && !imgRes.success) {
+              logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
+            }
+            return sendInteractiveButtons(phoneNumberId, from, {
+              body: EVENT_ADD_ASK_REGION,
+              buttons: [...EVENT_ADD_REGION_BUTTONS],
+            })
+          }
+        }
         conversationState.set(from, {
           step: STEPS.EVENT_ADD_EDIT_FREE_LANG_CONFIRM,
           eventAddFreeLangEdits: parseResult.edits,
@@ -1421,6 +1539,34 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return sendInteractiveList(phoneNumberId, from, buildEditMenuUnclearPayload(EVENT_EDIT_FREE_LANG_UNCLEAR))
     }
     return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+  }
+
+  if (step === STEPS.EVENT_ADD_EDIT_FREE_LANG_REGION) {
+    const edits = Array.isArray(state.eventAddFreeLangEdits) ? state.eventAddFreeLangEdits : []
+    const pendingCity = state.eventAddFreeLangPendingCity
+    const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
+    if (buttonId && validRegionIds.includes(buttonId) && typeof pendingCity === 'string') {
+      const editsWithRegion = [
+        ...edits.filter((e) => e.fieldKey !== 'region' && e.fieldKey !== 'cityType'),
+        { fieldKey: 'region', justification: '', newValue: buttonId },
+        { fieldKey: 'cityType', justification: '', newValue: 'custom' },
+      ]
+      conversationState.set(from, {
+        step: STEPS.EVENT_ADD_EDIT_FREE_LANG_CONFIRM,
+        eventAddFreeLangEdits: editsWithRegion,
+        eventAddFreeLangPendingCity: undefined,
+      })
+      return sendFreeLangSuggestedEdits(phoneNumberId, from, state.eventAddFormattedPreview || {}, editsWithRegion)
+    }
+    const imageUrl = getRegionMapImageUrl()
+    const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD_ASK_REGION_SUBTITLE_CUSTOM)
+    if (imgRes && !imgRes.success) {
+      logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
+    }
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_ADD_ASK_REGION,
+      buttons: [...EVENT_ADD_REGION_BUTTONS],
+    })
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_FREE_LANG_CONFIRM) {
@@ -1456,6 +1602,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_EDIT_FIELD) {
     const fieldKey = state.eventEditFieldKey
     const draftId = state.eventAddDraftId
+    if (fieldKey === 'price' && buttonId === EVENT_EDIT_PRICE_BACK_TO_MENU_BUTTON.id) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventEditFieldKey: undefined })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+    }
     if (!draftId) {
       if (fieldKey === 'title') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_TITLE)
       if (fieldKey === 'description') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DESCRIPTION)
@@ -1572,8 +1722,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         openaiModel: config.openaiModel,
       })
       if (parseResult.flagReason) {
-        await sendText(phoneNumberId, from, parseResult.flagReason)
-        return sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER)
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_EDIT_PRICE_PARSE_FAIL_MESSAGE,
+          buttons: [EVENT_EDIT_PRICE_BACK_TO_MENU_BUTTON],
+        })
       }
       const price = parseResult.price !== undefined ? parseResult.price : null
       const result = await patchDraft(draftId, { price })
@@ -1707,7 +1859,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY) {
-    if (buttonId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
+    if (buttonId === EVENT_ADD_CHANGE_GROUP_BUTTON.id || listReplyId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP })
       const groupListPayload = buildCategoryGroupListPayload()
       return sendInteractiveList(phoneNumberId, from, groupListPayload)
@@ -1814,7 +1966,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_EXTRA_ADD_CATEGORY) {
-    if (buttonId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
+    if (buttonId === EVENT_ADD_CHANGE_GROUP_BUTTON.id || listReplyId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_ADD_GROUP })
       const groupListPayload = buildCategoryGroupListPayload()
       return sendInteractiveList(phoneNumberId, from, groupListPayload)
@@ -1896,6 +2048,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         step: STEPS.EVENT_ADD_EDIT_LOCATION_FIELD,
         eventEditLocationFieldKey: fieldConfig.key,
       })
+      if (fieldConfig.inputType === 'region_buttons') {
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: fieldConfig.ask,
+          buttons: [...EVENT_ADD_REGION_BUTTONS],
+        })
+      }
       return sendText(phoneNumberId, from, fieldConfig.ask)
     }
     return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
@@ -1910,9 +2068,33 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
     }
 
+    const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
+    if (fieldKey === 'region' && buttonId && validRegionIds.includes(buttonId)) {
+      const locationPatch = { region: buttonId }
+      const result = await patchDraft(draftId, { location: locationPatch })
+      if (!result.success) {
+        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
+        return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
+      }
+      conversationState.set(from, {
+        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
+        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+        eventEditLocationFieldKey: undefined,
+      })
+      const updatedEvent = result.event || state.eventAddFormattedPreview
+      let body = EVENT_EDIT_SUCCESS_MESSAGES.location + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.location
+      return sendEditSuccessQuickReplies(phoneNumberId, from, body, { addLocationOption: true })
+    }
+
     if (!textBody) {
       const rowId = Object.keys(LOCATION_FIELD_MAP).find((id) => LOCATION_FIELD_MAP[id].key === fieldKey)
-      const ask = rowId ? LOCATION_FIELD_MAP[rowId].ask : EVENT_EDIT_LOCATION_ASK_PLACE_NAME
+      const fieldConfig = rowId ? LOCATION_FIELD_MAP[rowId] : null
+      const ask = fieldConfig?.ask ?? EVENT_EDIT_LOCATION_ASK_PLACE_NAME
+      if (fieldConfig?.inputType === 'region_buttons') {
+        return sendInteractiveButtons(phoneNumberId, from, { body: ask, buttons: [...EVENT_ADD_REGION_BUTTONS] })
+      }
       return sendText(phoneNumberId, from, ask)
     }
 
@@ -1921,16 +2103,29 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     if (fieldKey === 'locationName' || fieldKey === 'addressLine1' || fieldKey === 'addressLine2' || fieldKey === 'locationDetails') {
       locationPatch[fieldKey] = textBody.trim() || null
     } else if (fieldKey === 'City') {
-      const norm = await normalizeCityForEdit(textBody, {
+      const parsed = await normalizeCityToListedOrCustom(textBody, CITIES_LIST, {
         openaiApiKey: config.openaiApiKey,
         openaiModel: config.openaiModel,
+        correlationId: from,
       })
-      if (norm.city === null) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_LOCATION_CITY_UNRECOGNIZED)
-        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
+      if (parsed.type === 'listed') {
+        const { cityId, cityTitle, region } = parsed.value
+        locationPatch = { City: cityTitle, region, cityId, cityType: 'listed' }
+      } else {
+        conversationState.set(from, {
+          eventEditPendingCity: parsed.value,
+          step: STEPS.EVENT_ADD_EDIT_REGION,
+        })
+        const imageUrl = getRegionMapImageUrl()
+        const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD_ASK_REGION_SUBTITLE_CUSTOM)
+        if (imgRes && !imgRes.success) {
+          logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
+        }
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD_ASK_REGION,
+          buttons: [...EVENT_ADD_REGION_BUTTONS],
+        })
       }
-      locationPatch.City = norm.city
     } else if (fieldKey === 'gmapsNavLink' || fieldKey === 'wazeNavLink') {
       const extracted = extractNavLinksFromRaw(
         fieldKey === 'wazeNavLink' ? textBody : '',
@@ -1941,7 +2136,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       } else {
         locationPatch.wazeNavLink = extracted.wazeNavLink || null
       }
-    } else {
+    } else if (fieldKey !== 'City') {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU, eventEditLocationFieldKey: undefined })
       return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
     }
@@ -1965,6 +2160,43 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     })
   }
 
+  if (step === STEPS.EVENT_ADD_EDIT_REGION) {
+    const draftId = state.eventAddDraftId
+    const pendingCity = state.eventEditPendingCity
+    const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
+    if (!draftId || typeof pendingCity !== 'string') {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU, eventEditPendingCity: undefined })
+      return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
+    }
+    if (buttonId && validRegionIds.includes(buttonId)) {
+      const locationPatch = { City: pendingCity.trim(), region: buttonId, cityType: 'custom' }
+      const result = await patchDraft(draftId, { location: locationPatch })
+      conversationState.set(from, { eventEditPendingCity: undefined })
+      if (!result.success) {
+        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
+        return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
+      }
+      conversationState.set(from, {
+        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
+        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+      })
+      const updatedEvent = result.event || state.eventAddFormattedPreview
+      let body = EVENT_EDIT_SUCCESS_MESSAGES.location + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.location
+      return sendEditSuccessQuickReplies(phoneNumberId, from, body, { addLocationOption: true })
+    }
+    const imageUrl = getRegionMapImageUrl()
+    const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD_ASK_REGION_SUBTITLE_CUSTOM)
+    if (imgRes && !imgRes.success) {
+      logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
+    }
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_ADD_ASK_REGION,
+      buttons: [...EVENT_ADD_REGION_BUTTONS],
+    })
+  }
+
   if (step === STEPS.EVENT_ADD_EDIT_SUCCESS) {
     if (state.eventAddFromFreeLangSuccess && buttonId === EVENT_EDIT_FREE_LANG_SUCCESS_MORE_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddFromFreeLangSuccess: undefined })
@@ -1974,6 +2206,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       conversationState.set(from, { eventAddFromFreeLangSuccess: undefined })
       if (state.eventUpdateMode) {
         conversationState.clear(from)
+        conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
         return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
       }
       conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
@@ -2023,6 +2256,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return sendValidationAndReask(phoneNumberId, from, parsed.errorMessage || config.validate, () =>
         sendAskForFlagField(phoneNumberId, from, state, fieldKey),
       )
+    }
+    if (parsed.requiresRegionFirst) {
+      conversationState.set(from, {
+        ...parsed.stateUpdate,
+        step: STEPS.EVENT_ADD_REGION,
+        eventAddFlagRegionPending: true,
+        eventAddFlagIndex: idx,
+      })
+      return sendRegionStep(phoneNumberId, from, false)
     }
     conversationState.set(from, { ...parsed.stateUpdate, eventAddFlagIndex: idx + 1 })
     const nextIdx = idx + 1
@@ -2078,7 +2320,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_MAIN_CATEGORY) {
-    if (buttonId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
+    if (buttonId === EVENT_ADD_CHANGE_GROUP_BUTTON.id || listReplyId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP })
       const groupListPayload = buildCategoryGroupListPayload()
       return sendInteractiveList(phoneNumberId, from, groupListPayload)
@@ -2113,7 +2355,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_PLACE_NAME) {
     if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
       conversationState.set(from, { eventAddPlaceName: '', step: STEPS.EVENT_ADD_CITY })
-      return sendText(phoneNumberId, from, EVENT_ADD_ASK_CITY)
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD_ASK_CITY,
+        buttons: [EVENT_ADD_SKIP_BUTTON],
+      })
     }
     if (textBody) {
       if (textBody.length > EVENT_ADD_PLACE_NAME_MAX) {
@@ -2125,7 +2370,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         )
       }
       conversationState.set(from, { eventAddPlaceName: textBody, step: STEPS.EVENT_ADD_CITY })
-      return sendText(phoneNumberId, from, EVENT_ADD_ASK_CITY)
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD_ASK_CITY,
+        buttons: [EVENT_ADD_SKIP_BUTTON],
+      })
     }
     return sendInteractiveButtons(phoneNumberId, from, {
       body: EVENT_ADD_ASK_PLACE_NAME,
@@ -2134,14 +2382,80 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_CITY) {
-    if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_CITY)
+    if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
+      conversationState.set(from, {
+        eventAddCity: '',
+        eventAddCityResult: null,
+        step: STEPS.EVENT_ADD_REGION,
+      })
+      return sendRegionStep(phoneNumberId, from, false)
+    }
+    if (!textBody) {
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD_ASK_CITY,
+        buttons: [EVENT_ADD_SKIP_BUTTON],
+      })
+    }
     if (textBody.length > EVENT_ADD_CITY_MAX) {
       return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_CITY, () =>
-        sendText(phoneNumberId, from, EVENT_ADD_ASK_CITY),
+        sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD_ASK_CITY,
+          buttons: [EVENT_ADD_SKIP_BUTTON],
+        }),
       )
     }
+    const parsed = await normalizeCityToListedOrCustom(textBody, CITIES_LIST, {
+      openaiApiKey: config.openaiApiKey,
+      openaiModel: config.openaiModel,
+      correlationId: from,
+    })
     const placeName = (state.eventAddPlaceName ?? '').trim()
-    conversationState.set(from, { eventAddCity: textBody, step: STEPS.EVENT_ADD_ADDRESS })
+    if (parsed.type === 'listed') {
+      const { cityId, cityTitle, region } = parsed.value
+      conversationState.set(from, {
+        eventAddCity: cityTitle,
+        eventAddCityResult: parsed,
+        eventAddRegion: region,
+        step: STEPS.EVENT_ADD_ADDRESS,
+      })
+      if (placeName) {
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD_ASK_ADDRESS,
+          footer: EVENT_ADD_ASK_ADDRESS_FOOTER,
+          buttons: [EVENT_ADD_SKIP_BUTTON],
+        })
+      }
+      return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS + '\n_' + EVENT_ADD_ASK_ADDRESS_FOOTER + '_')
+    }
+    conversationState.set(from, {
+      eventAddCity: parsed.value,
+      eventAddCityResult: parsed,
+      step: STEPS.EVENT_ADD_REGION,
+    })
+    return sendRegionStep(phoneNumberId, from, true)
+  }
+
+  if (step === STEPS.EVENT_ADD_REGION) {
+    const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
+    if (!buttonId || !validRegionIds.includes(buttonId)) {
+      return sendRegionStep(phoneNumberId, from, !!state.eventAddCityResult)
+    }
+    if (state.eventAddFlagRegionPending) {
+      const order = Array.isArray(state.eventAddFlagFieldOrder) ? state.eventAddFlagFieldOrder : []
+      const idx = typeof state.eventAddFlagIndex === 'number' ? state.eventAddFlagIndex : 0
+      conversationState.set(from, {
+        eventAddRegion: buttonId,
+        eventAddFlagRegionPending: undefined,
+        eventAddFlagIndex: idx + 1,
+      })
+      const nextIdx = idx + 1
+      if (nextIdx >= order.length) {
+        return runProcessDraftAfterFlagInput(phoneNumberId, from, conversationState.get(from), context)
+      }
+      return sendAskForFlagField(phoneNumberId, from, conversationState.get(from), order[nextIdx])
+    }
+    const placeName = (state.eventAddPlaceName ?? '').trim()
+    conversationState.set(from, { eventAddRegion: buttonId, step: STEPS.EVENT_ADD_ADDRESS })
     if (placeName) {
       return sendInteractiveButtons(phoneNumberId, from, {
         body: EVENT_ADD_ASK_ADDRESS,
@@ -2256,11 +2570,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_WAZE_GMAPS) {
     if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
       conversationState.set(from, { eventAddNavLinks: '', step: STEPS.EVENT_ADD_PRICE })
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_PRICE,
-        footer: EVENT_ADD_ASK_PRICE_FOOTER,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
-      })
+      return sendText(phoneNumberId, from, EVENT_ADD_ASK_PRICE + '\n' + EVENT_ADD_ASK_PRICE_FOOTER)
     }
     if (textBody) {
       if (textBody.length > EVENT_ADD_WAZE_GMAPS_MAX) {
@@ -2275,11 +2585,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         eventAddNavLinks: textBody,
         step: STEPS.EVENT_ADD_PRICE,
       })
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_PRICE,
-        footer: EVENT_ADD_ASK_PRICE_FOOTER,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
-      })
+      return sendText(phoneNumberId, from, EVENT_ADD_ASK_PRICE + '\n' + EVENT_ADD_ASK_PRICE_FOOTER)
     }
     return sendInteractiveButtons(phoneNumberId, from, {
       body: EVENT_ADD_ASK_WAZE_GMAPS,
@@ -2288,28 +2594,16 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_PRICE) {
-    if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
-      conversationState.set(from, { eventAddPrice: '', step: STEPS.EVENT_ADD_DESCRIPTION })
-      return sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION)
-    }
     if (textBody) {
       if (textBody.length > EVENT_ADD_PRICE_MAX) {
         return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_PRICE, () =>
-          sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_PRICE,
-            footer: EVENT_ADD_ASK_PRICE_FOOTER,
-            buttons: [EVENT_ADD_SKIP_BUTTON],
-          }),
+          sendText(phoneNumberId, from, EVENT_ADD_ASK_PRICE + '\n' + EVENT_ADD_ASK_PRICE_FOOTER),
         )
       }
       conversationState.set(from, { eventAddPrice: textBody, step: STEPS.EVENT_ADD_DESCRIPTION })
       return sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION)
     }
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_PRICE,
-      footer: EVENT_ADD_ASK_PRICE_FOOTER,
-      buttons: [EVENT_ADD_SKIP_BUTTON],
-    })
+    return sendText(phoneNumberId, from, EVENT_ADD_ASK_PRICE + '\n' + EVENT_ADD_ASK_PRICE_FOOTER)
   }
 
   if (step === STEPS.EVENT_ADD_DESCRIPTION) {
