@@ -46,6 +46,9 @@ import {
   EVENT_DELETE_CONFIRM_KEYWORD,
   EVENT_DELETE_SUCCESS,
   EVENT_DELETE_SUCCESS_BUTTONS,
+  MAIN_MENU_INTENT_IRRELEVANT,
+  MAIN_MENU_INTENT_UNCLEAR,
+  MAIN_MENU_PUBLISHER_ONLY,
 } from '../consts/index.js'
 import { sendInitialMessage, handleEventAddFlow, isEventAddStep, sendMediaMoreMessageIfNeeded } from '../flows/eventAddFlow.js'
 import { buildEditMenuFirstMessagePayload, buildPublisherEventListPayload } from '../flows/eventEditFlow.js'
@@ -63,6 +66,7 @@ import {
   forwardToDev,
 } from '../utils/whatsappWebhookRouter.js'
 import { verifyWebhookSignature } from '../utils/webhookSignature.js'
+import { classifyMainMenuIntent } from '../services/mainMenuIntent.service.js'
 
 /** In-memory: approver waId -> (publisher waId -> fullName) for confirmation messages */
 const pendingPublisherNamesByApprover = new Map()
@@ -75,6 +79,9 @@ const lastApproverRequestPayloadByMessageId = new Map()
 
 /** Set only after 131047 + template send: when approver replies (non-button) we send all queued approval UIs. approverWaId -> Array<{ publisherWaId, fullName, body, buttons }> */
 const pendingApproverRequestByApprover = new Map()
+
+/** Log APP_SECRET warning only once per process to avoid log spam. */
+let hasWarnedNoAppSecret = false
 
 function getAndRemovePublisherName(approverFrom, publisherWaId) {
   const normalized = normalizePhone(approverFrom)
@@ -528,6 +535,63 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
 
   if (msg.type === 'text' && msg.text?.body) {
     const textBody = String(msg.text.body).trim()
+    const isWelcome = state.step === conversationState.STEPS.WELCOME
+    const isPublisherChoice = state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION
+    if ((isWelcome || isPublisherChoice) && config.allowMainMenuFreeLanguage && textBody) {
+      try {
+        const { intent } = await classifyMainMenuIntent(textBody, {
+          openaiApiKey: config.openaiApiKey,
+          openaiModel: config.openaiModel,
+        })
+        if (intent === 'discover') {
+          if (isPublisherChoice) conversationState.clear(from)
+          return handleDiscoverButton(phoneNumberId, from)
+        }
+        if (intent === 'contact') {
+          if (isPublisherChoice) conversationState.clear(from)
+          return sendText(phoneNumberId, from, CONTACT_MESSAGE)
+        }
+        if (intent === 'publish') {
+          return handlePublishButton(phoneNumberId, from, profileName)
+        }
+        if (intent === 'event_add_new') {
+          if (isPublisherChoice) return sendInitialMessage(phoneNumberId, from)
+          const { status } = await checkPublisher(from)
+          if (status === 'approved') {
+            conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
+            return sendInitialMessage(phoneNumberId, from)
+          }
+          return handlePublishButton(phoneNumberId, from, profileName)
+        }
+        if (intent === 'event_update') {
+          if (isPublisherChoice) return handleEventUpdateChoice(phoneNumberId, from)
+          const { status } = await checkPublisher(from)
+          if (status === 'approved') return handleEventUpdateChoice(phoneNumberId, from)
+          return sendInteractiveButtons(phoneNumberId, from, {
+            body: MAIN_MENU_PUBLISHER_ONLY,
+            buttons: WELCOME_INTERACTIVE.buttons,
+          })
+        }
+        if (intent === 'event_delete') {
+          if (isPublisherChoice) return handleEventDeleteChoice(phoneNumberId, from)
+          const { status } = await checkPublisher(from)
+          if (status === 'approved') return handleEventDeleteChoice(phoneNumberId, from)
+          return sendInteractiveButtons(phoneNumberId, from, {
+            body: MAIN_MENU_PUBLISHER_ONLY,
+            buttons: WELCOME_INTERACTIVE.buttons,
+          })
+        }
+        if (intent === 'irrelevant') {
+          return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU_INTENT_IRRELEVANT)
+        }
+        if (intent === 'unclear') {
+          return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU_INTENT_UNCLEAR)
+        }
+      } catch (err) {
+        logger.error(LOG_PREFIXES.WEBHOOK, 'Main menu intent handling failed', err)
+        return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU_INTENT_UNCLEAR)
+      }
+    }
     if (state.step === conversationState.STEPS.EVENT_DELETE_CONFIRM) {
       if (textBody === EVENT_DELETE_CONFIRM_KEYWORD) {
         const eventId = state.eventDeleteSelectedId
@@ -763,7 +827,10 @@ export function handlePost(req, res) {
         return
       }
     } else {
-      logger.warn(LOG_PREFIXES.WEBHOOK, 'Webhook signature verification skipped: APP_SECRET not set')
+      if (!hasWarnedNoAppSecret) {
+        hasWarnedNoAppSecret = true
+        logger.warn(LOG_PREFIXES.WEBHOOK, 'Webhook signature verification skipped: APP_SECRET not set')
+      }
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' })

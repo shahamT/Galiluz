@@ -30,7 +30,23 @@ export const WELCOME_INTERACTIVE = {
 
 /** Contact: message with wa.me link so user can open chat with the number */
 export const CONTACT_MESSAGE =
-  'לצורך יצירת קשר ניתן לשלוח הודעה ישירות:\nhttps://wa.me/972552835970'
+  'לצורך יצירת קשר ניתן לשלוח הודעה ישירות:\nhttps://wa.me/972559896278'
+
+/** Main menu: when user request is not something we offer. Body + main menu buttons. */
+export const MAIN_MENU_INTENT_IRRELEVANT = {
+  body: 'אין לנו איך לעזור לכם עם הבקשה הזו בשלב זה.\nאם תרצו, אפשר:',
+  buttons: WELCOME_INTERACTIVE.buttons,
+}
+
+/** Main menu: when we could not understand what the user wants. Body + main menu buttons. */
+export const MAIN_MENU_INTENT_UNCLEAR = {
+  body: 'לא הצלחנו להבין מה תרצו לעשות,\nמוזמנים לכתוב שוב, או:',
+  buttons: WELCOME_INTERACTIVE.buttons,
+}
+
+/** Shown when non-publisher tries update/delete via free language. */
+export const MAIN_MENU_PUBLISHER_ONLY =
+  'רק מפרסמים מאושרים יכולים לעדכן או למחוק אירועים.'
 
 /** Discover flow: ask category (list body) */
 export const DISCOVER_ASK_CATEGORY = 'איזה אירועים את/ה מחפש/ת?'

@@ -47,3 +47,18 @@ Single source of truth for wa-bot production code standards.
 
 - **APP_SECRET** (required in production): Meta App Secret from the Meta for Developers app settings. Used to verify webhook POST requests via `X-Hub-Signature-256` (HMAC-SHA256 of raw body). When set, only requests signed by Meta are processed; without it, the server logs a warning and skips verification (dev only).
 - Sender id (`from`) is trusted for access control only after signature verification passes.
+
+## 9. Production environment variables
+
+Set `NODE_ENV=production` in production so required variables are validated on startup (missing vars cause exit).
+
+**Required when `NODE_ENV=production`:**  
+`PORT`, `WEBHOOK_VERIFY_TOKEN`, `WA_CLOUD_ACCESS_TOKEN`, `WA_PHONE_NUMBER_ID`, `APP_SECRET`, `OPENAI_API_KEY`.
+
+**Optional (all environments):**  
+- `OPENAI_MODEL` – default `gpt-4o-mini`.  
+- `ALLOW_MAIN_MENU_FREE_LANGUAGE` – set to `false` to disable AI intent routing at main menu (text at menu resends menu only; saves cost). Default `true`.  
+- `GALILUZ_APP_URL` – Nuxt/API base (default in prod: `https://galiluz.co.il`).  
+- `GALILUZ_APP_API_KEY` / `API_SECRET` – if Nuxt API requires a key.  
+- `PUBLISHERS_APPROVER_WA_NUMBER`, `APPROVER_REENGAGEMENT_TEMPLATE_NAME`, `APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE` – for publisher approval flow.  
+- `LOG_LEVEL` – `info` (default) or `debug`.

@@ -59,6 +59,8 @@ function loadConfig() {
     approverReengagementTemplateName: (process.env.APPROVER_REENGAGEMENT_TEMPLATE_NAME || '').trim(),
     approverReengagementTemplateLanguage: (process.env.APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE || 'he').trim() || 'he',
     logLevel: process.env.LOG_LEVEL || 'info',
+    /** When true, text at main menu is classified by AI and routed to flows. When false, text at menu just resends the menu (cost saving). Publisher flows (add/edit) always use AI. */
+    allowMainMenuFreeLanguage: process.env.ALLOW_MAIN_MENU_FREE_LANGUAGE !== 'false',
     openaiApiKey: (process.env.OPENAI_API_KEY || '').trim(),
     openaiModel: (process.env.OPENAI_MODEL || 'gpt-4o-mini').trim() || 'gpt-4o-mini',
     whatsappTestPhoneNumberId: (process.env.WHATSAPP_TEST_PHONE_NUMBER_ID || '').trim(),
