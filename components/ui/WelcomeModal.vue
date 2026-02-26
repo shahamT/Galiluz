@@ -3,7 +3,6 @@
     <div
       v-if="isVisible"
       class="WelcomeModal"
-      @click.self="handleDismiss"
     >
       <div class="WelcomeModal-content">
         <header
@@ -195,6 +194,17 @@ function handleTakeMeToSchedule() {
 function onCategoriesUpdate(ids) {
   localSelectedCategories.value = ids
 }
+
+watch(isVisible, (visible) => {
+  if (import.meta.server) return
+  document.body.style.overflow = visible ? 'hidden' : ''
+})
+
+onUnmounted(() => {
+  if (import.meta.client) {
+    document.body.style.overflow = ''
+  }
+})
 </script>
 
 <style lang="scss">
