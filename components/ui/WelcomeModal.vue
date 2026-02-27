@@ -117,6 +117,7 @@
 import {
   WELCOME_MODAL_STORAGE_KEY,
   WELCOME_MODAL,
+  WELCOME_MODAL_EXPIRY_HOURS_DEV,
 } from '~/consts/ui.const'
 
 defineOptions({ name: 'WelcomeModal' })
@@ -134,13 +135,13 @@ const { timeFilterStart, timeFilterEnd, timeFilterPreset } = storeToRefs(calenda
 
 onMounted(() => {
   if (import.meta.server) return
-  if (import.meta.dev) {
-    isVisible.value = true
-    return
-  }
   try {
     const stored = localStorage.getItem(WELCOME_MODAL_STORAGE_KEY)
-    if (!stored) {
+    if (import.meta.dev) {
+      const expiryMs = WELCOME_MODAL_EXPIRY_HOURS_DEV * 60 * 60 * 1000
+      const isExpired = !stored || (Date.now() - new Date(stored).getTime() > expiryMs)
+      if (isExpired) isVisible.value = true
+    } else if (!stored) {
       isVisible.value = true
     }
   } catch {
