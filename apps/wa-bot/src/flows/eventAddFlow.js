@@ -95,6 +95,7 @@ const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_EDIT_FIELD,
   STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP,
   STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY,
+  STEPS.EVENT_ADD_EDIT_PREVIEW,
   STEPS.EVENT_ADD_EDIT_SUCCESS,
   STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES,
   STEPS.EVENT_ADD_EDIT_EXTRA_ADD_GROUP,
@@ -406,7 +407,13 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, o
   }
   if (fieldKey === 'description') {
     const shortDesc = typeof ev.shortDescription === 'string' ? ev.shortDescription.trim() : ''
-    return `*תיאור מקוצר:*\n${shortDesc || empty}`
+    const fullDescRaw = typeof ev.fullDescription === 'string' ? ev.fullDescription : ''
+    const fullDescPlain = fullDescRaw ? htmlToWhatsAppMessage(fullDescRaw).trim() : ''
+    const lines = [`*תיאור מקוצר:*`, shortDesc || empty]
+    if (fullDescPlain) {
+      lines.push('', '*תיאור מלא:*', fullDescPlain)
+    }
+    return lines.join('\n')
   }
   if (fieldKey === 'mainCategory') {
     const mainCatId = ev.mainCategory
@@ -627,15 +634,27 @@ async function sendConfirmSummary(phoneNumberId, from, formattedPreview) {
 }
 
 /**
- * After update-event flow: clear state and send main menu. No success message (user just chose "סיימתי לעדכון פרטים").
+ * After update-event flow: send success message with event link, then clear state and show main menu.
  * @param {string} phoneNumberId
  * @param {string} from
+ * @param {string} eventId - event/draft id for the link
  * @returns {Promise<object>}
  */
-function sendUpdateSuccessAndClear(phoneNumberId, from) {
+function sendActiveEventUpdateSuccess(phoneNumberId, from, eventId) {
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
+  const eventLink = eventId ? `${baseUrl}?event=${encodeURIComponent(eventId)}` : baseUrl
+  const body = [
+    EVENT_EDIT.ACTIVE_EVENT_SUCCESS_BODY,
+    '',
+    EVENT_EDIT.ACTIVE_EVENT_VIEW_PROMPT,
+    eventLink,
+  ].join('\n')
   conversationState.clear(from)
   conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
-  return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
+  return sendInteractiveButtons(phoneNumberId, from, {
+    body,
+    buttons: EVENT_EDIT.ACTIVE_EVENT_SUCCESS_BUTTONS,
+  })
 }
 
 /**
@@ -861,26 +880,17 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
       cloudinaryData: m.cloudinaryData,
       isMain: m.isMain ?? false,
     }))
-    const result = await patchDraft(draftId, { media: patchPayload })
-    if (!result.success) {
-      logger.error(LOG_PREFIXES.EVENT_ADD, 'Edit media patch failed', from, result.reason)
-      conversationState.set(from, { eventAddConfirmPending: undefined })
-      await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: buildMediaMoreBody(MAX_MEDIA - media.length),
-        buttons: [EVENT_ADD.MEDIA_DONE_BUTTON],
-      })
-    }
-    const updatedEvent = result.event || state.eventAddFormattedPreview
     conversationState.set(from, {
-      eventAddFormattedPreview: updatedEvent,
-      step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+      eventEditPendingPayload: { media: patchPayload },
+      eventEditFieldKey: 'media',
       eventAddEditMediaMode: undefined,
       eventAddConfirmPending: undefined,
+      step: STEPS.EVENT_ADD_EDIT_PREVIEW,
     })
-    let body = EVENT_EDIT.SUCCESS_MESSAGES.media + '\n\n' + buildEditSuccessValueBlock('media', updatedEvent || {}, EVENT_CATEGORIES)
-    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.media
-    return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+    const merged = buildMergedPreviewFromPending(conversationState.get(from))
+    let body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('media', merged, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.PREVIEW_INTRO
+    return sendEditPreviewQuickReplies(phoneNumberId, from, body)
   }
 
   const rawEvent = buildRawEvent(state, publisherInfo)
@@ -1057,12 +1067,64 @@ function getExtraCategoriesBody(preview) {
     : EVENT_EDIT.EXTRA_CATEGORIES_BODY + '\n\n' + EVENT_EDIT.EXTRA_CATEGORIES_NO_EXTRAS
 }
 
+const EDIT_PREVIEW_BUTTONS = [EVENT_EDIT.APPROVE_BUTTON, EVENT_EDIT.REEDIT_BUTTON, EVENT_EDIT.BACK_BUTTON]
+
 /**
- * Send edit success quick-reply buttons (סיימתי לעדכן / לעדכון פרטים נוספים).
- * When body is provided (e.g. "שם האירוע עודכן בהצלחה"), sends a single message with that body and the two buttons.
+ * Send edit preview quick-reply buttons (אישור / עריכה מחדש / ביטול וחזרה).
+ * If body exceeds max length, splits into multiple messages; the last message carries the buttons.
  * @param {string} phoneNumberId
  * @param {string} from
- * @param {string} [body] - Message body (success text); if omitted uses EVENT_EDIT.SUCCESS_CHOOSE_BODY
+ * @param {string} body - Message body (PREVIEW_INTRO + value block)
+ * @returns {Promise<object>}
+ */
+async function sendEditPreviewQuickReplies(phoneNumberId, from, body) {
+  const text = body || EVENT_EDIT.PREVIEW_INTRO
+  const chunks = splitBodyForButtons(text)
+  if (chunks.length === 1) {
+    return sendInteractiveButtons(phoneNumberId, from, { body: chunks[0], buttons: EDIT_PREVIEW_BUTTONS })
+  }
+  for (let i = 0; i < chunks.length - 1; i++) {
+    await sendText(phoneNumberId, from, chunks[i])
+  }
+  return sendInteractiveButtons(phoneNumberId, from, { body: chunks[chunks.length - 1], buttons: EDIT_PREVIEW_BUTTONS })
+}
+
+/**
+ * Merge eventAddFormattedPreview with eventEditPendingPayload for display.
+ * @param {object} state - conversation state with eventAddFormattedPreview and eventEditPendingPayload
+ * @returns {object} merged preview object
+ */
+function buildMergedPreviewFromPending(state) {
+  const preview = state.eventAddFormattedPreview && typeof state.eventAddFormattedPreview === 'object'
+    ? { ...state.eventAddFormattedPreview }
+    : {}
+  const pending = state.eventEditPendingPayload && typeof state.eventEditPendingPayload === 'object'
+    ? state.eventEditPendingPayload
+    : {}
+  if (pending.title !== undefined) preview.Title = pending.title
+  if (pending.fullDescription !== undefined) preview.fullDescription = pending.fullDescription
+  if (pending.shortDescription !== undefined) preview.shortDescription = pending.shortDescription
+  if (pending.occurrences !== undefined) preview.occurrences = pending.occurrences
+  if (pending.price !== undefined) preview.price = pending.price
+  if (pending.urls !== undefined) preview.urls = pending.urls
+  if (pending.mainCategory !== undefined) preview.mainCategory = pending.mainCategory
+  if (pending.categories !== undefined) preview.categories = pending.categories
+  if (pending.media !== undefined) preview.media = pending.media
+  if (pending.location !== undefined) {
+    preview.location = {
+      ...(preview.location && typeof preview.location === 'object' ? preview.location : {}),
+      ...pending.location,
+    }
+  }
+  return preview
+}
+
+/**
+ * Send edit success quick-reply buttons (סיימתי לעדכן / עדכון פרטים נוספים).
+ * When body is provided, sends a single message with that body and the two buttons.
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @param {string} [body] - Message body; if omitted uses EVENT_EDIT.SUCCESS_CHOOSE_BODY
  * @returns {Promise<object>}
  */
 function sendEditSuccessQuickReplies(phoneNumberId, from, body) {
@@ -1864,7 +1926,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_EDIT_MENU) {
     if (listReplyId === EDIT_DONE_ID) {
       if (state.eventUpdateMode && state.eventAddDraftId) {
-        return sendUpdateSuccessAndClear(phoneNumberId, from)
+        return sendActiveEventUpdateSuccess(phoneNumberId, from, state.eventAddDraftId)
       }
       conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
       const preview = state.eventAddFormattedPreview
@@ -1885,7 +1947,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_CATEGORIES_CHOICE })
       return sendInteractiveButtons(phoneNumberId, from, {
         body: EVENT_EDIT.CATEGORIES_CHOICE_BODY,
-        buttons: [EVENT_EDIT.CATEGORIES_MAIN_BUTTON, EVENT_EDIT.CATEGORIES_EXTRA_BUTTON, EVENT_EDIT.EXTRA_BACK_BUTTON],
+        buttons: [EVENT_EDIT.CATEGORIES_MAIN_BUTTON, EVENT_EDIT.CATEGORIES_EXTRA_BUTTON],
       })
     }
     if (listReplyId === 'edit_location') {
@@ -1950,7 +2012,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       const isDone = donePhrases.some((p) => textBody === p || textBody.startsWith(p + ' ') || textBody.replace(/\s+/g, ' ').trim() === p)
       if (isDone) {
         if (state.eventUpdateMode && state.eventAddDraftId) {
-          return sendUpdateSuccessAndClear(phoneNumberId, from)
+          return sendActiveEventUpdateSuccess(phoneNumberId, from, state.eventAddDraftId)
         }
         conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
         const preview = state.eventAddFormattedPreview
@@ -2189,21 +2251,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
           sendText(phoneNumberId, from, EVENT_EDIT.ASK_TITLE),
         )
       }
-      const result = await patchDraft(draftId, { title: textBody })
-      if (!result.success) {
-        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
-        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
-      }
       conversationState.set(from, {
-        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
-        eventEditFieldKey: undefined,
+        eventEditPendingPayload: { title: textBody },
+        eventEditFieldKey: 'title',
+        step: STEPS.EVENT_ADD_EDIT_PREVIEW,
       })
-      const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT.SUCCESS_MESSAGES.title + '\n\n' + buildEditSuccessValueBlock('title', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.title
-      return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+      const merged = buildMergedPreviewFromPending(conversationState.get(from))
+      let body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('title', merged, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.PREVIEW_INTRO
+      return sendEditPreviewQuickReplies(phoneNumberId, from, body)
     }
     if (fieldKey === 'description') {
       const len = textBody.length
@@ -2220,21 +2276,14 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       })
       const shortDescription = shortResult.shortDescription || (preview?.shortDescription && typeof preview.shortDescription === 'string' ? preview.shortDescription : '')
       const patchPayload = { fullDescription: convertMessageToHtml(textBody), shortDescription }
-      const result = await patchDraft(draftId, patchPayload)
-      if (!result.success) {
-        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
-        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
-      }
       conversationState.set(from, {
-        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
-        eventEditFieldKey: undefined,
+        eventEditPendingPayload: patchPayload,
+        eventEditFieldKey: 'description',
+        step: STEPS.EVENT_ADD_EDIT_PREVIEW,
       })
-      const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT.SUCCESS_MESSAGES.description + '\n\n' + buildEditSuccessValueBlock('description', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.description
-      return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+      const merged = buildMergedPreviewFromPending(conversationState.get(from))
+      const body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('description', merged, EVENT_CATEGORIES)
+      return sendEditPreviewQuickReplies(phoneNumberId, from, body)
     }
     if (fieldKey === 'datetime') {
       if (textBody.length > VALIDATION.DATETIME_MAX) {
@@ -2255,21 +2304,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         await sendText(phoneNumberId, from, EVENT_EDIT.DATETIME_PARSE_FAILED)
         return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER)
       }
-      const result = await patchDraft(draftId, { occurrences })
-      if (!result.success) {
-        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
-        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
-      }
       conversationState.set(from, {
-        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
-        eventEditFieldKey: undefined,
+        eventEditPendingPayload: { occurrences },
+        eventEditFieldKey: 'datetime',
+        step: STEPS.EVENT_ADD_EDIT_PREVIEW,
       })
-      const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT.SUCCESS_MESSAGES.datetime + '\n\n' + buildEditSuccessValueBlock('datetime', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.datetime
-      return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+      const merged = buildMergedPreviewFromPending(conversationState.get(from))
+      let body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('datetime', merged, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.PREVIEW_INTRO
+      return sendEditPreviewQuickReplies(phoneNumberId, from, body)
     }
     if (fieldKey === 'price') {
       if (textBody.length > VALIDATION.PRICE_MAX) {
@@ -2288,21 +2331,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         })
       }
       const price = parseResult.price !== undefined ? parseResult.price : null
-      const result = await patchDraft(draftId, { price })
-      if (!result.success) {
-        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
-        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
-      }
       conversationState.set(from, {
-        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
-        eventEditFieldKey: undefined,
+        eventEditPendingPayload: { price },
+        eventEditFieldKey: 'price',
+        step: STEPS.EVENT_ADD_EDIT_PREVIEW,
       })
-      const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT.SUCCESS_MESSAGES.price + '\n\n' + buildEditSuccessValueBlock('price', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.price
-      return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+      const merged = buildMergedPreviewFromPending(conversationState.get(from))
+      let body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('price', merged, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.PREVIEW_INTRO
+      return sendEditPreviewQuickReplies(phoneNumberId, from, body)
     }
     if (fieldKey === 'links') {
       if (textBody.length > VALIDATION.LINKS_MAX) {
@@ -2315,21 +2352,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         openaiModel: config.openaiModel,
       })
       const urls = Array.isArray(parseResult.urls) ? parseResult.urls : []
-      const result = await patchDraft(draftId, { urls })
-      if (!result.success) {
-        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
-        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
-      }
       conversationState.set(from, {
-        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
-        eventEditFieldKey: undefined,
+        eventEditPendingPayload: { urls },
+        eventEditFieldKey: 'links',
+        step: STEPS.EVENT_ADD_EDIT_PREVIEW,
       })
-      const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT.SUCCESS_MESSAGES.links + '\n\n' + buildEditSuccessValueBlock('links', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.links
-      return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+      const merged = buildMergedPreviewFromPending(conversationState.get(from))
+      let body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('links', merged, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.PREVIEW_INTRO
+      return sendEditPreviewQuickReplies(phoneNumberId, from, body)
     }
     conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventEditFieldKey: undefined })
     return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
@@ -2412,12 +2443,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES })
       return sendInteractiveButtons(phoneNumberId, from, {
         body: getExtraCategoriesBody(state.eventAddFormattedPreview),
-        buttons: [EVENT_EDIT.EXTRA_ADD_BUTTON, EVENT_EDIT.EXTRA_REMOVE_BUTTON, EVENT_EDIT.EXTRA_BACK_BUTTON],
+        buttons: [EVENT_EDIT.EXTRA_ADD_BUTTON, EVENT_EDIT.EXTRA_REMOVE_BUTTON],
       })
     }
     return sendInteractiveButtons(phoneNumberId, from, {
       body: EVENT_EDIT.CATEGORIES_CHOICE_BODY,
-      buttons: [EVENT_EDIT.CATEGORIES_MAIN_BUTTON, EVENT_EDIT.CATEGORIES_EXTRA_BUTTON, EVENT_EDIT.EXTRA_BACK_BUTTON],
+      buttons: [EVENT_EDIT.CATEGORIES_MAIN_BUTTON, EVENT_EDIT.CATEGORIES_EXTRA_BUTTON],
     })
   }
 
@@ -2464,28 +2495,24 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     const categories = Array.isArray(preview?.categories) ? [...preview.categories] : []
     const newMain = listReplyId
     if (!categories.includes(newMain)) categories.unshift(newMain)
-    const result = await patchDraft(draftId, { mainCategory: newMain, categories })
-    if (!result.success) {
-      await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
-    }
+    const patchPayload = { mainCategory: newMain, categories }
     conversationState.set(from, {
-      eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-      step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+      eventEditPendingPayload: patchPayload,
+      eventEditFieldKey: 'mainCategory',
       eventAddMainCategoryGroupId: undefined,
+      step: STEPS.EVENT_ADD_EDIT_PREVIEW,
     })
-    const updatedEvent = result.event || state.eventAddFormattedPreview
-    let body = EVENT_EDIT.SUCCESS_MESSAGES.mainCategory + '\n\n' + buildEditSuccessValueBlock('mainCategory', updatedEvent || {}, EVENT_CATEGORIES)
-    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.mainCategory
-    return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+    const merged = buildMergedPreviewFromPending(conversationState.get(from))
+    let body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('mainCategory', merged, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.PREVIEW_INTRO
+    return sendEditPreviewQuickReplies(phoneNumberId, from, body)
   }
 
   function sendExtraCategoriesScreen() {
     const current = conversationState.get(from)
     return sendInteractiveButtons(phoneNumberId, from, {
       body: getExtraCategoriesBody(current.eventAddFormattedPreview),
-      buttons: [EVENT_EDIT.EXTRA_ADD_BUTTON, EVENT_EDIT.EXTRA_REMOVE_BUTTON, EVENT_EDIT.EXTRA_BACK_BUTTON],
+      buttons: [EVENT_EDIT.EXTRA_ADD_BUTTON, EVENT_EDIT.EXTRA_REMOVE_BUTTON],
     })
   }
 
@@ -2565,21 +2592,17 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     const categories = Array.isArray(preview?.categories) ? [...preview.categories] : []
     const newId = listReplyId
     if (!categories.includes(newId)) categories.push(newId)
-    const result = await patchDraft(draftId, { categories })
-    if (!result.success) {
-      const reason = typeof result.reason === 'string' ? result.reason : ''
-      const isMaxCategories = /maximum|exceed/i.test(reason)
-      const errMsg = isMaxCategories ? EVENT_EDIT.EXTRA_MAX_REACHED(EVENT_ADD.MAX_EXTRA_CATEGORIES) : getPatchFailureUserMessage(result)
-      await sendText(phoneNumberId, from, errMsg)
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES })
-      return sendExtraCategoriesScreen()
-    }
+    const patchPayload = { categories }
     conversationState.set(from, {
-      eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-      step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES,
+      eventEditPendingPayload: patchPayload,
+      eventEditFieldKey: 'categories',
       eventAddMainCategoryGroupId: undefined,
+      step: STEPS.EVENT_ADD_EDIT_PREVIEW,
     })
-    return sendExtraCategoriesScreen()
+    const merged = buildMergedPreviewFromPending(conversationState.get(from))
+    let body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('mainCategory', merged, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.PREVIEW_INTRO
+    return sendEditPreviewQuickReplies(phoneNumberId, from, body)
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_EXTRA_REMOVE) {
@@ -2598,17 +2621,16 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES })
       return sendExtraCategoriesScreen()
     }
-    const result = await patchDraft(draftId, { categories: newCategories })
-    if (!result.success) {
-      await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES })
-      return sendExtraCategoriesScreen()
-    }
+    const patchPayload = { categories: newCategories }
     conversationState.set(from, {
-      eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-      step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES,
+      eventEditPendingPayload: patchPayload,
+      eventEditFieldKey: 'categories',
+      step: STEPS.EVENT_ADD_EDIT_PREVIEW,
     })
-    return sendExtraCategoriesScreen()
+    const merged = buildMergedPreviewFromPending(conversationState.get(from))
+    let body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('mainCategory', merged, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.PREVIEW_INTRO
+    return sendEditPreviewQuickReplies(phoneNumberId, from, body)
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_LOCATION_PLACE) {
@@ -2842,15 +2864,9 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       wazeNavLink: null,
       gmapsNavLink: null,
     }
-    const result = await patchDraft(draftId, { location })
-    if (!result.success) {
-      await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
-    }
     conversationState.set(from, {
-      eventAddFormattedPreview: result.event || s.eventAddFormattedPreview,
-      step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+      eventEditPendingPayload: { location },
+      eventEditFieldKey: 'location',
       eventEditPlaceName: undefined,
       eventEditCity: undefined,
       eventEditCityResult: undefined,
@@ -2858,11 +2874,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       eventEditAddressLine1: undefined,
       eventEditAddressLine2: undefined,
       eventEditLocationNotes: undefined,
+      step: STEPS.EVENT_ADD_EDIT_PREVIEW,
     })
-    const updatedEvent = result.event || s.eventAddFormattedPreview
-    let body = EVENT_EDIT.SUCCESS_MESSAGES.location + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES)
-    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.location
-    return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+    const merged = buildMergedPreviewFromPending(conversationState.get(from))
+    let body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('location', merged, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.PREVIEW_INTRO
+    return sendEditPreviewQuickReplies(phoneNumberId, from, body)
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_NAV_LINKS) {
@@ -2881,20 +2898,168 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       wazeNavLink: extracted.wazeNavLink ?? null,
       gmapsNavLink: extracted.gmapsNavLink ?? null,
     }
-    const result = await patchDraft(draftId, { location: locationPatch })
-    if (!result.success) {
-      await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+    conversationState.set(from, {
+      eventEditPendingPayload: { location: locationPatch },
+      eventEditFieldKey: 'navLinks',
+      step: STEPS.EVENT_ADD_EDIT_PREVIEW,
+    })
+    const merged = buildMergedPreviewFromPending(conversationState.get(from))
+    let body = EVENT_EDIT.PREVIEW_INTRO + '\n\n' + buildEditSuccessValueBlock('location', merged, EVENT_CATEGORIES, { includeNavLinks: true })
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.PREVIEW_INTRO
+    return sendEditPreviewQuickReplies(phoneNumberId, from, body)
+  }
+
+  if (step === STEPS.EVENT_ADD_EDIT_PREVIEW) {
+    const draftId = state.eventAddDraftId
+    const fieldKey = state.eventEditFieldKey
+    const pending = state.eventEditPendingPayload
+
+    if (buttonId === EVENT_EDIT.BACK_BUTTON.id) {
+      conversationState.set(from, {
+        step: STEPS.EVENT_ADD_EDIT_MENU,
+        eventEditPendingPayload: undefined,
+        eventEditFieldKey: undefined,
+      })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
-    conversationState.set(from, {
-      eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-      step: STEPS.EVENT_ADD_EDIT_SUCCESS,
-    })
-    const updatedEvent = result.event || state.eventAddFormattedPreview
-    let body = EVENT_EDIT.SUCCESS_MESSAGES.navLinks + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES, { includeNavLinks: true })
-    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.navLinks
-    return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+
+    if (buttonId === EVENT_EDIT.REEDIT_BUTTON.id) {
+      const merged = buildMergedPreviewFromPending(state)
+      if (fieldKey === 'title') {
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_FIELD,
+          eventEditFieldKey: 'title',
+          eventEditPendingPayload: undefined,
+        })
+        return sendText(phoneNumberId, from, EVENT_EDIT.ASK_TITLE)
+      }
+      if (fieldKey === 'description') {
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_FIELD,
+          eventEditFieldKey: 'description',
+          eventEditPendingPayload: undefined,
+        })
+        return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DESCRIPTION)
+      }
+      if (fieldKey === 'datetime') {
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_FIELD,
+          eventEditFieldKey: 'datetime',
+          eventEditPendingPayload: undefined,
+        })
+        return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER)
+      }
+      if (fieldKey === 'price') {
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_FIELD,
+          eventEditFieldKey: 'price',
+          eventEditPendingPayload: undefined,
+        })
+        return sendText(phoneNumberId, from, EVENT_EDIT.ASK_PRICE + '\n' + EVENT_EDIT.ASK_PRICE_FOOTER)
+      }
+      if (fieldKey === 'links') {
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_FIELD,
+          eventEditFieldKey: 'links',
+          eventEditPendingPayload: undefined,
+        })
+        return sendText(phoneNumberId, from, EVENT_EDIT.ASK_LINKS)
+      }
+      if (fieldKey === 'mainCategory') {
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP,
+          eventEditFieldKey: undefined,
+          eventEditPendingPayload: undefined,
+        })
+        const groupListPayload = buildCategoryGroupListPayload()
+        return sendInteractiveList(phoneNumberId, from, groupListPayload)
+      }
+      if (fieldKey === 'categories') {
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES,
+          eventEditFieldKey: undefined,
+          eventEditPendingPayload: undefined,
+        })
+        return sendExtraCategoriesScreen()
+      }
+      if (fieldKey === 'location') {
+        const loc = merged.location && typeof merged.location === 'object' ? merged.location : {}
+        const cityType = loc.cityType === 'listed' || loc.cityType === 'custom' ? loc.cityType : undefined
+        const cityRaw = typeof loc.city === 'string' ? loc.city.trim() : ''
+        let eventEditCity = ''
+        let eventEditCityResult = null
+        let eventEditRegion = (loc.region && typeof loc.region === 'string') ? loc.region : undefined
+        if (cityType === 'listed' && cityRaw) {
+          const cityEntry = CITIES_LIST.find((c) => c.id === cityRaw)
+          if (cityEntry) {
+            eventEditCity = cityEntry.title
+            eventEditCityResult = { type: 'listed', value: { cityId: cityEntry.id, cityTitle: cityEntry.title, region: cityEntry.region } }
+            eventEditRegion = cityEntry.region
+          }
+        } else if (cityType === 'custom' && cityRaw) {
+          eventEditCity = cityRaw
+          eventEditCityResult = { type: 'custom', value: cityRaw }
+        }
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_LOCATION_PLACE,
+          eventEditFieldKey: undefined,
+          eventEditPendingPayload: undefined,
+          eventEditPlaceName: (loc.locationName && typeof loc.locationName === 'string') ? loc.locationName.trim() : '',
+          eventEditCity,
+          eventEditCityResult,
+          eventEditRegion,
+          eventEditAddressLine1: (loc.addressLine1 && typeof loc.addressLine1 === 'string') ? loc.addressLine1.trim() : '',
+          eventEditAddressLine2: (loc.addressLine2 && typeof loc.addressLine2 === 'string') ? loc.addressLine2.trim() : '',
+          eventEditLocationNotes: (loc.locationDetails && typeof loc.locationDetails === 'string') ? loc.locationDetails.trim() : '',
+        })
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_EDIT.LOCATION_ASK_PLACE_NAME,
+          buttons: [EVENT_ADD.SKIP_BUTTON],
+        })
+      }
+      if (fieldKey === 'navLinks') {
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_NAV_LINKS,
+          eventEditFieldKey: undefined,
+          eventEditPendingPayload: undefined,
+        })
+        return sendText(phoneNumberId, from, EVENT_EDIT.NAV_LINKS_ASK)
+      }
+      if (fieldKey === 'media') {
+        conversationState.set(from, {
+          step: STEPS.EVENT_ADD_EDIT_MEDIA_INTRO,
+          eventEditFieldKey: undefined,
+          eventEditPendingPayload: undefined,
+        })
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_EDIT.ASK_MEDIA,
+          footer: EVENT_EDIT.ASK_MEDIA_FOOTER,
+          buttons: [EVENT_EDIT.MEDIA_CANCEL_BUTTON],
+        })
+      }
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventEditPendingPayload: undefined, eventEditFieldKey: undefined })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+    }
+
+    if (buttonId === EVENT_EDIT.APPROVE_BUTTON.id && draftId && pending && typeof pending === 'object') {
+      const payload = { ...pending }
+      delete payload._meta
+      const result = await patchDraft(draftId, payload)
+      if (!result.success) {
+        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
+        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventEditPendingPayload: undefined, eventEditFieldKey: undefined })
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+      }
+      conversationState.set(from, {
+        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
+        eventEditPendingPayload: undefined,
+        eventEditFieldKey: undefined,
+        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+      })
+      return sendEditSuccessQuickReplies(phoneNumberId, from, EVENT_EDIT.HOW_TO_CONTINUE)
+    }
+
+    return sendEditPreviewQuickReplies(phoneNumberId, from, EVENT_EDIT.PREVIEW_INTRO)
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_SUCCESS) {
@@ -2904,10 +3069,8 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     }
     if (state.eventAddFromFreeLangSuccess && buttonId === EVENT_EDIT.FREE_LANG_SUCCESS_DONE_BUTTON.id) {
       conversationState.set(from, { eventAddFromFreeLangSuccess: undefined })
-      if (state.eventUpdateMode) {
-        conversationState.clear(from)
-        conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
-        return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
+      if (state.eventUpdateMode && state.eventAddDraftId) {
+        return sendActiveEventUpdateSuccess(phoneNumberId, from, state.eventAddDraftId)
       }
       conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
       const preview = state.eventAddFormattedPreview
@@ -2917,6 +3080,9 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if (buttonId === EVENT_EDIT.SUCCESS_DONE_BUTTON.id) {
+      if (state.eventUpdateMode && state.eventAddDraftId) {
+        return sendActiveEventUpdateSuccess(phoneNumberId, from, state.eventAddDraftId)
+      }
       conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
       const preview = state.eventAddFormattedPreview
       if (preview && typeof preview === 'object') {
@@ -2932,7 +3098,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
-    return sendEditSuccessQuickReplies(phoneNumberId, from)
+    return sendEditSuccessQuickReplies(phoneNumberId, from, EVENT_EDIT.HOW_TO_CONTINUE)
   }
 
   if (step === STEPS.EVENT_ADD_FLAG_INPUT) {

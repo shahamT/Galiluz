@@ -19,6 +19,7 @@
  *       eventAddFlagRegionPending (when rawCity skipped in flag flow: collect region before next flag).
  *       eventAddFreeLangEdits, eventAddFreeLangPendingCity (free-lang city edit: collect region when custom city before confirm).
  *       eventEditFieldKey (when step is event_add_edit_field: 'title' | 'description' | 'mainCategory' | ...).
+ *       eventEditPendingPayload (patch payload stored before preview; applied only on Approve).
  *       eventUpdateMode (true when edit flow was entered from "עדכון אירוע" — on done show update-success + link instead of activate).
  *       eventUpdateList, eventUpdateListOffset (events list and pagination for update flow).
  *       eventDeleteList, eventDeleteListOffset (events list and pagination for delete flow).
@@ -73,6 +74,7 @@ const STEPS = {
   EVENT_ADD_EDIT_FIELD: 'event_add_edit_field',
   EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP: 'event_add_edit_main_category_group',
   EVENT_ADD_EDIT_MAIN_CATEGORY: 'event_add_edit_main_category',
+  EVENT_ADD_EDIT_PREVIEW: 'event_add_edit_preview',
   EVENT_ADD_EDIT_SUCCESS: 'event_add_edit_success',
   EVENT_ADD_EDIT_EXTRA_CATEGORIES: 'event_add_edit_extra_categories',
   EVENT_ADD_EDIT_EXTRA_ADD_GROUP: 'event_add_edit_extra_add_group',
