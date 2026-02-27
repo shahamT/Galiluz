@@ -84,8 +84,9 @@ export async function createDraft(body) {
 
 /**
  * Process draft: format locally (OpenAI) then POST formattedEvent to Nuxt to update draft.
+ * When body.formattedEvent is provided (free-lang flow), skip formatPublisherEvent and POST directly.
  * @param {string} draftId - id from createDraft
- * @param {{ rawEvent: object, media: Array, mainCategory: string, categories: string[] }} body - same as createDraft
+ * @param {{ rawEvent?: object, formattedEvent?: object, media?: Array, mainCategory?: string, categories?: string[] }} body
  * @returns {Promise<{ success: boolean, formattedEvent?: object, flags?: Array<{ fieldKey: string, reason: string }>, reason?: string }>}
  */
 export async function processDraft(draftId, body) {
@@ -93,6 +94,51 @@ export async function processDraft(draftId, body) {
   const correlationId = `${Date.now().toString(36)}-${draftId.slice(-4)}`
   const rawEvent = body?.rawEvent
   const media = Array.isArray(body?.media) ? body.media : []
+  let formattedEvent = body?.formattedEvent && typeof body.formattedEvent === 'object' ? body.formattedEvent : null
+
+  if (formattedEvent) {
+    logger.info(LOG_PREFIXES.CLOUD_API, 'processDraft: using pre-formatted event, bypassing formatPublisherEvent', { draftId: draftId?.slice(-8) })
+    const eventWithMedia = { ...formattedEvent, media: media.length > 0 ? media : (formattedEvent.media ?? []) }
+    const url = `${baseUrl}/api/events/${encodeURIComponent(draftId)}/process`
+    const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
+    if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ formattedEvent: eventWithMedia }),
+      })
+      if (!res.ok) {
+        const errBody = await res.text()
+        let reason = `HTTP ${res.status}`
+        if (errBody.length > 0) {
+          try {
+            const data = JSON.parse(errBody)
+            if (typeof data.message === 'string' && data.message.trim()) {
+              reason = data.message.trim()
+            } else if (typeof data.errorMessage === 'string' && data.errorMessage.trim()) {
+              reason = data.errorMessage.trim()
+            } else {
+              reason = errBody.slice(0, 300)
+            }
+          } catch {
+            reason = errBody.slice(0, 300)
+          }
+        }
+        logger.error(LOG_PREFIXES.CLOUD_API, 'Events process failed', res.status, reason)
+        return { success: false, reason }
+      }
+      const data = await res.json()
+      if (!data.formattedEvent) return { success: false, reason: 'no formattedEvent' }
+      return { success: true, formattedEvent: data.formattedEvent, flags: [] }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err)
+      logger.error(LOG_PREFIXES.CLOUD_API, 'Events process error', err)
+      return { success: false, reason }
+    }
+  }
+
+  logger.info(LOG_PREFIXES.CLOUD_API, 'processDraft: no formattedEvent, calling formatPublisherEvent', { draftId: draftId?.slice(-8) })
   const mainCategory = typeof body?.mainCategory === 'string' ? body.mainCategory.trim() : ''
   const categories = Array.isArray(body?.categories) ? body.categories.filter((c) => typeof c === 'string') : []
   const rawEventWithAll = {
@@ -121,6 +167,12 @@ export async function processDraft(draftId, body) {
     ? formatResult.flags.filter((f) => f && typeof f.fieldKey === 'string' && typeof f.reason === 'string').map((f) => ({ fieldKey: f.fieldKey, reason: f.reason }))
     : []
   if (flags.length > 0) {
+    logger.info(LOG_PREFIXES.CLOUD_API, 'processDraft: format returned flags', {
+      draftId,
+      rawOccurrences: rawEvent?.rawOccurrences ?? '(none)',
+      rawOccurrencesLength: typeof rawEvent?.rawOccurrences === 'string' ? rawEvent.rawOccurrences.length : 0,
+      flags: flags.map((f) => ({ fieldKey: f.fieldKey, reason: f.reason })),
+    })
     return { success: true, formattedEvent: formatResult.formattedEvent, flags }
   }
 

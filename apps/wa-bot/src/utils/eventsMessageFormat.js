@@ -3,7 +3,7 @@ import { getTimeInIsraelFromIso } from './date.helpers.js'
 const ALL_DAY_TEXT = 'כל היום'
 const UNKNOWN_LOCATION = 'לא ידוע'
 const MAX_EVENTS_IN_MESSAGE = 15
-const MORE_EVENTS_LINE = '\nלעוד אירועים כנסו ל־https://galiluz.co.il'
+const MORE_EVENTS_LINE = '\nלעוד אירועים כנסו ל־ https://galiluz.co.il'
 
 /** Format YYYY-MM-DD as d.m (e.g. 23.2, 7.3) */
 export function formatDateDotted(dateString) {
@@ -14,15 +14,14 @@ export function formatDateDotted(dateString) {
 }
 
 /**
- * Location line: addressLine1, addressLine2, city (same as event modal basicLocation).
- * Empty/unknown same as frontend: "לא ידוע".
+ * Location line for event list: locationName and city only.
+ * Uses whichever is present (one or both). No address lines.
  */
 export function formatLocation(event) {
   if (!event?.location) return UNKNOWN_LOCATION
   const loc = event.location
   const parts = []
-  if (loc.addressLine1?.trim()) parts.push(loc.addressLine1.trim())
-  if (loc.addressLine2?.trim()) parts.push(loc.addressLine2.trim())
+  if (loc.locationName?.trim()) parts.push(loc.locationName.trim())
   if (loc.city?.trim()) parts.push(loc.city.trim())
   return parts.length === 0 ? UNKNOWN_LOCATION : parts.join(', ')
 }
@@ -83,7 +82,7 @@ export function formatEventsListMessage(
   }
 
   if (onDateFlatEvents.length === 0) {
-    return `אין אירועים ביום הזה. לצפייה בכל האירועים כנסו ל־${baseUrl}`
+    return `אין אירועים ביום הזה. לצפייה בכל האירועים כנסו ל־ ${baseUrl}`
   }
   let body = lines.join('\n').trim()
   if (onDateFlatEvents.length > MAX_EVENTS_IN_MESSAGE) body += MORE_EVENTS_LINE

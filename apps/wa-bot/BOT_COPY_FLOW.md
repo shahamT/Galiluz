@@ -118,20 +118,20 @@ All user-facing messages, footers, buttons, list labels, and validation errors i
 | Ask main category | List | בחרו את הקטגוריה המתאימה ביותר לאירוע שלכם | אנחנו כבר נשייך את האירוע לקטגוריות נוספות | Groups: מוזיקה/טבע/תנועה, אוכל/אמנות/שופינג, קהילה, סדנאות/לימודים |
 | Change group prompt | Text | לא מתאים? אפשר לבחור קבוצה אחרת. | — | **בחירת קבוצה אחרת** |
 | Location intro | Text | *מיקום האירוע*\nאנא מלאו את פרטי המיקום | — | — |
-| Ask place name | Buttons | שם המקום | — | **דלג** |
-| Ask city | Buttons | יישוב | ניתן לדלג ולבחור אזור בלחיצה | **דלג** |
+| Ask place name | Buttons | שם המקום | — | **דלגו** |
+| Ask city | Buttons | יישוב | ניתן לדלג ולבחור אזור בלחיצה | **דלגו** |
 | City outside region | Text | היישוב שציינת לא באיזור הצפון. אנא הזינו יישוב מתאים | — | — |
 | Ask region | Image + Buttons | באיזה אזור האירוע? (image: areas map) | — | **הגליל העליון המרכזי** \| **צפון ומרכז רמת הגולן** \| **אצבע הגליל** |
-| Ask address | Buttons/Text | כתובת | עד שתי שורות | **דלג** |
-| Ask location notes | Buttons | הערות נוספות למיקום | לדוגמה - הכוונה של איך להגיע לכניסה | **דלג** |
-| Ask Waze/Gmaps | Buttons | הוספת לינקים לניווט עם google maps/waze | — | **דלג** |
+| Ask address | Buttons/Text | כתובת | עד שתי שורות | **דלגו** |
+| Ask location notes | Buttons | הערות נוספות למיקום | לדוגמה - הכוונה של איך להגיע לכניסה | **דלגו** |
+| Ask Waze/Gmaps | Buttons | הוספת לינקים לניווט עם google maps/waze | — | **דלגו** |
 | Ask price | Buttons | מחיר האירוע | לדוגמה - 20 ש"ח / חינם | — |
 | Ask description | Text | תיאור מלא של האירוע (חובה)\n_ללא לינקים ומספרי טלפון, ניתן להוסיף לינקים וטלפונים בשדה הבא_ | — | — |
-| Ask links | Buttons | הוספת לינקים וטלפונים | יש להוסיף תיאור לכל לינק. לדוגמה: tickets.co.il | **דלג** |
+| Ask links | Buttons | הוספת לינקים וטלפונים | יש להוסיף תיאור לכל לינק. לדוגמה: tickets.co.il | **דלגו** |
 | Ask media first | Buttons | הוספת תמונות וסרטונים\nשלח/י תמונה/סרטון ראשי | — | **ללא תמונות/סרטונים** \| **סיימתי להעלות קבצים** |
 | Ask media more | Text/Buttons | ניתן לשלוח עוד תמונה/סרטון (or "עוד תמונה/סרטון אחד" or "עוד {n} תמונות/סרטונים") | _X/6 קבצים נטענו_ | **סיימתי להעלות קבצים** |
 | Media max reached | Text | נשמרו 6 קבצים. ממשיכים לשלב הבא. | — | — |
-| Media upload failed | Text | שמירת התמונה/סרטון נכשלה (שירות לא זמין כרגע). נסה/י שוב או לחץ/י דלג. | — | — |
+| Media upload failed | Text | שמירת התמונה/סרטון נכשלה (שירות לא זמין כרגע). נסה/י שוב או לחץ/י דלגו. | — | — |
 
 ### 8d. Confirm Step (Preview)
 
@@ -155,7 +155,7 @@ All user-facing messages, footers, buttons, list labels, and validation errors i
 |------|------|------|---------|
 | Flags intro | Text | יש כמה פרטים שחסרים לנו.\n\nמלאו את הפרטים הבאים: | — |
 | Flag field labels | (used in asks) | שם האירוע, תאריך ושעה, יישוב, מיקום, לינקי ניווט, מחיר, תיאור, לינקים, קטגוריה | — |
-| City ask footer | — | ניתן לדלג ולבחור אזור בלחיצה | **דלג** |
+| City ask footer | — | ניתן לדלג ולבחור אזור בלחיצה | **דלגו** |
 
 ---
 

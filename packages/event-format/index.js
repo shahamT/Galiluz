@@ -5,7 +5,8 @@
  */
 import OpenAI from 'openai'
 import { PUBLISHER_EVENT_FORMAT_SCHEMA, ALLOWED_FLAG_FIELD_KEYS } from './schema.js'
-import { getCurrentIsraelUtcOffset } from './israelDate.js'
+import { getCurrentIsraelUtcOffset, israelMidnightToUtcIso, localTimeIsraelToUtcIso } from './israelDate.js'
+import { normalizeOccurrenceTime } from './occurrenceUtils.js'
 import { sanitizeRawEventForPrompt } from './promptSanitize.js'
 import { extractNavLinksFromRaw } from './navLinks.js'
 import { convertMessageToHtml } from './whatsappFormatToHtml.js'
@@ -26,6 +27,17 @@ function log(ctx, level, message, data) {
   if (level === 'error') console.error(line)
   else if (level === 'warn') console.warn(line)
   else console.info(line)
+}
+
+/** True if rawOccurrences text clearly indicates an end time (range, until, duration). */
+function rawOccurrencesHasEndTime(rawOccurrences) {
+  const s = typeof rawOccurrences === 'string' ? rawOccurrences.trim() : ''
+  if (!s) return false
+  if (/עד\s/.test(s) || /\sעד\s/.test(s)) return true
+  if (/\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}/.test(s) || /\d{1,2}\s*[-–]\s*\d{1,2}:\d{2}/.test(s)) return true
+  if (/ל\s*\d+\s*שעות?/.test(s)) return true
+  if (/משעה|משעות|מ-?\d/.test(s) && /עד|ל-?\d/.test(s)) return true
+  return false
 }
 
 function getIsraelDateContext() {
@@ -56,14 +68,22 @@ OUTPUT LANGUAGE: All generated text (shortDescription, urls titles, etc.) must b
 RULES:
 1. Prefer best-effort interpretation: try to parse and fill every field from the raw data. Only when it is truly impossible to produce any reasonable value should you leave a field minimal or flag it (see FLAGS).
 2. Use the full raw event object only as context (keys: rawTitle, rawOccurrences, rawCity, rawLocationName, rawAddressLine1, rawAddressLine2, rawLocationDetails, rawNavLinks, rawPrice, rawFullDescription, rawUrls, rawMainCategory, rawCategories, rawMedia). Output only the fields defined in the schema.
-3. rawOccurrences: Parse into occurrences. All times are Israel (Asia/Jerusalem). Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, "3 בצהריים" = 15:00, "4 בצהריים" = 16:00, etc. Convert Israel time to UTC (Israel is UTC+2 in winter, UTC+3 in summer/DST — use the offset that applies to the occurrence date). Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (if hasTime: combine date with time in Israel then convert to UTC; if !hasTime: use Israel midnight for that date in UTC), endTime = ISO UTC or null. Set endTime only when there is an explicit end time or when duration clearly implies it (e.g. "מתחילים בשעה 6 בערב ל3 שעות" → 21:00). Do not invent endTime when it is not stated or implied. Interpret flexibly (e.g. "סוף השבוע" → pick a reasonable weekend date from context); only flag when the text contains no date/time at all or an impossible date.
+3. rawOccurrences: Parse into occurrences. All times are Israel (Asia/Jerusalem). Hebrew evening: "שש בערב" = 18:00, "שבע בערב" = 19:00, "שמונה בערב" = 20:00, "תשע בערב" = 21:00, "עשר בערב" = 22:00. "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, etc. Convert Israel time to UTC. Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string, endTime = ISO UTC or null.
+CRITICAL — NO HALLUCINATION (you must NOT invent times):
+- No date at all → flag rawOccurrences. Do not invent a date.
+- Date but no clear start time → hasTime: false, startTime = date at Israel 00:00 → UTC, endTime: null (displays as "כל היום"/ללא).
+- End time stated but no start time (rare) → treat as all-day: hasTime: false, startTime = Israel midnight, endTime: null.
+- Start time stated but NO end time (very common) → hasTime: true, startTime = extracted, endTime: null. NEVER invent endTime. Do not assume "evening ends at 23:00" or "one hour" or "same hour". Leave endTime null.
+- endTime: Set ONLY when there is an explicit end time (e.g. "18:00-21:00", "משש עד תשע") or duration that clearly implies it (e.g. "ל3 שעות"). Otherwise null.
+Example: "28.2 בשעה 6 בערב" or "28.2 בשעה שש בערב" or "החמישי במרץ בשעה 6" → hasTime: true, startTime = 18:00 Israel → UTC, endTime: null. Never add 23:00 or any other invented end time.
+Interpret flexibly (e.g. "סוף השבוע" → pick a reasonable weekend date); only flag when the text contains no date/time at all or an impossible date.
 4. city: The publisher may have provided a city, or it may be empty if they skipped. When provided: fix common Israeli place name typos (e.g. "קריעת שמונה" → "קריית שמונה", ת"א → תל אביב). Do not change correct names; only normalize obvious misspellings. Do not infer a different city. When rawCity is empty, output empty string.
 5. price: Convert to number or null. Free entry (e.g. חינם, בחינם, free, כניסה חופשית, ללא תשלום, אין תשלום) → 0. Ignore a number only when it is clearly not the event price (e.g. merchandise, food at event). If unclear or not a single number, use null. For rawPrice: Flag when the text is empty, or when it neither contains a price/number nor any free-entry phrase (e.g. חינם, בחינם, free, כניסה חופשית). Valid only when the raw text implies a specific price or free entry.
 6. shortDescription: Write in Hebrew (1–2 sentences) unless the event description was in English. Base shortDescription ONLY on the event name (rawTitle) and the full description (rawFullDescription). It must NOT contain or paraphrase: location (city, address, place name, nav links), price, or dates and times. Do not include categories or urls. Summarize only what the event is about — the name and the descriptive content of the event itself.
 7. categories: mainCategory is already provided in the raw event — it MUST be included in the categories array. Add up to 3 additional category ids ONLY from the list below when the event clearly fits (e.g. both music and party). Do not add categories the publisher did not intend. Use ONLY these ids:
 8. urls: Use ONLY rawUrls to produce the urls array. Do NOT include Waze or Google Maps navigation links in urls — those are stored in rawNavLinks and go to location. Do not add Waze/Gmaps URLs from rawNavLinks or rawFullDescription. urls should contain only: event links (tickets, website, registration) and phone numbers from rawUrls. type = "link" for web URLs, type = "phone" for phone numbers. Title = short Hebrew label (e.g. "כרטיסים", "טלפון להרשמה", "אתר האירוע"). If rawUrls is empty, return empty array.
 
-FLAGS: You must always include "flags" (array). When multiple fields are impossible to parse, add an entry for each — include ALL qualifying fields in flags, not just one. Add an entry ONLY when it is truly impossible to output any reasonable value for that field — do NOT flag when a best-effort interpretation is possible. The publisher can edit the processed data afterwards, so prefer filling in your best interpretation over flagging. Flag only when: the raw value is purely irrelevant text (e.g. date/time field contains no date or time at all), logically impossible (e.g. date that does not exist), or completely empty for a required field with no possible inference. For rawPrice: Flag when empty or when the text neither contains a price/number nor any free-entry phrase (e.g. חינם, בחינם, free, כניסה חופשית). Do NOT flag for mere ambiguity, vagueness, or missing details — interpret as well as you can and leave flags empty. Allowed fieldKey values are ONLY: rawTitle, rawOccurrences, rawCity, rawNavLinks, rawPrice, rawFullDescription, rawUrls. Do NOT flag category, location name, address, location details, or media. For "reason" provide a short Hebrew explanation only when you do flag. If you can output any proper data for a field, use empty array [] for flags.
+FLAGS: You must always include "flags" (array). When multiple fields are impossible to parse, add an entry for each — include ALL qualifying fields in flags, not just one. Add an entry ONLY when it is truly impossible to output any reasonable value for that field — do NOT flag when a best-effort interpretation is possible. The publisher can edit the processed data afterwards, so prefer filling in your best interpretation over flagging. Flag only when: the raw value is purely irrelevant text (e.g. date/time field contains no date or time at all — do NOT flag for missing end time; end time is not required), logically impossible (e.g. date that does not exist), or completely empty for a required field with no possible inference. For rawPrice: Flag ONLY when empty or when the text neither contains a price/number nor any free-entry phrase (e.g. חינם, בחינם, free, כניסה חופשית). Do NOT flag when you successfully output a numeric price or 0 (free). Do NOT flag for mere ambiguity, vagueness, or missing details — interpret as well as you can and leave flags empty. Allowed fieldKey values are ONLY: rawTitle, rawOccurrences, rawCity, rawNavLinks, rawPrice, rawFullDescription, rawUrls. Do NOT flag category, location name, address, location details, or media. For "reason" provide a short Hebrew explanation only when you do flag. If you can output any proper data for a field, use empty array [] for flags.
 
 ${categoriesText}`
 }
@@ -178,6 +198,10 @@ async function callOpenAIForPublisherFormat(rawEventWithAll, categoriesList, dat
           city: parsed.city,
           price: parsed.price,
           categoriesCount: parsed.categories.length,
+          ...(Array.isArray(parsed.flags) && parsed.flags.length > 0 && {
+            aiFlags: parsed.flags.map((f) => ({ fieldKey: f.fieldKey, reason: f.reason })),
+            aiOccurrences: parsed.occurrences?.map((o) => ({ date: o.date, hasTime: o.hasTime, startTime: o.startTime, endTime: o.endTime })),
+          }),
         })
         return { result: parsed }
       }
@@ -247,6 +271,14 @@ function buildEventLocation(rawEventWithAll, aiResult, navLinks) {
  */
 export async function formatPublisherEvent(rawEventWithAll, categoriesList, options = {}) {
   const correlationId = options.correlationId
+  const rawKeys = rawEventWithAll && typeof rawEventWithAll === 'object' ? Object.keys(rawEventWithAll) : []
+  const hasFreeLang = !!(rawEventWithAll?.freeLanguageDescription && typeof rawEventWithAll.freeLanguageDescription === 'string')
+  const rawOccForLog = typeof rawEventWithAll?.rawOccurrences === 'string' ? rawEventWithAll.rawOccurrences.trim() : ''
+  log(correlationId, 'info', 'formatPublisherEvent invoked', {
+    rawEventKeys: rawKeys,
+    hasFreeLanguageDescription: hasFreeLang,
+    rawOccurrences: rawOccForLog || '(empty)',
+  })
   const apiKey = (options.openaiApiKey ?? process.env.OPENAI_API_KEY ?? '').trim()
   const model = (options.openaiModel ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL).trim() || DEFAULT_MODEL
 
@@ -266,12 +298,32 @@ export async function formatPublisherEvent(rawEventWithAll, categoriesList, opti
     return { formattedEvent: null, errorReason: `OpenAI format failed (${aiCall.errorReason})` }
   }
   const aiResult = aiCall.result
+  const rawOcc = typeof rawEventWithAll.rawOccurrences === 'string' ? rawEventWithAll.rawOccurrences.trim() : ''
+  const hasExplicitEndTime = rawOccurrencesHasEndTime(rawOcc)
 
   const normalizedOccurrences = (Array.isArray(aiResult.occurrences) ? aiResult.occurrences : []).map((occ) => {
     if (!occ || typeof occ !== 'object') return occ
     const startTime = normalizeOccurrenceTime(occ.startTime)
-    const endTime = occ.endTime != null && occ.endTime !== '' ? normalizeOccurrenceTime(occ.endTime) : null
-    return { ...occ, startTime: startTime ?? occ.startTime, endTime }
+    let endTime = occ.endTime != null && occ.endTime !== '' ? normalizeOccurrenceTime(occ.endTime) : null
+    if (endTime && !hasExplicitEndTime) endTime = null
+    let startIso = startTime ?? occ.startTime
+    if (!startIso || !SERVER_ISO_DATETIME.test(String(startIso).trim())) {
+      const dateStr = typeof occ.date === 'string' ? occ.date.trim().slice(0, 10) : ''
+      if (YYYY_MM_DD.test(dateStr)) {
+        if (occ.hasTime === false) {
+          startIso = israelMidnightToUtcIso(dateStr)
+          if (startIso) endTime = null
+        } else {
+          startIso = localTimeIsraelToUtcIso(dateStr, '00:00') || israelMidnightToUtcIso(dateStr)
+        }
+      }
+    }
+    if (endTime && startIso) {
+      const startMs = new Date(startIso).getTime()
+      const endMs = new Date(endTime).getTime()
+      if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs <= startMs) endTime = null
+    }
+    return { ...occ, startTime: startIso, endTime }
   })
 
   const publisher = rawEventWithAll.publisher
@@ -324,6 +376,13 @@ export async function formatPublisherEvent(rawEventWithAll, categoriesList, opti
     mainCategory: event.mainCategory,
     price: event.price,
     flagsCount: flags.length,
+    ...(flags.length > 0 && {
+      flags: flags.map((f) => ({ fieldKey: f.fieldKey, reason: f.reason })),
+      rawOccurrences: rawOcc,
+      rawOccurrencesLength: rawOcc.length,
+      hasExplicitEndTime,
+      occurrencesNormalized: event.occurrences.map((o) => ({ date: o.date, hasTime: o.hasTime, startTime: o.startTime?.slice(0, 19), endTime: o.endTime?.slice(0, 19) ?? null })),
+    }),
   })
   return { formattedEvent: event, flags }
 }
@@ -497,27 +556,11 @@ const PARSE_OCCURRENCES_SCHEMA = {
 
 /** Server expects ISO 8601 with seconds and Z or offset. Normalize so validation passes. */
 const SERVER_ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/i
-function normalizeOccurrenceTime(s) {
-  if (s == null || typeof s !== 'string') return s
-  let trimmed = s.trim().replace(/\s+/, 'T')
-  if (!trimmed) return s
-  if (SERVER_ISO_DATETIME.test(trimmed)) return trimmed
-  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(\.[0-9]+)?(Z|[+-]\d{2}:?\d{2})?$/i)
-  if (match) {
-    const datePart = match[1]
-    const hh = match[2]
-    const mm = match[3]
-    const ss = match[4] || '00'
-    const frac = match[5] || ''
-    const tz = match[6] || 'Z'
-    return `${datePart}T${hh}:${mm}:${ss}${frac}${tz}`
-  }
-  const d = new Date(trimmed)
-  if (!Number.isNaN(d.getTime())) return d.toISOString()
-  return s
-}
+const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/
 
-const PARSE_OCCURRENCES_SYSTEM_PROMPT = `You parse free-text dates and times (Hebrew or English) into event occurrences. All times are Israel (Asia/Jerusalem). Convert Israel time to UTC: subtract the Israel UTC offset (UTC+2 winter, UTC+3 summer) from the time. Each occurrence: date = YYYY-MM-DD (Israel date), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string in this exact form: YYYY-MM-DDTHH:mm:ssZ (e.g. 2025-02-25T08:00:00Z — always include seconds and trailing Z), endTime = same format or null. Set endTime only when there is an explicit end time or when duration clearly implies it (e.g. "מתחילים בשעה 6 בערב ל3 שעות" → 21:00). Do not invent endTime when it is not stated or implied. Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, etc. If the text cannot be reliably parsed into at least one occurrence, set valid to false and provide reason: a short Hebrew explanation (e.g. "לא הצלחתי לזהות תאריך או שעה ברורה"). When valid is true, set reason to "". Output valid JSON only.`
+const PARSE_OCCURRENCES_SYSTEM_PROMPT = `You parse free-text dates and times (Hebrew or English) into event occurrences. All times are Israel (Asia/Jerusalem). Convert Israel time to UTC. Each occurrence: date = YYYY-MM-DD (Israel date), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (YYYY-MM-DDTHH:mm:ssZ), endTime = same format or null.
+CRITICAL — NO HALLUCINATION: No clear start time → hasTime: false, startTime = date at Israel 00:00 → UTC, endTime: null. End time without start time → hasTime: false, startTime = Israel midnight, endTime: null. Start time without end time (very common) → hasTime: true, startTime = extracted, endTime: null. NEVER invent endTime (do not assume "evening ends at 23:00" or "one hour"). endTime: ONLY when explicit end time (e.g. "18:00-21:00") or duration (e.g. "ל3 שעות") implies it. Example: "28.2 בשעה 6 בערב" or "28.2 בשעה שש בערב" → endTime: null.
+Hebrew evening: "שש בערב" = 18:00, "שבע בערב" = 19:00, "שמונה בערב" = 20:00, "תשע בערב" = 21:00, "עשר בערב" = 22:00. "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, etc. If the text cannot be reliably parsed, set valid: false. Output valid JSON only.`
 
 /**
  * Parse free-text dates/times into occurrences (edit flow).
@@ -567,15 +610,28 @@ export async function parseOccurrencesFromText(text, options = {}) {
     const valid = parsed.valid === true && occurrences.length > 0
     const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : ''
     if (!valid) {
+      log(correlationId, 'info', 'parseOccurrencesFromText', {
+        userContentLength: userContent.length,
+        userContentSample: userContent.length > 80 ? userContent.slice(0, 80) + '...' : userContent,
+        valid,
+        flagReason: reason || 'לא הצלחתי לזהות תאריכים ושעות.',
+      })
       return { occurrences: [], flagReason: reason || 'לא הצלחתי לזהות תאריכים ושעות.' }
     }
+    const hasExplicitEndTime = rawOccurrencesHasEndTime(userContent)
     const normalized = occurrences.map((occ) => {
       if (!occ || typeof occ !== 'object') return occ
       const startTime = normalizeOccurrenceTime(occ.startTime)
-      const endTime = occ.endTime != null && occ.endTime !== '' ? normalizeOccurrenceTime(occ.endTime) : null
+      let endTime = occ.endTime != null && occ.endTime !== '' ? normalizeOccurrenceTime(occ.endTime) : null
+      if (endTime && !hasExplicitEndTime) endTime = null
       return { ...occ, startTime: startTime ?? occ.startTime, endTime }
     })
-    log(correlationId, 'info', 'parseOccurrencesFromText: ok', { count: normalized.length })
+    log(correlationId, 'info', 'parseOccurrencesFromText', {
+      userContentLength: userContent.length,
+      userContentSample: userContent.length > 80 ? userContent.slice(0, 80) + '...' : userContent,
+      valid: true,
+      occurrences: normalized.map((o) => ({ date: o.date, hasTime: o.hasTime, startTime: o.startTime?.slice(0, 19), endTime: o.endTime?.slice(0, 19) ?? null })),
+    })
     return { occurrences: normalized }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -845,5 +901,6 @@ export async function verifyCityInNorthernIsrael(cityName, options = {}) {
   }
 }
 
+export { normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 export { extractNavLinksFromRaw, htmlToWhatsAppMessage, parseFreeLanguageEditRequest, convertMessageToHtml }
 export { detectEventFromFreeText, extractEventFromFreeText } from './freeLanguageExtract.js'

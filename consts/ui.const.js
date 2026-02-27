@@ -22,7 +22,7 @@ export const WELCOME_MODAL = {
   stepTitleCategories: 'בחירת קטגוריות',
   regionsHeading: 'בחרו את האיזורים הרלוונטיים אליכם:',
   categoriesHeading: 'בחרו את הקטגוריות הרלוונטיות לכם:',
-  skipLabel: 'דלג/י',
+  skipLabel: 'דלגו',
   nextStepLabel: 'המשך/י',
   takeMeToScheduleLabel: 'קחו אותי ללו"ז',
 }

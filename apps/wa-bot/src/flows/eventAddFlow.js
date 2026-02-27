@@ -3,6 +3,32 @@
  * Handles timeout, cancel (ביטול / back), validation, media upload, and submit.
  */
 import {
+  generateShortDescription,
+  normalizeCityToListedOrCustom,
+  verifyCityInNorthernIsrael,
+  extractNavLinksFromRaw,
+  parseOccurrencesFromText,
+  parsePriceFromText,
+  parseUrlsFromText,
+  parseFreeLanguageEditRequest,
+  htmlToWhatsAppMessage,
+  convertMessageToHtml,
+  detectEventFromFreeText,
+  extractEventFromFreeText,
+} from 'event-format'
+import { config, normalizePhone } from '../config.js'
+import {
+  EVENT_ADD,
+  EVENT_EDIT,
+  VALIDATION,
+  WELCOME,
+  MAIN_MENU,
+  LOG_PREFIXES,
+} from '../consts/index.js'
+import { getFlagFieldOrder, FLAG_FIELD_CONFIGS } from '../consts/eventAddFields.config.js'
+import { CITIES_LIST } from '../consts/cities.const.js'
+import { CATEGORY_GROUPS, EVENT_CATEGORIES } from '../consts/categories.const.js'
+import {
   sendText,
   sendInteractiveButtons,
   sendInteractiveList,
@@ -19,192 +45,23 @@ import {
 } from '../services/eventsCreate.service.js'
 import { patchDraft } from '../services/eventDraftPatch.service.js'
 import { conversationState } from '../services/conversationState.service.js'
-import { config, normalizePhone } from '../config.js'
-import {
-  generateShortDescription,
-  normalizeCityToListedOrCustom,
-  verifyCityInNorthernIsrael,
-  extractNavLinksFromRaw,
-  parseOccurrencesFromText,
-  parsePriceFromText,
-  parseUrlsFromText,
-  parseFreeLanguageEditRequest,
-  htmlToWhatsAppMessage,
-  convertMessageToHtml,
-  detectEventFromFreeText,
-  extractEventFromFreeText,
-} from 'event-format'
+import { buildEditMenuFirstMessagePayload, buildEditMenuUnclearPayload, EDIT_DONE_ID } from './eventEditFlow.js'
 import { getDateInIsraelFromIso, getTimeInIsraelFromIso } from '../utils/date.helpers.js'
 import { logger } from '../utils/logger.js'
-import {
-  EVENT_ADD_INITIAL,
-  EVENT_ADD_METHOD_CHOICE_BODY,
-  EVENT_ADD_METHOD_AI_BUTTON,
-  EVENT_ADD_METHOD_MANUAL_BUTTON,
-  EVENT_ADD_AI_PROMPT_BODY,
-  EVENT_ADD_AI_PROMPT_FOOTER,
-  EVENT_ADD_AI_BACK_BUTTON,
-  EVENT_ADD_AI_RETRY_BUTTON,
-  EVENT_ADD_AI_EXPECT_TEXT,
-  EVENT_ADD_AI_PROCESSING_ACK,
-  EVENT_ADD_AI_NOT_EVENT_BODY,
-  EVENT_ADD_AI_NO_CATEGORIES_BODY,
-  EVENT_ADD_AI_EXTRACTION_FAILED_BODY,
-  EVENT_ADD_DRAFT_CREATE_FAILED_BODY,
-  EVENT_ADD_ASK_TITLE,
-  EVENT_ADD_ASK_DATETIME,
-  EVENT_ADD_ASK_DATETIME_FOOTER,
-  EVENT_ADD_CATEGORY_INTRO,
-  EVENT_ADD_ASK_CATEGORY_GROUP,
-  EVENT_ADD_ASK_MAIN_CATEGORY,
-  EVENT_ADD_CATEGORY_FOOTER,
-  EVENT_ADD_CHANGE_GROUP_BUTTON,
-  EVENT_ADD_CHANGE_GROUP_ROW_TITLE,
-  EVENT_ADD_LOCATION_INTRO,
-  EVENT_ADD_ASK_PLACE_NAME,
-  EVENT_ADD_SKIP_BUTTON,
-  EVENT_ADD_NO_MEDIA_BUTTON,
-  EVENT_ADD_MEDIA_DONE_BUTTON,
-  EVENT_ADD_ASK_CITY,
-  EVENT_ADD_ASK_REGION,
-  EVENT_ADD_ASK_REGION_IMAGE_PATH,
-  EVENT_ADD_REGION_BUTTONS,
-  EVENT_ADD_ASK_ADDRESS,
-  EVENT_ADD_ASK_ADDRESS_FOOTER,
-  EVENT_ADD_ASK_LOCATION_NOTES,
-  EVENT_ADD_ASK_LOCATION_NOTES_FOOTER,
-  EVENT_ADD_ASK_WAZE_GMAPS,
-  EVENT_ADD_ASK_PRICE,
-  EVENT_ADD_ASK_PRICE_FOOTER,
-  EVENT_ADD_ASK_DESCRIPTION,
-  EVENT_ADD_ASK_LINKS,
-  EVENT_ADD_ASK_LINKS_FOOTER,
-  EVENT_ADD_ASK_MEDIA_FIRST,
-  EVENT_ADD_ASK_MEDIA_MORE,
-  EVENT_ADD_MEDIA_MORE_ONE,
-  EVENT_ADD_MEDIA_MORE_MANY_TEMPLATE,
-  EVENT_ADD_PROCESSING_MESSAGE,
-  EVENT_ADD_SUCCESS,
-  EVENT_ADD_TITLE_MIN,
-  EVENT_ADD_TITLE_MAX,
-  EVENT_ADD_DATETIME_MAX,
-  EVENT_ADD_PLACE_NAME_MAX,
-  EVENT_ADD_CITY_MAX,
-  EVENT_ADD_ADDRESS_MAX,
-  EVENT_ADD_LOCATION_NOTES_MAX,
-  EVENT_ADD_WAZE_GMAPS_MAX,
-  EVENT_ADD_PRICE_MAX,
-  EVENT_ADD_DESCRIPTION_MIN,
-  EVENT_ADD_DESCRIPTION_MAX,
-  EVENT_ADD_LINKS_MAX,
-  EVENT_ADD_VALIDATE_TITLE,
-  EVENT_ADD_VALIDATE_DATETIME,
-  EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP,
-  EVENT_ADD_VALIDATE_MAIN_CATEGORY,
-  EVENT_ADD_VALIDATE_PLACE_NAME,
-  EVENT_ADD_VALIDATE_CITY,
-  EVENT_ADD_VALIDATE_ADDRESS,
-  EVENT_ADD_VALIDATE_LOCATION_NOTES,
-  EVENT_ADD_VALIDATE_WAZE_GMAPS,
-  EVENT_ADD_VALIDATE_PRICE,
-  EVENT_ADD_VALIDATE_DESCRIPTION,
-  EVENT_ADD_VALIDATE_LINKS,
-  EVENT_ADD_VALIDATE_MEDIA,
-  EVENT_ADD_MEDIA_UPLOAD_FAILED,
-  EVENT_ADD_CONFIRM_INTRO,
-  EVENT_ADD_SUCCESS_HEADING,
-  EVENT_ADD_SUCCESS_BODY,
-  EVENT_ADD_SUCCESS_VIEW_PROMPT,
-  EVENT_ADD_SUCCESS_ADD_AGAIN_BUTTON,
-  EVENT_ADD_SUCCESS_MAIN_MENU_BUTTON,
-  EVENT_ADD_CONFIRM_SAVE_BUTTON,
-  EVENT_ADD_CONFIRM_EDIT_BUTTON,
-  EVENT_ADD_CONFIRM_EDIT_RESTART,
-  EVENT_EDIT_ASK_TITLE,
-  EVENT_EDIT_ASK_DESCRIPTION,
-  EVENT_EDIT_ASK_DATETIME,
-  EVENT_EDIT_ASK_DATETIME_FOOTER,
-  EVENT_EDIT_ASK_PRICE,
-  EVENT_EDIT_ASK_PRICE_FOOTER,
-  EVENT_EDIT_PRICE_PARSE_FAIL_MESSAGE,
-  EVENT_EDIT_PRICE_BACK_TO_MENU_BUTTON,
-  EVENT_EDIT_ASK_LINKS,
-  EVENT_EDIT_ASK_LINKS_FOOTER,
-  EVENT_EDIT_ASK_MEDIA,
-  EVENT_EDIT_ASK_MEDIA_FOOTER,
-  EVENT_EDIT_MEDIA_CANCEL_BUTTON,
-  EVENT_EDIT_SUCCESS_MESSAGES,
-  EVENT_EDIT_SUCCESS_VALUE_EMPTY,
-  EVENT_EDIT_SUCCESS_DONE_BUTTON,
-  EVENT_EDIT_SUCCESS_MORE_BUTTON,
-  EVENT_EDIT_SUCCESS_MORE_LOCATION_BUTTON,
-  EVENT_EDIT_SUCCESS_CHOOSE_BODY,
-  EVENT_EDIT_PATCH_ERROR,
-  EVENT_EDIT_DATETIME_PARSE_FAILED,
-  EVENT_EDIT_FREE_LANG_UNCLEAR,
-  EVENT_EDIT_FREE_LANG_CONFIRM_BODY,
-  EVENT_EDIT_FREE_LANG_CONFIRM_BUTTON,
-  EVENT_EDIT_FREE_LANG_CANCEL_BUTTON,
-  EVENT_EDIT_FREE_LANG_SUCCESS_BODY,
-  EVENT_EDIT_FREE_LANG_SUGGESTED_INTRO,
-  EVENT_EDIT_FREE_LANG_SUCCESS_PROMPT,
-  EVENT_EDIT_FREE_LANG_SUCCESS_MORE_BUTTON,
-  EVENT_EDIT_FREE_LANG_SUCCESS_DONE_BUTTON,
-  EVENT_EDIT_EXTRA_CANNOT_REMOVE_LAST,
-  EVENT_EDIT_LOCATION_CITY_UNRECOGNIZED,
-  EVENT_ADD_MAX_CATEGORIES,
-  EVENT_EDIT_EXTRA_CATEGORIES_BODY,
-  EVENT_EDIT_EXTRA_CATEGORIES_NO_EXTRAS,
-  EVENT_EDIT_EXTRA_ADD_BUTTON,
-  EVENT_EDIT_EXTRA_REMOVE_BUTTON,
-  EVENT_EDIT_EXTRA_BACK_BUTTON,
-  EVENT_EDIT_EXTRA_MAX_REACHED,
-  EVENT_EDIT_EXTRA_REMOVE_ASK,
-  EVENT_EDIT_EXTRA_NO_REMOVE,
-  EVENT_EDIT_LOCATION_MENU_BODY,
-  EVENT_EDIT_LOCATION_MENU_FOOTER,
-  EVENT_EDIT_LOCATION_BACK_ROW,
-  EVENT_EDIT_LOCATION_DONE_ROW,
-  EVENT_EDIT_LOCATION_FIELD_ROWS,
-  EVENT_EDIT_LOCATION_ASK_PLACE_NAME,
-  EVENT_EDIT_LOCATION_ASK_CITY,
-  EVENT_EDIT_LOCATION_ASK_REGION,
-  EVENT_EDIT_LOCATION_ASK_ADDRESS,
-  EVENT_EDIT_LOCATION_ASK_DETAILS,
-  EVENT_EDIT_LOCATION_ASK_GMAPS,
-  EVENT_EDIT_LOCATION_ASK_WAZE,
-  EVENT_ADD_CITY_OUTSIDE_REGION,
-  EVENT_EDIT_CITY_OUTSIDE_REGION,
-  EVENT_EDIT_FREE_LANG_CITY_OUTSIDE_REMOVED,
-  EVENT_ADD_FORMAT_FAILED,
-  EVENT_ADD_FORMAT_RETRY_BUTTON,
-  EVENT_ADD_SUBMIT_FAILED,
-  EVENT_ADD_SUBMIT_FAILED_WITH_REASON,
-  EVENT_ADD_CONFIRM_SAVE_ERROR,
-  EVENT_ADD_FLAGS_INTRO,
-  EVENT_ADD_FLAGS_FILL_PROMPT,
-  LOG_PREFIXES,
-  WELCOME_INTERACTIVE,
-  EVENT_EDIT_DONE_ROW,
-  EVENT_EDIT_MENU_ROWS,
-} from '../consts/index.js'
-import { getFlagFieldOrder, FLAG_FIELD_CONFIGS } from '../consts/eventAddFields.config.js'
-import { CITIES_LIST } from '../consts/cities.const.js'
-import { buildEditMenuFirstMessagePayload, buildEditMenuUnclearPayload, buildLocationEditMenuPayload, EDIT_DONE_ID } from './eventEditFlow.js'
-import { CATEGORY_GROUPS, EVENT_CATEGORIES } from '../consts/categories.const.js'
 
 const VALID_CATEGORY_IDS = new Set(Object.keys(EVENT_CATEGORIES))
 const VALID_GROUP_IDS = new Set(CATEGORY_GROUPS.map((g) => g.id))
 
-/** Map from location edit list row id to { key: location field key, ask: prompt string }. */
-const LOCATION_FIELD_MAP = {
-  loc_place_name: { key: 'locationName', ask: EVENT_EDIT_LOCATION_ASK_PLACE_NAME },
-  loc_city: { key: 'city', ask: EVENT_EDIT_LOCATION_ASK_CITY },
-  loc_region: { key: 'region', ask: EVENT_EDIT_LOCATION_ASK_REGION, inputType: 'region_buttons' },
-  loc_address: { key: 'addressLine1', ask: EVENT_EDIT_LOCATION_ASK_ADDRESS },
-  loc_details: { key: 'locationDetails', ask: EVENT_EDIT_LOCATION_ASK_DETAILS },
-  loc_gmaps: { key: 'gmapsNavLink', ask: EVENT_EDIT_LOCATION_ASK_GMAPS },
-  loc_waze: { key: 'wazeNavLink', ask: EVENT_EDIT_LOCATION_ASK_WAZE },
+/**
+ * Get user-friendly Hebrew message for patch failure (use when result.success is false).
+ * @param {{ success: boolean, reason?: string }} result
+ * @returns {string}
+ */
+function getPatchFailureUserMessage(result) {
+  const reason = result?.reason
+  if (VALIDATION.REASON_TO_MESSAGE[reason]) return VALIDATION.REASON_TO_MESSAGE[reason]
+  if (reason && typeof reason === 'string' && reason.length <= 120) return reason
+  return VALIDATION.PATCH_VALIDATION_DEFAULT
 }
 
 const STEPS = conversationState.STEPS
@@ -243,9 +100,13 @@ const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_EDIT_EXTRA_ADD_GROUP,
   STEPS.EVENT_ADD_EDIT_EXTRA_ADD_CATEGORY,
   STEPS.EVENT_ADD_EDIT_EXTRA_REMOVE,
-  STEPS.EVENT_ADD_EDIT_LOCATION_MENU,
-  STEPS.EVENT_ADD_EDIT_LOCATION_FIELD,
-  STEPS.EVENT_ADD_EDIT_REGION,
+  STEPS.EVENT_ADD_EDIT_CATEGORIES_CHOICE,
+  STEPS.EVENT_ADD_EDIT_LOCATION_PLACE,
+  STEPS.EVENT_ADD_EDIT_LOCATION_CITY,
+  STEPS.EVENT_ADD_EDIT_LOCATION_REGION,
+  STEPS.EVENT_ADD_EDIT_LOCATION_ADDRESS,
+  STEPS.EVENT_ADD_EDIT_LOCATION_NOTES,
+  STEPS.EVENT_ADD_EDIT_NAV_LINKS,
   STEPS.EVENT_ADD_EDIT_FREE_LANG_REGION,
   STEPS.EVENT_ADD_EDIT_MEDIA_INTRO,
 ]
@@ -260,8 +121,8 @@ function buildMediaCountMessage(mediaCount) {
 
 /** Body for "עוד X תמונות/סרטונים" with button. remaining = MAX_MEDIA - mediaCount. */
 function buildMediaMoreBody(remaining) {
-  if (remaining <= 1) return EVENT_ADD_MEDIA_MORE_ONE
-  return EVENT_ADD_MEDIA_MORE_MANY_TEMPLATE.replace('{remaining}', String(remaining))
+  if (remaining <= 1) return EVENT_ADD.MEDIA_MORE_ONE
+  return EVENT_ADD.MEDIA_MORE_MANY_TEMPLATE.replace('{remaining}', String(remaining))
 }
 
 /**
@@ -282,7 +143,7 @@ export function sendMediaMoreMessageIfNeeded(phoneNumberId, from) {
   ) {
     return sendInteractiveButtons(phoneNumberId, from, {
       body: buildMediaMoreBody(MAX_MEDIA - media.length),
-      buttons: [EVENT_ADD_MEDIA_DONE_BUTTON],
+      buttons: [EVENT_ADD.MEDIA_DONE_BUTTON],
     })
   }
 }
@@ -349,14 +210,55 @@ function applyEventAddTestModeAndGoToMedia(phoneNumberId, from) {
   })
   logger.info(LOG_PREFIXES.EVENT_ADD, 'Test mode: skip to media', from)
   return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_ADD_ASK_MEDIA_FIRST,
-    buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
+    body: EVENT_ADD.ASK_MEDIA_FIRST,
+    buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
   })
 }
 
 const WHATSAPP_MESSAGE_MAX = 4096
 /** WhatsApp interactive button message body max (one message with intro + preview + buttons). */
 const WHATSAPP_INTERACTIVE_BODY_MAX = 1024
+
+/**
+ * Split text into chunks so the last chunk can carry interactive buttons (must be ≤ maxLen).
+ * Prefers breaking at newlines for readability.
+ * @param {string} text
+ * @param {number} [maxLen]
+ * @returns {string[]}
+ */
+function splitBodyForButtons(text, maxLen = WHATSAPP_INTERACTIVE_BODY_MAX) {
+  if (!text || text.length <= maxLen) return [text].filter(Boolean)
+  const chunks = []
+  let remaining = text
+  while (remaining.length > maxLen) {
+    const segment = remaining.slice(0, maxLen)
+    const lastNewline = segment.lastIndexOf('\n')
+    const breakAt = lastNewline >= maxLen * 0.5 ? lastNewline + 1 : maxLen
+    chunks.push(remaining.slice(0, breakAt).trimEnd())
+    remaining = remaining.slice(breakAt).replace(/^\n+/, '')
+  }
+  if (remaining.trim()) chunks.push(remaining.trim())
+  return chunks
+}
+
+/**
+ * Send body with quick-reply buttons. If body exceeds max length, split into multiple messages; the last message carries the buttons.
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @param {string} body
+ * @param {Array<{ id: string, title: string }>} buttons
+ * @returns {Promise<object>}
+ */
+async function sendBodyWithButtons(phoneNumberId, from, body, buttons) {
+  const chunks = splitBodyForButtons(body)
+  if (chunks.length === 1) {
+    return sendInteractiveButtons(phoneNumberId, from, { body: chunks[0], buttons })
+  }
+  for (let i = 0; i < chunks.length - 1; i++) {
+    await sendText(phoneNumberId, from, chunks[i])
+  }
+  return sendInteractiveButtons(phoneNumberId, from, { body: chunks[chunks.length - 1], buttons })
+}
 
 /**
  * Format YYYY-MM-DD as DD.MM.YYYY for display.
@@ -486,7 +388,7 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
 
 /**
  * Build the value block shown after edit success (new line + empty line + value in summary format).
- * Uses EVENT_EDIT_SUCCESS_VALUE_EMPTY for empty values.
+ * Uses EVENT_EDIT.SUCCESS_VALUE_EMPTY for empty values.
  * @param {'title' | 'description' | 'mainCategory' | 'location' | 'datetime' | 'price' | 'links'} fieldKey
  * @param {Record<string, unknown>} formattedEvent - result.event or eventAddFormattedPreview
  * @param {Record<string, { label: string }>} eventCategories - id → { label }
@@ -494,7 +396,7 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
  * @returns {string}
  */
 function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, options = {}) {
-  const empty = EVENT_EDIT_SUCCESS_VALUE_EMPTY
+  const empty = EVENT_EDIT.SUCCESS_VALUE_EMPTY
   const catLabel = (id) => (eventCategories[id]?.label ?? id)
   const ev = formattedEvent && typeof formattedEvent === 'object' ? formattedEvent : {}
 
@@ -585,15 +487,16 @@ function getRegionDisplayName(loc) {
   if (!loc || typeof loc !== 'object') return ''
   if (loc.cityType === 'listed' && loc.city) {
     const entry = CITIES_LIST.find((c) => c.id === loc.city)
-    return entry?.region ? (EVENT_ADD_REGION_BUTTONS.find((b) => b.id === entry.region)?.title ?? entry.region) : ''
+    return entry?.region ? (EVENT_ADD.REGION_BUTTONS.find((b) => b.id === entry.region)?.title ?? entry.region) : ''
   }
-  if (loc.region) return EVENT_ADD_REGION_BUTTONS.find((b) => b.id === loc.region)?.title ?? loc.region
+  if (loc.region) return EVENT_ADD.REGION_BUTTONS.find((b) => b.id === loc.region)?.title ?? loc.region
   return ''
 }
 
 /**
  * Merge free-language edits into a copy of the current event (for display and for patch).
- * Location sub-field edits are merged into a single location object.
+ * Location: full "location" edit takes precedence; wazeNavLink/gmapsNavLink from separate edits
+ * are merged in (nav-link-only edits are allowed per parseFreeLanguageEditRequest).
  * @param {Array<{ fieldKey: string, newValue: unknown }>} edits
  * @param {Record<string, unknown>} currentEvent
  * @returns {Record<string, unknown>}
@@ -643,7 +546,7 @@ function buildSuggestedEditsBody(edits, currentEvent) {
       const html = merged.fullDescription
       const plain = htmlToWhatsAppMessage(typeof html === 'string' ? html : '')
       const truncated = plain.length > 800 ? plain.slice(0, 797) + '...' : plain
-      blocks.push(`*תיאור מלא:*\n${truncated || EVENT_EDIT_SUCCESS_VALUE_EMPTY}`)
+      blocks.push(`*תיאור מלא:*\n${truncated || EVENT_EDIT.SUCCESS_VALUE_EMPTY}`)
     } else if (key === 'location') {
       blocks.push(buildEditSuccessValueBlock(key, merged, EVENT_CATEGORIES, { includeNavLinks: hasNavLinkEdit }))
     } else {
@@ -663,19 +566,11 @@ function buildSuggestedEditsBody(edits, currentEvent) {
  */
 async function sendFreeLangSuggestedEdits(phoneNumberId, from, currentEvent, edits) {
   const body = buildSuggestedEditsBody(edits, currentEvent)
-  const intro = EVENT_EDIT_FREE_LANG_SUGGESTED_INTRO + '\n\n'
-  const fullBody = intro + body
-  if (fullBody.length <= WHATSAPP_INTERACTIVE_BODY_MAX) {
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: fullBody,
-      buttons: [EVENT_EDIT_FREE_LANG_CONFIRM_BUTTON, EVENT_EDIT_FREE_LANG_CANCEL_BUTTON],
-    })
-  }
-  await sendText(phoneNumberId, from, fullBody)
-  return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_EDIT_FREE_LANG_CONFIRM_BODY,
-    buttons: [EVENT_EDIT_FREE_LANG_CONFIRM_BUTTON, EVENT_EDIT_FREE_LANG_CANCEL_BUTTON],
-  })
+  const fullBody = EVENT_EDIT.FREE_LANG_SUGGESTED_INTRO + '\n\n' + body
+  return sendBodyWithButtons(phoneNumberId, from, fullBody, [
+    EVENT_EDIT.FREE_LANG_CONFIRM_BUTTON,
+    EVENT_EDIT.FREE_LANG_CANCEL_BUTTON,
+  ])
 }
 
 /**
@@ -724,18 +619,11 @@ function buildPatchPayloadFromFreeLangEdits(edits, currentEvent) {
  */
 async function sendConfirmSummary(phoneNumberId, from, formattedPreview) {
   const previewParts = buildEventPreviewMessage(formattedPreview, EVENT_CATEGORIES)
-  const combinedBody = EVENT_ADD_CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
-  if (combinedBody.length <= WHATSAPP_INTERACTIVE_BODY_MAX) {
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: combinedBody,
-      buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-    })
-  }
-  await sendText(phoneNumberId, from, combinedBody)
-  return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_EDIT_SUCCESS_CHOOSE_BODY,
-    buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-  })
+  const combinedBody = EVENT_ADD.CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
+  return sendBodyWithButtons(phoneNumberId, from, combinedBody, [
+    EVENT_ADD.CONFIRM_SAVE_BUTTON,
+    EVENT_ADD.CONFIRM_EDIT_BUTTON,
+  ])
 }
 
 /**
@@ -747,11 +635,99 @@ async function sendConfirmSummary(phoneNumberId, from, formattedPreview) {
 function sendUpdateSuccessAndClear(phoneNumberId, from) {
   conversationState.clear(from)
   conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
-  return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+  return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
 }
 
 /**
- * After collecting all flagged field inputs: re-run processDraft, then branch on flags or go to confirm.
+ * Merge user flag inputs into formattedEvent (free-lang flow). No second AI.
+ * @param {object} formattedEvent - base from extraction
+ * @param {object} state - with eventAdd* from flag inputs
+ * @param {string[]} flagFieldOrder - fields user was asked to fill
+ * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string }} [options]
+ * @returns {Promise<object>}
+ */
+async function mergeUserFlagInputsIntoFormattedEvent(formattedEvent, state, flagFieldOrder, options = {}) {
+  const merged = { ...formattedEvent }
+  const loc = { ...(formattedEvent.location && typeof formattedEvent.location === 'object' ? formattedEvent.location : {}) }
+
+  for (const fieldKey of flagFieldOrder || []) {
+    if (fieldKey === 'rawPrice') {
+      const text = (state.eventAddPrice ?? '').trim()
+      if (text) {
+        const result = await parsePriceFromText(text, options)
+        merged.price = result.price
+      }
+    } else if (fieldKey === 'rawOccurrences') {
+      const text = (state.eventAddDateTime ?? '').trim()
+      if (text) {
+        const result = await parseOccurrencesFromText(text, options)
+        if (result.occurrences?.length) {
+          merged.occurrences = result.occurrences
+        }
+      }
+    } else if (fieldKey === 'rawTitle') {
+      const v = (state.eventAddTitle ?? '').trim()
+      if (v) merged.Title = v
+    } else if (fieldKey === 'rawFullDescription') {
+      const v = (state.eventAddDescription ?? '').trim()
+      if (v) merged.fullDescription = convertMessageToHtml(v)
+    } else if (fieldKey === 'rawLocation') {
+      const name = (state.eventAddPlaceName ?? '').trim()
+      if (name) loc.locationName = name
+      const cityResult = state.eventAddCityResult
+      const cityStr = (state.eventAddCity ?? '').trim()
+      const regionStr = (state.eventAddRegion ?? '').trim()
+      if (cityResult?.type === 'listed' && cityResult?.value) {
+        loc.city = cityResult.value.cityId ?? cityStr
+        loc.cityType = 'listed'
+        loc.region = undefined
+      } else if (cityStr) {
+        loc.city = cityStr
+        loc.cityType = 'custom'
+        loc.region = regionStr || undefined
+      }
+    } else if (fieldKey === 'rawCity' || fieldKey === 'rawCityOutsideNorth' || fieldKey === 'rawRegion') {
+      const cityResult = state.eventAddCityResult
+      const cityStr = (state.eventAddCity ?? '').trim()
+      const regionStr = (state.eventAddRegion ?? '').trim()
+      if (cityResult?.type === 'listed' && cityResult?.value) {
+        loc.city = cityResult.value.cityId ?? cityStr
+        loc.cityType = 'listed'
+        loc.region = undefined
+      } else if (cityStr) {
+        loc.city = cityStr
+        loc.cityType = 'custom'
+        loc.region = regionStr || undefined
+      }
+    } else if (fieldKey === 'rawNavLinks') {
+      const text = (state.eventAddNavLinks ?? '').trim()
+      if (text) {
+        const links = extractNavLinksFromRaw(text, text)
+        if (links.wazeNavLink) loc.wazeNavLink = links.wazeNavLink
+        if (links.gmapsNavLink) loc.gmapsNavLink = links.gmapsNavLink
+      }
+    } else if (fieldKey === 'rawUrls') {
+      const text = (state.eventAddLinks ?? '').trim()
+      if (text) {
+        const result = await parseUrlsFromText(text, options)
+        if (result.urls?.length) merged.urls = result.urls
+      }
+    } else if (fieldKey === 'rawMainCategory') {
+      const main = (state.eventAddMainCategory ?? '').trim()
+      const extras = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
+      if (main) {
+        merged.mainCategory = main
+        merged.categories = [main, ...extras.filter((c) => c !== main)].filter(Boolean)
+      }
+    }
+  }
+
+  merged.location = loc
+  return merged
+}
+
+/**
+ * After collecting all flagged field inputs: for free-lang merge into formattedEvent and POST; for structured run processDraft.
  * @param {string} phoneNumberId
  * @param {string} from
  * @param {object} state - current state (with updated eventAdd* from flag inputs)
@@ -759,26 +735,52 @@ function sendUpdateSuccessAndClear(phoneNumberId, from) {
  * @returns {Promise<object>}
  */
 async function runProcessDraftAfterFlagInput(phoneNumberId, from, state, context) {
+  logger.info(LOG_PREFIXES.EVENT_ADD, 'runProcessDraftAfterFlagInput', from, {
+    eventAddFromFreeLang: !!state.eventAddFromFreeLang,
+    hasFormattedEvent: !!(state.eventAddFormattedEvent && typeof state.eventAddFormattedEvent === 'object'),
+    eventAddPendingMediaStep: !!state.eventAddPendingMediaStep,
+  })
   const draftId = state.eventAddDraftId
   if (!draftId) {
     conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA })
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_FORMAT_FAILED,
-      buttons: [EVENT_ADD_FORMAT_RETRY_BUTTON],
+      body: EVENT_ADD.FORMAT_FAILED,
+      buttons: [EVENT_ADD.FORMAT_RETRY_BUTTON],
     })
   }
   const publisherInfo = { phone: from, name: context?.profileName ?? '', waId: from }
-  const rawEvent = buildRawEvent(state, publisherInfo)
   const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
   const mainCategory = (state.eventAddMainCategory ?? '').trim()
   const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
-  await sendText(phoneNumberId, from, EVENT_ADD_PROCESSING_MESSAGE)
-  const processResult = await processDraft(draftId, { rawEvent, media, mainCategory, categories })
+  await sendText(phoneNumberId, from, EVENT_ADD.PROCESSING_MESSAGE)
+
+  let processResult
+  if (state.eventAddFromFreeLang && state.eventAddFormattedEvent) {
+    logger.info(LOG_PREFIXES.EVENT_ADD, 'runProcessDraftAfterFlagInput: useFormattedEvent true', from)
+    const flagFieldOrder = Array.isArray(state.eventAddFlagFieldOrder) ? state.eventAddFlagFieldOrder : []
+    const mergedFormattedEvent = await mergeUserFlagInputsIntoFormattedEvent(
+      state.eventAddFormattedEvent,
+      state,
+      flagFieldOrder,
+      { openaiApiKey: config.openaiApiKey, openaiModel: config.openaiModel, correlationId: from },
+    )
+    const eventWithMedia = { ...mergedFormattedEvent, media: media.length > 0 ? media : mergedFormattedEvent.media }
+    processResult = await processDraft(draftId, {
+      formattedEvent: eventWithMedia,
+      media,
+      mainCategory,
+      categories,
+    })
+  } else {
+    logger.info(LOG_PREFIXES.EVENT_ADD, 'runProcessDraftAfterFlagInput: useFormattedEvent false', from)
+    const rawEvent = buildRawEvent(state, publisherInfo)
+    processResult = await processDraft(draftId, { rawEvent, media, mainCategory, categories })
+  }
   if (!processResult.success || !processResult.formattedEvent) {
     conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA })
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_FORMAT_FAILED,
-      buttons: [EVENT_ADD_FORMAT_RETRY_BUTTON],
+      body: EVENT_ADD.FORMAT_FAILED,
+      buttons: [EVENT_ADD.FORMAT_RETRY_BUTTON],
     })
   }
   const flags = Array.isArray(processResult.flags) ? processResult.flags : []
@@ -793,18 +795,11 @@ async function runProcessDraftAfterFlagInput(phoneNumberId, from, state, context
         eventAddFlagIndex: undefined,
       })
       const previewParts = buildEventPreviewMessage(processResult.formattedEvent, EVENT_CATEGORIES)
-      const combinedBody = EVENT_ADD_CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
-      if (combinedBody.length <= WHATSAPP_INTERACTIVE_BODY_MAX) {
-        return sendInteractiveButtons(phoneNumberId, from, {
-          body: combinedBody,
-          buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-        })
-      }
-      await sendText(phoneNumberId, from, combinedBody)
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_EDIT_SUCCESS_CHOOSE_BODY,
-        buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-      })
+      const combinedBody = EVENT_ADD.CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
+      return sendBodyWithButtons(phoneNumberId, from, combinedBody, [
+        EVENT_ADD.CONFIRM_SAVE_BUTTON,
+        EVENT_ADD.CONFIRM_EDIT_BUTTON,
+      ])
     }
     conversationState.set(from, {
       eventAddFlags: flags,
@@ -821,27 +816,28 @@ async function runProcessDraftAfterFlagInput(phoneNumberId, from, state, context
     const s = conversationState.get(from)
     return sendAskForFlagField(phoneNumberId, from, s, flagFieldOrder[0])
   }
+  const goToMedia = state.eventAddPendingMediaStep === true
   conversationState.set(from, {
     eventAddFormattedPreview: processResult.formattedEvent,
     eventAddDraftProcessed: true,
-    step: STEPS.EVENT_ADD_CONFIRM,
+    step: goToMedia ? STEPS.EVENT_ADD_MEDIA : STEPS.EVENT_ADD_CONFIRM,
     eventAddFlags: undefined,
     eventAddFlagFieldOrder: undefined,
     eventAddFlagIndex: undefined,
+    eventAddPendingMediaStep: undefined,
   })
-  const previewParts = buildEventPreviewMessage(processResult.formattedEvent, EVENT_CATEGORIES)
-  const combinedBody = EVENT_ADD_CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
-  if (combinedBody.length <= WHATSAPP_INTERACTIVE_BODY_MAX) {
+  if (goToMedia) {
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: combinedBody,
-      buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
+      body: EVENT_ADD.ASK_MEDIA_FIRST,
+      buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
     })
   }
-  await sendText(phoneNumberId, from, combinedBody)
-  return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_EDIT_SUCCESS_CHOOSE_BODY,
-    buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-  })
+  const previewParts = buildEventPreviewMessage(processResult.formattedEvent, EVENT_CATEGORIES)
+  const combinedBody = EVENT_ADD.CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
+  return sendBodyWithButtons(phoneNumberId, from, combinedBody, [
+    EVENT_ADD.CONFIRM_SAVE_BUTTON,
+    EVENT_ADD.CONFIRM_EDIT_BUTTON,
+  ])
 }
 
 /**
@@ -869,10 +865,10 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
     if (!result.success) {
       logger.error(LOG_PREFIXES.EVENT_ADD, 'Edit media patch failed', from, result.reason)
       conversationState.set(from, { eventAddConfirmPending: undefined })
-      await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+      await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
       return sendInteractiveButtons(phoneNumberId, from, {
         body: buildMediaMoreBody(MAX_MEDIA - media.length),
-        buttons: [EVENT_ADD_MEDIA_DONE_BUTTON],
+        buttons: [EVENT_ADD.MEDIA_DONE_BUTTON],
       })
     }
     const updatedEvent = result.event || state.eventAddFormattedPreview
@@ -882,8 +878,8 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
       eventAddEditMediaMode: undefined,
       eventAddConfirmPending: undefined,
     })
-    let body = EVENT_EDIT_SUCCESS_MESSAGES.media + '\n\n' + buildEditSuccessValueBlock('media', updatedEvent || {}, EVENT_CATEGORIES)
-    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.media
+    let body = EVENT_EDIT.SUCCESS_MESSAGES.media + '\n\n' + buildEditSuccessValueBlock('media', updatedEvent || {}, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.media
     return sendEditSuccessQuickReplies(phoneNumberId, from, body)
   }
 
@@ -891,7 +887,14 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
   const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
   const mainCategory = (state.eventAddMainCategory ?? '').trim()
   const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
-  const payloadSummary = { mediaCount: media.length, hasRawTitle: !!rawEvent.rawTitle }
+  const payloadSummary = {
+    mediaCount: media.length,
+    hasRawTitle: !!rawEvent.rawTitle,
+    eventAddFromFreeLang: !!state.eventAddFromFreeLang,
+    eventAddDraftProcessed: !!state.eventAddDraftProcessed,
+    draftId: !!state.eventAddDraftId,
+    hasFormattedEvent: !!(state.eventAddFormattedEvent && typeof state.eventAddFormattedEvent === 'object'),
+  }
   logger.info(LOG_PREFIXES.EVENT_ADD, 'goToConfirmOrRetryMedia', from, payloadSummary)
 
   if (draftId && state.eventAddDraftProcessed) {
@@ -905,8 +908,8 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
       logger.error(LOG_PREFIXES.EVENT_ADD, 'Media patch failed (draft already processed)', from, patchResult.reason)
       conversationState.set(from, { eventAddConfirmPending: undefined })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_FORMAT_FAILED,
-        buttons: [EVENT_ADD_FORMAT_RETRY_BUTTON],
+        body: EVENT_ADD.FORMAT_FAILED,
+        buttons: [EVENT_ADD.FORMAT_RETRY_BUTTON],
       })
     }
     const preview = patchResult.event || state.eventAddFormattedPreview
@@ -916,21 +919,14 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
       eventAddConfirmPending: undefined,
     })
     const previewParts = buildEventPreviewMessage(preview || {}, EVENT_CATEGORIES)
-    const combinedBody = EVENT_ADD_CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
-    if (combinedBody.length <= WHATSAPP_INTERACTIVE_BODY_MAX) {
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: combinedBody,
-        buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-      })
-    }
-    await sendText(phoneNumberId, from, combinedBody)
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_EDIT_SUCCESS_CHOOSE_BODY,
-      buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-    })
+    const combinedBody = EVENT_ADD.CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
+    return sendBodyWithButtons(phoneNumberId, from, combinedBody, [
+      EVENT_ADD.CONFIRM_SAVE_BUTTON,
+      EVENT_ADD.CONFIRM_EDIT_BUTTON,
+    ])
   }
 
-  await sendText(phoneNumberId, from, EVENT_ADD_PROCESSING_MESSAGE)
+  await sendText(phoneNumberId, from, EVENT_ADD.PROCESSING_MESSAGE)
 
   if (!draftId) {
     const body = { rawEvent, media, mainCategory, categories }
@@ -939,20 +935,41 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
       logger.error(LOG_PREFIXES.EVENT_ADD, 'Draft create failed', from)
       conversationState.set(from, { eventAddConfirmPending: undefined })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_DRAFT_CREATE_FAILED_BODY,
-        buttons: [EVENT_ADD_FORMAT_RETRY_BUTTON],
+        body: EVENT_ADD.DRAFT_CREATE_FAILED_BODY,
+        buttons: [EVENT_ADD.FORMAT_RETRY_BUTTON],
       })
     }
     draftId = draftResult.id
     conversationState.set(from, { eventAddDraftId: draftId })
   }
-  const processResult = await processDraft(draftId, { rawEvent, media, mainCategory, categories })
+
+  let processResult
+  if (state.eventAddFromFreeLang && state.eventAddFormattedEvent) {
+    logger.info(LOG_PREFIXES.EVENT_ADD, 'goToConfirmOrRetryMedia: using formattedEvent bypass (free-lang)', from)
+    const flagFieldOrder = Array.isArray(state.eventAddFlagFieldOrder) ? state.eventAddFlagFieldOrder : []
+    const mergedFormattedEvent = await mergeUserFlagInputsIntoFormattedEvent(
+      state.eventAddFormattedEvent,
+      state,
+      flagFieldOrder,
+      { openaiApiKey: config.openaiApiKey, openaiModel: config.openaiModel, correlationId: from },
+    )
+    const eventWithMedia = { ...mergedFormattedEvent, media: media.length > 0 ? media : mergedFormattedEvent.media }
+    processResult = await processDraft(draftId, {
+      formattedEvent: eventWithMedia,
+      media,
+      mainCategory,
+      categories,
+    })
+  } else {
+    logger.info(LOG_PREFIXES.EVENT_ADD, 'goToConfirmOrRetryMedia: using rawEvent (structured flow)', from)
+    processResult = await processDraft(draftId, { rawEvent, media, mainCategory, categories })
+  }
   if (!processResult.success || !processResult.formattedEvent) {
     logger.info(LOG_PREFIXES.EVENT_ADD, 'Process failed', from, { draftId, reason: processResult.reason || 'no formattedEvent' })
     conversationState.set(from, { eventAddConfirmPending: undefined })
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_FORMAT_FAILED,
-      buttons: [EVENT_ADD_FORMAT_RETRY_BUTTON],
+      body: EVENT_ADD.FORMAT_FAILED,
+      buttons: [EVENT_ADD.FORMAT_RETRY_BUTTON],
     })
   }
   const flags = Array.isArray(processResult.flags) ? processResult.flags : []
@@ -965,18 +982,11 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
         eventAddConfirmPending: undefined,
       })
       const previewParts = buildEventPreviewMessage(processResult.formattedEvent, EVENT_CATEGORIES)
-      const combinedBody = EVENT_ADD_CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
-      if (combinedBody.length <= WHATSAPP_INTERACTIVE_BODY_MAX) {
-        return sendInteractiveButtons(phoneNumberId, from, {
-          body: combinedBody,
-          buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-        })
-      }
-      await sendText(phoneNumberId, from, combinedBody)
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_EDIT_SUCCESS_CHOOSE_BODY,
-        buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-      })
+      const combinedBody = EVENT_ADD.CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
+      return sendBodyWithButtons(phoneNumberId, from, combinedBody, [
+        EVENT_ADD.CONFIRM_SAVE_BUTTON,
+        EVENT_ADD.CONFIRM_EDIT_BUTTON,
+      ])
     }
     conversationState.set(from, {
       eventAddFlags: flags,
@@ -1000,24 +1010,17 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
     eventAddConfirmPending: undefined,
   })
   const previewParts = buildEventPreviewMessage(processResult.formattedEvent, EVENT_CATEGORIES)
-  const combinedBody = EVENT_ADD_CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
-  if (combinedBody.length <= WHATSAPP_INTERACTIVE_BODY_MAX) {
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: combinedBody,
-      buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-    })
-  }
-  await sendText(phoneNumberId, from, combinedBody)
-  return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_EDIT_SUCCESS_CHOOSE_BODY,
-    buttons: [EVENT_ADD_CONFIRM_SAVE_BUTTON, EVENT_ADD_CONFIRM_EDIT_BUTTON],
-  })
+  const combinedBody = EVENT_ADD.CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
+  return sendBodyWithButtons(phoneNumberId, from, combinedBody, [
+    EVENT_ADD.CONFIRM_SAVE_BUTTON,
+    EVENT_ADD.CONFIRM_EDIT_BUTTON,
+  ])
 }
 
 /** WhatsApp interactive list allows max 10 rows total. One section, 4 rows (group labels). */
 function buildCategoryGroupList() {
   return {
-    body: EVENT_ADD_ASK_CATEGORY_GROUP,
+    body: EVENT_ADD.ASK_CATEGORY_GROUP,
     button: 'בחר קבוצה',
     sections: [
       {
@@ -1035,7 +1038,7 @@ function buildCategoryGroupList() {
 function buildCategoryGroupListPayload() {
   return {
     ...buildCategoryGroupList(),
-    body: EVENT_ADD_CATEGORY_INTRO + '\n' + EVENT_ADD_ASK_CATEGORY_GROUP,
+    body: EVENT_ADD.CATEGORY_INTRO + '\n' + EVENT_ADD.ASK_CATEGORY_GROUP,
   }
 }
 
@@ -1050,8 +1053,8 @@ function getExtraCategoriesBody(preview) {
   const extraIds = mainId ? cats.filter((id) => id !== mainId) : [...cats]
   const labels = extraIds.map((id) => EVENT_CATEGORIES[id]?.label ?? id)
   return labels.length
-    ? EVENT_EDIT_EXTRA_CATEGORIES_BODY + '\n\n' + labels.join('\n')
-    : EVENT_EDIT_EXTRA_CATEGORIES_BODY + '\n\n' + EVENT_EDIT_EXTRA_CATEGORIES_NO_EXTRAS
+    ? EVENT_EDIT.EXTRA_CATEGORIES_BODY + '\n\n' + labels.join('\n')
+    : EVENT_EDIT.EXTRA_CATEGORIES_BODY + '\n\n' + EVENT_EDIT.EXTRA_CATEGORIES_NO_EXTRAS
 }
 
 /**
@@ -1059,13 +1062,13 @@ function getExtraCategoriesBody(preview) {
  * When body is provided (e.g. "שם האירוע עודכן בהצלחה"), sends a single message with that body and the two buttons.
  * @param {string} phoneNumberId
  * @param {string} from
- * @param {string} [body] - Message body (success text); if omitted uses EVENT_EDIT_SUCCESS_CHOOSE_BODY
+ * @param {string} [body] - Message body (success text); if omitted uses EVENT_EDIT.SUCCESS_CHOOSE_BODY
  * @returns {Promise<object>}
  */
 function sendEditSuccessQuickReplies(phoneNumberId, from, body) {
   return sendInteractiveButtons(phoneNumberId, from, {
-    body: body || EVENT_EDIT_SUCCESS_CHOOSE_BODY,
-    buttons: [EVENT_EDIT_SUCCESS_DONE_BUTTON, EVENT_EDIT_SUCCESS_MORE_BUTTON],
+    body: body || EVENT_EDIT.SUCCESS_CHOOSE_BODY,
+    buttons: [EVENT_EDIT.SUCCESS_DONE_BUTTON, EVENT_EDIT.SUCCESS_MORE_BUTTON],
   })
 }
 
@@ -1077,10 +1080,10 @@ function sendEditSuccessQuickReplies(phoneNumberId, from, body) {
  * @returns {Promise<object>}
  */
 function sendFreeLangSuccessQuickReplies(phoneNumberId, from, body) {
-  const fullBody = (body ? body + '\n\n' : '') + EVENT_EDIT_FREE_LANG_SUCCESS_PROMPT
+  const fullBody = (body ? body + '\n\n' : '') + EVENT_EDIT.FREE_LANG_SUCCESS_PROMPT
   return sendInteractiveButtons(phoneNumberId, from, {
-    body: fullBody.length > WHATSAPP_INTERACTIVE_BODY_MAX ? EVENT_EDIT_FREE_LANG_SUCCESS_PROMPT : fullBody,
-    buttons: [EVENT_EDIT_FREE_LANG_SUCCESS_MORE_BUTTON, EVENT_EDIT_FREE_LANG_SUCCESS_DONE_BUTTON],
+    body: fullBody.length > WHATSAPP_INTERACTIVE_BODY_MAX ? EVENT_EDIT.FREE_LANG_SUCCESS_PROMPT : fullBody,
+    buttons: [EVENT_EDIT.FREE_LANG_SUCCESS_MORE_BUTTON, EVENT_EDIT.FREE_LANG_SUCCESS_DONE_BUTTON],
   })
 }
 
@@ -1092,8 +1095,8 @@ function sendFreeLangSuccessQuickReplies(phoneNumberId, from, body) {
  */
 function buildCategoryListForGroup(groupId, opts = {}) {
   const group = CATEGORY_GROUPS.find((g) => g.id === groupId)
-  const defaultBody = EVENT_ADD_ASK_MAIN_CATEGORY
-  const defaultFooter = EVENT_ADD_CATEGORY_FOOTER
+  const defaultBody = EVENT_ADD.ASK_MAIN_CATEGORY
+  const defaultFooter = EVENT_ADD.CATEGORY_FOOTER
   if (!group) return { body: opts.bodyOverride || defaultBody, footer: defaultFooter, button: 'בחר קטגוריה', sections: [{ title: '', rows: [] }] }
   const excludeIds = opts.excludeIds || []
   const rows = group.categoryIds
@@ -1102,7 +1105,7 @@ function buildCategoryListForGroup(groupId, opts = {}) {
   const categorySection = { title: group.label, rows }
   const sections = opts.addChangeGroupRow
     ? [
-        { title: 'אפשרויות', rows: [{ id: EVENT_ADD_CHANGE_GROUP_BUTTON.id, title: EVENT_ADD_CHANGE_GROUP_ROW_TITLE }] },
+        { title: 'אפשרויות', rows: [{ id: EVENT_ADD.CHANGE_GROUP_BUTTON.id, title: EVENT_ADD.CHANGE_GROUP_ROW_TITLE }] },
         categorySection,
       ]
     : [categorySection]
@@ -1121,7 +1124,7 @@ function buildCategoryListForGroup(groupId, opts = {}) {
  */
 function buildFlagsMessageBody(flags) {
   if (!Array.isArray(flags) || flags.length === 0) return ''
-  return EVENT_ADD_FLAGS_INTRO + '\n\n' + EVENT_ADD_FLAGS_FILL_PROMPT
+  return EVENT_ADD.FLAGS_INTRO + '\n\n' + EVENT_ADD.FLAGS_FILL_PROMPT
 }
 
 /**
@@ -1134,11 +1137,11 @@ function buildFlagsMessageBody(flags) {
  */
 async function sendAskForFlagField(phoneNumberId, from, state, fieldKey) {
   const config = FLAG_FIELD_CONFIGS[fieldKey]
-  if (!config) return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
+  if (!config) return sendText(phoneNumberId, from, EVENT_ADD.ASK_TITLE)
   if (config.inputType === 'compound_location') {
     const subStep = state.eventAddRawLocationSubStep ?? 0
     if (subStep === 0) {
-      await sendText(phoneNumberId, from, EVENT_ADD_LOCATION_INTRO)
+      await sendText(phoneNumberId, from, EVENT_ADD.LOCATION_INTRO)
       return sendInteractiveButtons(phoneNumberId, from, {
         body: config.ask,
         buttons: [config.skipButton],
@@ -1146,15 +1149,14 @@ async function sendAskForFlagField(phoneNumberId, from, state, fieldKey) {
     }
     if (subStep === 1) {
       const placeName = (state.eventAddPlaceName ?? '').trim()
-      const canSkipAddress = !!placeName
-      if (canSkipAddress) {
+      const canSkipCity = !!placeName
+      if (canSkipCity) {
         return sendInteractiveButtons(phoneNumberId, from, {
-          body: config.askAddress,
-          footer: config.footerAddress,
-          buttons: [EVENT_ADD_SKIP_BUTTON],
+          body: config.askCity,
+          buttons: [EVENT_ADD.SKIP_BUTTON],
         })
       }
-      return sendText(phoneNumberId, from, config.askAddress + '\n' + (config.footerAddress || ''))
+      return sendText(phoneNumberId, from, config.askCity)
     }
     return sendText(phoneNumberId, from, config.ask)
   }
@@ -1188,7 +1190,7 @@ async function sendAskForFlagField(phoneNumberId, from, state, fieldKey) {
       return sendInteractiveButtons(phoneNumberId, from, {
         body: config.ask,
         footer: config.footer,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
+        buttons: [EVENT_ADD.SKIP_BUTTON],
       })
     }
   }
@@ -1207,12 +1209,12 @@ async function sendAskForFlagField(phoneNumberId, from, state, fieldKey) {
  */
 function validateAndParseFlagFieldInput(fieldKey, msg, state) {
   const config = FLAG_FIELD_CONFIGS[fieldKey]
-  if (!config) return { ok: false, errorMessage: EVENT_ADD_VALIDATE_TITLE }
+  if (!config) return { ok: false, errorMessage: VALIDATION.VALIDATE_TITLE }
   const { textBody, buttonId, listReplyId } = msg
   const limits = config.lengthLimits || {}
 
   if (config.inputType === 'region_buttons') {
-    const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
+    const validRegionIds = EVENT_ADD.REGION_BUTTONS.map((b) => b.id)
     if (buttonId && validRegionIds.includes(buttonId)) {
       return { ok: true, stateUpdate: { eventAddRegion: buttonId } }
     }
@@ -1222,7 +1224,7 @@ function validateAndParseFlagFieldInput(fieldKey, msg, state) {
   if (config.inputType === 'compound_location') {
     const subStep = state.eventAddRawLocationSubStep ?? 0
     if (subStep === 0) {
-      if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
+      if (buttonId === EVENT_ADD.SKIP_BUTTON.id) {
         return {
           ok: true,
           stateUpdate: { eventAddPlaceName: '', eventAddRawLocationSubStep: 1 },
@@ -1240,28 +1242,28 @@ function validateAndParseFlagFieldInput(fieldKey, msg, state) {
     }
     if (subStep === 1) {
       const placeName = (state.eventAddPlaceName ?? '').trim()
-      const addressOptional = !!placeName
-      if (addressOptional && (buttonId === EVENT_ADD_SKIP_BUTTON.id || !(textBody ?? '').trim())) {
+      const cityOptional = !!placeName
+      if (cityOptional && buttonId === EVENT_ADD.SKIP_BUTTON.id) {
         return {
           ok: true,
-          stateUpdate: { eventAddAddressLine1: '', eventAddAddressLine2: '', eventAddRawLocationSubStep: undefined },
+          stateUpdate: { eventAddCity: '', eventAddCityResult: null, eventAddRawLocationSubStep: undefined },
           advanceFlag: true,
+          requiresRegionFirst: true,
         }
       }
-      if (!addressOptional && !(textBody ?? '').trim()) {
-        return { ok: false, errorMessage: config.validateAddress }
+      if (!(textBody ?? '').trim()) {
+        if (!cityOptional) return { ok: false, errorMessage: config.validateCity }
+        return {
+          ok: true,
+          stateUpdate: { eventAddCity: '', eventAddCityResult: null, eventAddRawLocationSubStep: undefined },
+          advanceFlag: true,
+          requiresRegionFirst: true,
+        }
       }
-      const lines = (textBody ?? '').split(/\n/).map((s) => s.trim()).filter(Boolean)
-      if (lines.length > 2) return { ok: false, errorMessage: config.validateAddress }
-      const line1 = (lines[0] ?? '').trim()
-      const line2 = (lines[1] ?? '').trim()
-      const addrMax = config.lengthLimitsAddress?.max ?? EVENT_ADD_ADDRESS_MAX
-      if (line1.length > addrMax || line2.length > addrMax) return { ok: false, errorMessage: config.validateAddress }
-      return {
-        ok: true,
-        stateUpdate: { eventAddAddressLine1: line1, eventAddAddressLine2: line2, eventAddRawLocationSubStep: undefined },
-        advanceFlag: true,
-      }
+      // City text is handled in FLAG_INPUT by async normalizeCityToListedOrCustom; we should not reach here with text
+      const cityMax = config.lengthLimitsCity?.max ?? VALIDATION.CITY_MAX
+      if ((textBody ?? '').trim().length > cityMax) return { ok: false, errorMessage: config.validateCity }
+      return { ok: false, errorMessage: config.validateCity }
     }
     return { ok: false, errorMessage: config.validate }
   }
@@ -1279,7 +1281,7 @@ function validateAndParseFlagFieldInput(fieldKey, msg, state) {
       }
       return { ok: false, errorMessage: config.validate }
     }
-    if (listReplyId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
+    if (listReplyId === EVENT_ADD.CHANGE_GROUP_BUTTON.id) {
       return {
         ok: true,
         stateUpdate: { eventAddMainCategoryGroupId: undefined, eventAddCategoryFlagSubStep: 0 },
@@ -1311,7 +1313,7 @@ function validateAndParseFlagFieldInput(fieldKey, msg, state) {
     return { ok: true, stateUpdate: { eventAddMainCategory: listReplyId } }
   }
 
-  if (config.inputType === 'text_skip' && buttonId === EVENT_ADD_SKIP_BUTTON.id) {
+  if (config.inputType === 'text_skip' && buttonId === EVENT_ADD.SKIP_BUTTON.id) {
     if (fieldKey === 'rawCity' || fieldKey === 'rawCityOutsideNorth') {
       return {
         ok: true,
@@ -1350,10 +1352,10 @@ function validateAndParseFlagFieldInput(fieldKey, msg, state) {
  */
 async function sendLocationIntroAndPlaceName(phoneNumberId, from) {
   conversationState.set(from, { step: STEPS.EVENT_ADD_PLACE_NAME })
-  await sendText(phoneNumberId, from, EVENT_ADD_LOCATION_INTRO)
+  await sendText(phoneNumberId, from, EVENT_ADD.LOCATION_INTRO)
   return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_ADD_ASK_PLACE_NAME,
-    buttons: [EVENT_ADD_SKIP_BUTTON],
+    body: EVENT_ADD.ASK_PLACE_NAME,
+    buttons: [EVENT_ADD.SKIP_BUTTON],
   })
 }
 
@@ -1370,22 +1372,22 @@ async function sendLocationIntroAndPlaceName(phoneNumberId, from) {
  */
 function getRegionMapImageUrl() {
   const base = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
-  const url = base + EVENT_ADD_ASK_REGION_IMAGE_PATH
+  const url = base + EVENT_ADD.ASK_REGION_IMAGE_PATH
   if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
-    return 'https://galiluz.co.il' + EVENT_ADD_ASK_REGION_IMAGE_PATH
+    return 'https://galiluz.co.il' + EVENT_ADD.ASK_REGION_IMAGE_PATH
   }
   return url
 }
 
 async function sendRegionStep(phoneNumberId, from) {
   const imageUrl = getRegionMapImageUrl()
-  const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD_ASK_REGION)
+  const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD.ASK_REGION)
   if (imgRes && !imgRes.success) {
     logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
   }
   return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_ADD_ASK_REGION,
-    buttons: [...EVENT_ADD_REGION_BUTTONS],
+    body: EVENT_ADD.ASK_REGION,
+    buttons: [...EVENT_ADD.REGION_BUTTONS],
   })
 }
 
@@ -1402,6 +1404,24 @@ function sendValidationAndReask(phoneNumberId, from, requirementsMessage, reaskF
     if (r && !r.success) return r
     return reaskFn()
   })
+}
+
+/**
+ * Build minimal rawEvent for free-lang draft. Only true raw data: message + publisher.
+ * @param {object} state - conversation state (must have freeLanguageDescription, eventAddFromFreeLang)
+ * @param {{ phone?: string, name?: string, waId?: string }} publisherInfo
+ */
+function buildMinimalRawEventForFreeLang(state, publisherInfo) {
+  const phone = normalizePhone(publisherInfo?.phone ?? '')
+  const name = (publisherInfo?.name ?? '').trim()
+  const waId = String(publisherInfo?.waId ?? '')
+  const rawEvent = {
+    publisher: { phone, name, waId },
+  }
+  if (state.eventAddFromFreeLang && typeof state.freeLanguageDescription === 'string' && state.freeLanguageDescription.trim()) {
+    rawEvent.freeLanguageDescription = state.freeLanguageDescription.trim()
+  }
+  return rawEvent
 }
 
 /**
@@ -1474,7 +1494,7 @@ async function killEventAddFlow(phoneNumberId, from, state) {
   }
   conversationState.clear(from)
   conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
-  return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+  return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
 }
 
 /**
@@ -1484,8 +1504,8 @@ async function killEventAddFlow(phoneNumberId, from, state) {
 export function sendEventAddMethodChoice(phoneNumberId, from) {
   conversationState.set(from, { step: STEPS.EVENT_ADD_CHOOSE_METHOD, eventAddLastActivityAt: Date.now() })
   return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_ADD_METHOD_CHOICE_BODY,
-    buttons: [EVENT_ADD_METHOD_AI_BUTTON, EVENT_ADD_METHOD_MANUAL_BUTTON],
+    body: EVENT_ADD.METHOD_CHOICE_BODY,
+    buttons: [EVENT_ADD.METHOD_AI_BUTTON, EVENT_ADD.METHOD_MANUAL_BUTTON],
   })
 }
 
@@ -1496,9 +1516,9 @@ export function sendEventAddMethodChoice(phoneNumberId, from) {
 function sendAiPromptMessage(phoneNumberId, from) {
   conversationState.set(from, { step: STEPS.EVENT_ADD_AI_INPUT, eventAddLastActivityAt: Date.now() })
   return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_ADD_AI_PROMPT_BODY,
-    footer: EVENT_ADD_AI_PROMPT_FOOTER,
-    buttons: [EVENT_ADD_AI_BACK_BUTTON],
+    body: EVENT_ADD.AI_PROMPT_BODY,
+    footer: EVENT_ADD.AI_PROMPT_FOOTER,
+    buttons: [EVENT_ADD.AI_BACK_BUTTON],
   })
 }
 
@@ -1506,7 +1526,7 @@ function sendAiPromptMessage(phoneNumberId, from) {
  * Handle free-language text input at EVENT_ADD_AI_INPUT: detect event, extract, then flags or media.
  */
 async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, context) {
-  await sendText(phoneNumberId, from, EVENT_ADD_AI_PROCESSING_ACK)
+  await sendText(phoneNumberId, from, EVENT_ADD.AI_PROCESSING_ACK)
 
   const detection = await detectEventFromFreeText(textBody, {
     openaiApiKey: config.openaiApiKey,
@@ -1515,8 +1535,8 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
   })
   if (!detection.isEvent) {
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_AI_NOT_EVENT_BODY,
-      buttons: [EVENT_ADD_AI_BACK_BUTTON],
+      body: EVENT_ADD.AI_NOT_EVENT_BODY,
+      buttons: [EVENT_ADD.AI_BACK_BUTTON],
     })
   }
 
@@ -1524,8 +1544,8 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
   if (!categoriesList?.length) {
     logger.error(LOG_PREFIXES.EVENT_ADD, 'No categories for AI extraction', from)
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_AI_NO_CATEGORIES_BODY,
-      buttons: [EVENT_ADD_AI_RETRY_BUTTON, EVENT_ADD_AI_BACK_BUTTON],
+      body: EVENT_ADD.AI_NO_CATEGORIES_BODY,
+      buttons: [EVENT_ADD.AI_RETRY_BUTTON, EVENT_ADD.AI_BACK_BUTTON],
     })
   }
 
@@ -1537,8 +1557,8 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
   if (!extraction.rawEventSupplement || !extraction.formattedEvent) {
     logger.error(LOG_PREFIXES.EVENT_ADD, 'AI extraction failed', from, extraction.errorReason)
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_AI_EXTRACTION_FAILED_BODY,
-      buttons: [EVENT_ADD_AI_RETRY_BUTTON, EVENT_ADD_AI_BACK_BUTTON],
+      body: EVENT_ADD.AI_EXTRACTION_FAILED_BODY,
+      buttons: [EVENT_ADD.AI_RETRY_BUTTON, EVENT_ADD.AI_BACK_BUTTON],
     })
   }
 
@@ -1552,6 +1572,7 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
   const stateUpdate = {
     eventAddFromFreeLang: true,
     freeLanguageDescription: textBody,
+    eventAddFormattedEvent: formatted,
     eventAddTitle: raw.rawTitle ?? '',
     eventAddDateTime: raw.rawOccurrences ?? '',
     eventAddDescription: raw.rawFullDescription ?? '',
@@ -1609,8 +1630,9 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
   conversationState.set(from, stateUpdate)
 
   const publisherInfo = { phone: from, name: context?.profileName ?? '', waId: from }
+  const currentState = conversationState.get(from)
   const draftBody = {
-    rawEvent: buildRawEvent(conversationState.get(from), publisherInfo),
+    rawEvent: buildMinimalRawEventForFreeLang(currentState, publisherInfo),
     media: [],
     mainCategory: stateUpdate.eventAddMainCategory,
     categories: stateUpdate.eventAddExtraCategories,
@@ -1619,24 +1641,41 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
   if (!draftResult.success || !draftResult.id) {
     logger.error(LOG_PREFIXES.EVENT_ADD, 'AI flow: draft create failed', from)
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_DRAFT_CREATE_FAILED_BODY,
-      buttons: [EVENT_ADD_AI_RETRY_BUTTON, EVENT_ADD_AI_BACK_BUTTON],
+      body: EVENT_ADD.DRAFT_CREATE_FAILED_BODY,
+      buttons: [EVENT_ADD.AI_RETRY_BUTTON, EVENT_ADD.AI_BACK_BUTTON],
     })
   }
   conversationState.set(from, { eventAddDraftId: draftResult.id })
 
   if (flags.length === 0) {
-    conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA })
+    const processResult = await processDraft(draftResult.id, {
+      formattedEvent: stateUpdate.eventAddFormattedEvent,
+      media: [],
+      mainCategory: stateUpdate.eventAddMainCategory,
+      categories: stateUpdate.eventAddExtraCategories,
+    })
+    if (!processResult.success || !processResult.formattedEvent) {
+      logger.error(LOG_PREFIXES.EVENT_ADD, 'AI flow: process failed', from, processResult.reason)
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD.FORMAT_FAILED,
+        buttons: [EVENT_ADD.AI_RETRY_BUTTON, EVENT_ADD.AI_BACK_BUTTON],
+      })
+    }
+    conversationState.set(from, {
+      eventAddFormattedPreview: processResult.formattedEvent,
+      eventAddDraftProcessed: true,
+      step: STEPS.EVENT_ADD_MEDIA,
+    })
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_MEDIA_FIRST,
-      buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
+      body: EVENT_ADD.ASK_MEDIA_FIRST,
+      buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
     })
   }
 
   const flagFieldOrder = getFlagFieldOrder(flags)
   if (flagFieldOrder.length === 0) {
     conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA })
-    return sendText(phoneNumberId, from, EVENT_ADD_ASK_MEDIA_FIRST)
+    return sendText(phoneNumberId, from, EVENT_ADD.ASK_MEDIA_FIRST)
   }
 
   conversationState.set(from, {
@@ -1647,6 +1686,11 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
     eventAddCategoryFlagSubStep: 0,
     eventAddPendingMediaStep: true,
     step: STEPS.EVENT_ADD_FLAG_INPUT,
+  })
+  logger.info(LOG_PREFIXES.EVENT_ADD, 'handleAiFreeLanguageInput: going to flag input', from, {
+    eventAddPendingMediaStep: true,
+    flagsCount: flags.length,
+    flagKeys: flags.map((f) => f.fieldKey),
   })
   const flagsBody = buildFlagsMessageBody(flags)
   await sendText(phoneNumberId, from, flagsBody)
@@ -1659,9 +1703,9 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
  */
 export function sendInitialMessage(phoneNumberId, from) {
   conversationState.set(from, { step: STEPS.EVENT_ADD_TITLE, eventAddLastActivityAt: Date.now() })
-  return sendInteractiveButtons(phoneNumberId, from, EVENT_ADD_INITIAL).then((r) => {
+  return sendInteractiveButtons(phoneNumberId, from, EVENT_ADD.INITIAL).then((r) => {
     if (r && !r.success) return r
-    return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
+    return sendText(phoneNumberId, from, EVENT_ADD.ASK_TITLE)
   })
 }
 
@@ -1694,26 +1738,26 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
     const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
     const eventLink = result.id ? `${baseUrl}?event=${encodeURIComponent(result.id)}` : baseUrl
     const successBody = [
-      EVENT_ADD_SUCCESS_HEADING,
+      EVENT_ADD.SUCCESS_HEADING,
       '',
-      EVENT_ADD_SUCCESS_BODY,
+      EVENT_ADD.SUCCESS_BODY,
       '',
-      EVENT_ADD_SUCCESS_VIEW_PROMPT,
+      EVENT_ADD.SUCCESS_VIEW_PROMPT,
       eventLink,
     ].join('\n')
     return sendInteractiveButtons(phoneNumberId, from, {
       body: successBody,
-      buttons: [EVENT_ADD_SUCCESS_ADD_AGAIN_BUTTON, EVENT_ADD_SUCCESS_MAIN_MENU_BUTTON],
+      buttons: [EVENT_ADD.SUCCESS_ADD_AGAIN_BUTTON, EVENT_ADD.SUCCESS_MAIN_MENU_BUTTON],
     })
   } else {
     logger.error(LOG_PREFIXES.EVENT_ADD, 'Event create/activate failed', from, result.reason || '')
     const failMsg = result.reason && result.reason.length <= 200
-      ? EVENT_ADD_SUBMIT_FAILED_WITH_REASON(result.reason)
-      : EVENT_ADD_SUBMIT_FAILED
+      ? EVENT_ADD.SUBMIT_FAILED_WITH_REASON(result.reason)
+      : EVENT_ADD.SUBMIT_FAILED
     await sendText(phoneNumberId, from, failMsg)
   }
   conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
-  return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+  return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
 }
 
 /**
@@ -1773,17 +1817,17 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   conversationState.set(from, { eventAddLastActivityAt: Date.now() })
 
   if (step === STEPS.EVENT_ADD_CHOOSE_METHOD) {
-    if (buttonId === EVENT_ADD_METHOD_AI_BUTTON.id) {
+    if (buttonId === EVENT_ADD.METHOD_AI_BUTTON.id) {
       return sendAiPromptMessage(phoneNumberId, from)
     }
-    if (buttonId === EVENT_ADD_METHOD_MANUAL_BUTTON.id) {
+    if (buttonId === EVENT_ADD.METHOD_MANUAL_BUTTON.id) {
       return sendInitialMessage(phoneNumberId, from)
     }
     return Promise.resolve()
   }
 
   if (step === STEPS.EVENT_ADD_AI_INPUT) {
-    if (buttonId === EVENT_ADD_AI_RETRY_BUTTON.id) {
+    if (buttonId === EVENT_ADD.AI_RETRY_BUTTON.id) {
       return sendAiPromptMessage(phoneNumberId, from)
     }
     if (textBody) {
@@ -1791,15 +1835,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     }
     if (msg.type === 'image' || msg.type === 'video') {
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_AI_EXPECT_TEXT,
-        buttons: [EVENT_ADD_AI_BACK_BUTTON],
+        body: EVENT_ADD.AI_EXPECT_TEXT,
+        buttons: [EVENT_ADD.AI_BACK_BUTTON],
       })
     }
     return Promise.resolve()
   }
 
   if (step === STEPS.EVENT_ADD_CONFIRM) {
-    if (buttonId === EVENT_ADD_CONFIRM_SAVE_BUTTON.id) {
+    if (buttonId === EVENT_ADD.CONFIRM_SAVE_BUTTON.id) {
       const preview = state.eventAddFormattedPreview
       if (preview && typeof preview === 'object') {
         return submitEvent(phoneNumberId, from, state, context, { formattedEvent: preview })
@@ -1807,10 +1851,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       logger.error(LOG_PREFIXES.EVENT_ADD, 'Confirm save but no formatted preview', from)
       conversationState.clear(from)
       conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
-      await sendText(phoneNumberId, from, EVENT_ADD_CONFIRM_SAVE_ERROR)
-      return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+      await sendText(phoneNumberId, from, EVENT_ADD.CONFIRM_SAVE_ERROR)
+      return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
     }
-    if (buttonId === EVENT_ADD_CONFIRM_EDIT_BUTTON.id) {
+    if (buttonId === EVENT_ADD.CONFIRM_EDIT_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddLastActivityAt: Date.now() })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
@@ -1831,46 +1875,74 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     }
     if (listReplyId === 'edit_title') {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_FIELD, eventEditFieldKey: 'title' })
-      return sendText(phoneNumberId, from, EVENT_EDIT_ASK_TITLE)
+      return sendText(phoneNumberId, from, EVENT_EDIT.ASK_TITLE)
     }
     if (listReplyId === 'edit_description') {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_FIELD, eventEditFieldKey: 'description' })
-      return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DESCRIPTION)
+      return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DESCRIPTION)
     }
-    if (listReplyId === 'edit_main_category') {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP })
-      const groupListPayload = buildCategoryGroupListPayload()
-      return sendInteractiveList(phoneNumberId, from, groupListPayload)
-    }
-    if (listReplyId === 'edit_extra_categories') {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES })
+    if (listReplyId === 'edit_categories') {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_CATEGORIES_CHOICE })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: getExtraCategoriesBody(state.eventAddFormattedPreview),
-        buttons: [EVENT_EDIT_EXTRA_ADD_BUTTON, EVENT_EDIT_EXTRA_REMOVE_BUTTON, EVENT_EDIT_EXTRA_BACK_BUTTON],
+        body: EVENT_EDIT.CATEGORIES_CHOICE_BODY,
+        buttons: [EVENT_EDIT.CATEGORIES_MAIN_BUTTON, EVENT_EDIT.CATEGORIES_EXTRA_BUTTON, EVENT_EDIT.EXTRA_BACK_BUTTON],
       })
     }
     if (listReplyId === 'edit_location') {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
+      const loc = state.eventAddFormattedPreview?.location
+      const cityType = loc?.cityType === 'listed' || loc?.cityType === 'custom' ? loc.cityType : undefined
+      const cityRaw = typeof loc?.city === 'string' ? loc.city.trim() : ''
+      let eventEditCity = ''
+      let eventEditCityResult = null
+      let eventEditRegion = (loc?.region && typeof loc.region === 'string') ? loc.region : undefined
+      if (cityType === 'listed' && cityRaw) {
+        const cityEntry = CITIES_LIST.find((c) => c.id === cityRaw)
+        if (cityEntry) {
+          eventEditCity = cityEntry.title
+          eventEditCityResult = { type: 'listed', value: { cityId: cityEntry.id, cityTitle: cityEntry.title, region: cityEntry.region } }
+          eventEditRegion = cityEntry.region
+        }
+      } else if (cityType === 'custom' && cityRaw) {
+        eventEditCity = cityRaw
+        eventEditCityResult = { type: 'custom', value: cityRaw }
+      }
+      conversationState.set(from, {
+        step: STEPS.EVENT_ADD_EDIT_LOCATION_PLACE,
+        eventEditPlaceName: (loc?.locationName && typeof loc.locationName === 'string') ? loc.locationName.trim() : '',
+        eventEditCity,
+        eventEditCityResult,
+        eventEditRegion,
+        eventEditAddressLine1: (loc?.addressLine1 && typeof loc.addressLine1 === 'string') ? loc.addressLine1.trim() : '',
+        eventEditAddressLine2: (loc?.addressLine2 && typeof loc.addressLine2 === 'string') ? loc.addressLine2.trim() : '',
+        eventEditLocationNotes: (loc?.locationDetails && typeof loc.locationDetails === 'string') ? loc.locationDetails.trim() : '',
+      })
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_EDIT.LOCATION_ASK_PLACE_NAME,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
+      })
+    }
+    if (listReplyId === 'edit_nav_links') {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_NAV_LINKS })
+      return sendText(phoneNumberId, from, EVENT_EDIT.NAV_LINKS_ASK)
     }
     if (listReplyId === 'edit_datetime') {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_FIELD, eventEditFieldKey: 'datetime' })
-      return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
+      return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER)
     }
     if (listReplyId === 'edit_price') {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_FIELD, eventEditFieldKey: 'price' })
-      return sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER)
+      return sendText(phoneNumberId, from, EVENT_EDIT.ASK_PRICE + '\n' + EVENT_EDIT.ASK_PRICE_FOOTER)
     }
     if (listReplyId === 'edit_links') {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_FIELD, eventEditFieldKey: 'links' })
-      return sendText(phoneNumberId, from, EVENT_EDIT_ASK_LINKS + '\n' + EVENT_EDIT_ASK_LINKS_FOOTER)
+      return sendText(phoneNumberId, from, EVENT_EDIT.ASK_LINKS)
     }
     if (listReplyId === 'edit_media') {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MEDIA_INTRO })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_EDIT_ASK_MEDIA,
-        footer: EVENT_EDIT_ASK_MEDIA_FOOTER,
-        buttons: [EVENT_EDIT_MEDIA_CANCEL_BUTTON],
+        body: EVENT_EDIT.ASK_MEDIA,
+        footer: EVENT_EDIT.ASK_MEDIA_FOOTER,
+        buttons: [EVENT_EDIT.MEDIA_CANCEL_BUTTON],
       })
     }
     if (msg.type === 'text' && textBody) {
@@ -1887,7 +1959,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         }
         return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
-      const menuOptions = [EVENT_EDIT_DONE_ROW, ...EVENT_EDIT_MENU_ROWS]
+      const menuOptions = [EVENT_EDIT.DONE_ROW, ...EVENT_EDIT.MENU_ROWS]
       logger.info(LOG_PREFIXES.EVENT_ADD, 'Free-lang edit: calling LLM', from)
       const parseResult = await parseFreeLanguageEditRequest(textBody, menuOptions, state.eventAddFormattedPreview || {}, {
         openaiApiKey: config.openaiApiKey,
@@ -1900,7 +1972,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         ...(parseResult.type === 'unclear' && parseResult.message ? { message: parseResult.message.slice(0, 80) } : {}),
       })
       if (parseResult.type === 'unclear') {
-        return sendInteractiveList(phoneNumberId, from, buildEditMenuUnclearPayload(parseResult.message || EVENT_EDIT_FREE_LANG_UNCLEAR))
+        return sendInteractiveList(phoneNumberId, from, buildEditMenuUnclearPayload(parseResult.message || EVENT_EDIT.FREE_LANG_UNCLEAR))
       }
       if (parseResult.type === 'complete_update') {
         conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
@@ -1914,9 +1986,9 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         if (parseResult.edits.some((e) => e.fieldKey === 'media')) {
           conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MEDIA_INTRO })
           return sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_EDIT_ASK_MEDIA,
-            footer: EVENT_EDIT_ASK_MEDIA_FOOTER,
-            buttons: [EVENT_EDIT_MEDIA_CANCEL_BUTTON],
+            body: EVENT_EDIT.ASK_MEDIA,
+            footer: EVENT_EDIT.ASK_MEDIA_FOOTER,
+            buttons: [EVENT_EDIT.MEDIA_CANCEL_BUTTON],
           })
         }
         let cityStr = ''
@@ -1961,7 +2033,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
               await sendText(
                 phoneNumberId,
                 from,
-                EVENT_EDIT_FREE_LANG_CITY_OUTSIDE_REMOVED(parsed.value),
+                EVENT_EDIT.FREE_LANG_CITY_OUTSIDE_REMOVED(parsed.value),
               )
               if (filteredEdits.length === 0) {
                 conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
@@ -1981,13 +2053,13 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
               eventAddLastActivityAt: Date.now(),
             })
             const imageUrl = getRegionMapImageUrl()
-            const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD_ASK_REGION)
+            const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD.ASK_REGION)
             if (imgRes && !imgRes.success) {
               logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
             }
             return sendInteractiveButtons(phoneNumberId, from, {
-              body: EVENT_ADD_ASK_REGION,
-              buttons: [...EVENT_ADD_REGION_BUTTONS],
+              body: EVENT_ADD.ASK_REGION,
+              buttons: [...EVENT_ADD.REGION_BUTTONS],
             })
           }
           if (parsed.type === 'listed' && parsed.value) {
@@ -2023,7 +2095,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         })
         return sendFreeLangSuggestedEdits(phoneNumberId, from, state.eventAddFormattedPreview || {}, parseResult.edits)
       }
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuUnclearPayload(EVENT_EDIT_FREE_LANG_UNCLEAR))
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuUnclearPayload(EVENT_EDIT.FREE_LANG_UNCLEAR))
     }
     return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
   }
@@ -2031,7 +2103,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_EDIT_FREE_LANG_REGION) {
     const edits = Array.isArray(state.eventAddFreeLangEdits) ? state.eventAddFreeLangEdits : []
     const pendingCity = state.eventAddFreeLangPendingCity
-    const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
+    const validRegionIds = EVENT_ADD.REGION_BUTTONS.map((b) => b.id)
     if (buttonId && validRegionIds.includes(buttonId) && typeof pendingCity === 'string') {
       const editsWithRegion = [
         ...edits.filter((e) => e.fieldKey !== 'region' && e.fieldKey !== 'cityType' && e.fieldKey !== 'city'),
@@ -2047,30 +2119,30 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return sendFreeLangSuggestedEdits(phoneNumberId, from, state.eventAddFormattedPreview || {}, editsWithRegion)
     }
     const imageUrl = getRegionMapImageUrl()
-    const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD_ASK_REGION)
+    const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD.ASK_REGION)
     if (imgRes && !imgRes.success) {
       logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
     }
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_REGION,
-      buttons: [...EVENT_ADD_REGION_BUTTONS],
+      body: EVENT_ADD.ASK_REGION,
+      buttons: [...EVENT_ADD.REGION_BUTTONS],
     })
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_FREE_LANG_CONFIRM) {
     const draftId = state.eventAddDraftId
     const edits = Array.isArray(state.eventAddFreeLangEdits) ? state.eventAddFreeLangEdits : []
-    if (buttonId === EVENT_EDIT_FREE_LANG_CANCEL_BUTTON.id) {
+    if (buttonId === EVENT_EDIT.FREE_LANG_CANCEL_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddFreeLangEdits: undefined })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
-    if (buttonId === EVENT_EDIT_FREE_LANG_CONFIRM_BUTTON.id && draftId && edits.length > 0) {
+    if (buttonId === EVENT_EDIT.FREE_LANG_CONFIRM_BUTTON.id && draftId && edits.length > 0) {
       const payload = buildPatchPayloadFromFreeLangEdits(edits, state.eventAddFormattedPreview || {})
       payload._meta = { editSource: 'free_language' }
       const result = await patchDraft(draftId, payload)
       if (!result.success) {
         logger.error(LOG_PREFIXES.EVENT_ADD, 'Free-lang confirm patch failed', from, result.reason)
-        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddFreeLangEdits: undefined })
         return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
@@ -2080,7 +2152,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         eventAddFreeLangEdits: undefined,
         eventAddFromFreeLangSuccess: true,
       })
-      const body = EVENT_EDIT_FREE_LANG_SUCCESS_BODY
+      const body = EVENT_EDIT.FREE_LANG_SUCCESS_BODY
       return sendFreeLangSuccessQuickReplies(phoneNumberId, from, body)
     }
     conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddFreeLangEdits: undefined })
@@ -2090,36 +2162,36 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_EDIT_FIELD) {
     const fieldKey = state.eventEditFieldKey
     const draftId = state.eventAddDraftId
-    if (fieldKey === 'price' && buttonId === EVENT_EDIT_PRICE_BACK_TO_MENU_BUTTON.id) {
+    if (fieldKey === 'price' && buttonId === EVENT_EDIT.PRICE_BACK_TO_MENU_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventEditFieldKey: undefined })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if (!draftId) {
-      if (fieldKey === 'title') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_TITLE)
-      if (fieldKey === 'description') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DESCRIPTION)
-      if (fieldKey === 'datetime') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
-      if (fieldKey === 'price') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER)
-      if (fieldKey === 'links') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_LINKS + '\n' + EVENT_EDIT_ASK_LINKS_FOOTER)
+      if (fieldKey === 'title') return sendText(phoneNumberId, from, EVENT_EDIT.ASK_TITLE)
+      if (fieldKey === 'description') return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DESCRIPTION)
+      if (fieldKey === 'datetime') return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER)
+      if (fieldKey === 'price') return sendText(phoneNumberId, from, EVENT_EDIT.ASK_PRICE + '\n' + EVENT_EDIT.ASK_PRICE_FOOTER)
+      if (fieldKey === 'links') return sendText(phoneNumberId, from, EVENT_EDIT.ASK_LINKS)
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if (!textBody) {
-      if (fieldKey === 'title') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_TITLE)
-      if (fieldKey === 'description') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DESCRIPTION)
-      if (fieldKey === 'datetime') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
-      if (fieldKey === 'price') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER)
-      if (fieldKey === 'links') return sendText(phoneNumberId, from, EVENT_EDIT_ASK_LINKS + '\n' + EVENT_EDIT_ASK_LINKS_FOOTER)
+      if (fieldKey === 'title') return sendText(phoneNumberId, from, EVENT_EDIT.ASK_TITLE)
+      if (fieldKey === 'description') return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DESCRIPTION)
+      if (fieldKey === 'datetime') return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER)
+      if (fieldKey === 'price') return sendText(phoneNumberId, from, EVENT_EDIT.ASK_PRICE + '\n' + EVENT_EDIT.ASK_PRICE_FOOTER)
+      if (fieldKey === 'links') return sendText(phoneNumberId, from, EVENT_EDIT.ASK_LINKS)
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     if (fieldKey === 'title') {
       const len = textBody.length
-      if (len < EVENT_ADD_TITLE_MIN || len > EVENT_ADD_TITLE_MAX) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_TITLE, () =>
-          sendText(phoneNumberId, from, EVENT_EDIT_ASK_TITLE),
+      if (len < VALIDATION.TITLE_MIN || len > VALIDATION.TITLE_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_TITLE, () =>
+          sendText(phoneNumberId, from, EVENT_EDIT.ASK_TITLE),
         )
       }
       const result = await patchDraft(draftId, { title: textBody })
       if (!result.success) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
         return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
@@ -2129,15 +2201,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         eventEditFieldKey: undefined,
       })
       const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT_SUCCESS_MESSAGES.title + '\n\n' + buildEditSuccessValueBlock('title', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.title
+      let body = EVENT_EDIT.SUCCESS_MESSAGES.title + '\n\n' + buildEditSuccessValueBlock('title', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.title
       return sendEditSuccessQuickReplies(phoneNumberId, from, body)
     }
     if (fieldKey === 'description') {
       const len = textBody.length
-      if (len < EVENT_ADD_DESCRIPTION_MIN || len > EVENT_ADD_DESCRIPTION_MAX) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_DESCRIPTION, () =>
-          sendText(phoneNumberId, from, EVENT_EDIT_ASK_DESCRIPTION),
+      if (len < VALIDATION.DESCRIPTION_MIN || len > VALIDATION.DESCRIPTION_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_DESCRIPTION, () =>
+          sendText(phoneNumberId, from, EVENT_EDIT.ASK_DESCRIPTION),
         )
       }
       const preview = state.eventAddFormattedPreview
@@ -2150,7 +2222,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       const patchPayload = { fullDescription: convertMessageToHtml(textBody), shortDescription }
       const result = await patchDraft(draftId, patchPayload)
       if (!result.success) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
         return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
@@ -2160,14 +2232,14 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         eventEditFieldKey: undefined,
       })
       const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT_SUCCESS_MESSAGES.description + '\n\n' + buildEditSuccessValueBlock('description', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.description
+      let body = EVENT_EDIT.SUCCESS_MESSAGES.description + '\n\n' + buildEditSuccessValueBlock('description', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.description
       return sendEditSuccessQuickReplies(phoneNumberId, from, body)
     }
     if (fieldKey === 'datetime') {
-      if (textBody.length > EVENT_ADD_DATETIME_MAX) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_DATETIME, () =>
-          sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER),
+      if (textBody.length > VALIDATION.DATETIME_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_DATETIME, () =>
+          sendText(phoneNumberId, from, EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER),
         )
       }
       const parseResult = await parseOccurrencesFromText(textBody, {
@@ -2176,16 +2248,16 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       })
       if (parseResult.flagReason) {
         await sendText(phoneNumberId, from, parseResult.flagReason)
-        return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
+        return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER)
       }
       const occurrences = Array.isArray(parseResult.occurrences) ? parseResult.occurrences : []
       if (occurrences.length === 0) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_DATETIME_PARSE_FAILED)
-        return sendText(phoneNumberId, from, EVENT_EDIT_ASK_DATETIME + '\n' + EVENT_EDIT_ASK_DATETIME_FOOTER)
+        await sendText(phoneNumberId, from, EVENT_EDIT.DATETIME_PARSE_FAILED)
+        return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER)
       }
       const result = await patchDraft(draftId, { occurrences })
       if (!result.success) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
         return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
@@ -2195,14 +2267,14 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         eventEditFieldKey: undefined,
       })
       const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT_SUCCESS_MESSAGES.datetime + '\n\n' + buildEditSuccessValueBlock('datetime', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.datetime
+      let body = EVENT_EDIT.SUCCESS_MESSAGES.datetime + '\n\n' + buildEditSuccessValueBlock('datetime', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.datetime
       return sendEditSuccessQuickReplies(phoneNumberId, from, body)
     }
     if (fieldKey === 'price') {
-      if (textBody.length > EVENT_ADD_PRICE_MAX) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_PRICE, () =>
-          sendText(phoneNumberId, from, EVENT_EDIT_ASK_PRICE + '\n' + EVENT_EDIT_ASK_PRICE_FOOTER),
+      if (textBody.length > VALIDATION.PRICE_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_PRICE, () =>
+          sendText(phoneNumberId, from, EVENT_EDIT.ASK_PRICE + '\n' + EVENT_EDIT.ASK_PRICE_FOOTER),
         )
       }
       const parseResult = await parsePriceFromText(textBody, {
@@ -2211,14 +2283,14 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       })
       if (parseResult.flagReason) {
         return sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_EDIT_PRICE_PARSE_FAIL_MESSAGE,
-          buttons: [EVENT_EDIT_PRICE_BACK_TO_MENU_BUTTON],
+          body: EVENT_EDIT.PRICE_PARSE_FAIL_MESSAGE,
+          buttons: [EVENT_EDIT.PRICE_BACK_TO_MENU_BUTTON],
         })
       }
       const price = parseResult.price !== undefined ? parseResult.price : null
       const result = await patchDraft(draftId, { price })
       if (!result.success) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
         return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
@@ -2228,14 +2300,14 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         eventEditFieldKey: undefined,
       })
       const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT_SUCCESS_MESSAGES.price + '\n\n' + buildEditSuccessValueBlock('price', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.price
+      let body = EVENT_EDIT.SUCCESS_MESSAGES.price + '\n\n' + buildEditSuccessValueBlock('price', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.price
       return sendEditSuccessQuickReplies(phoneNumberId, from, body)
     }
     if (fieldKey === 'links') {
-      if (textBody.length > EVENT_ADD_LINKS_MAX) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_LINKS, () =>
-          sendText(phoneNumberId, from, EVENT_EDIT_ASK_LINKS + '\n' + EVENT_EDIT_ASK_LINKS_FOOTER),
+      if (textBody.length > VALIDATION.LINKS_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_LINKS, () =>
+          sendText(phoneNumberId, from, EVENT_EDIT.ASK_LINKS),
         )
       }
       const parseResult = await parseUrlsFromText(textBody, {
@@ -2245,7 +2317,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       const urls = Array.isArray(parseResult.urls) ? parseResult.urls : []
       const result = await patchDraft(draftId, { urls })
       if (!result.success) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
         return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
@@ -2255,8 +2327,8 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         eventEditFieldKey: undefined,
       })
       const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT_SUCCESS_MESSAGES.links + '\n\n' + buildEditSuccessValueBlock('links', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.links
+      let body = EVENT_EDIT.SUCCESS_MESSAGES.links + '\n\n' + buildEditSuccessValueBlock('links', updatedEvent || {}, EVENT_CATEGORIES)
+      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.links
       return sendEditSuccessQuickReplies(phoneNumberId, from, body)
     }
     conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventEditFieldKey: undefined })
@@ -2265,7 +2337,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_EDIT_MEDIA_INTRO) {
     const draftId = state.eventAddDraftId
-    if (buttonId === EVENT_EDIT_MEDIA_CANCEL_BUTTON.id) {
+    if (buttonId === EVENT_EDIT.MEDIA_CANCEL_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
@@ -2291,7 +2363,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       }
       const patchResult = await patchDraft(draftId, { media: [] })
       if (!patchResult.success) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+        await sendText(phoneNumberId, from, getPatchFailureUserMessage(patchResult))
         conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
         return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
@@ -2306,9 +2378,9 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (!item) {
         await sendText(phoneNumberId, from, EVENT_ADD_MEDIA_UPLOAD_FAILED)
         return sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_EDIT_ASK_MEDIA,
-          footer: EVENT_EDIT_ASK_MEDIA_FOOTER,
-          buttons: [EVENT_EDIT_MEDIA_CANCEL_BUTTON],
+          body: EVENT_EDIT.ASK_MEDIA,
+          footer: EVENT_EDIT.ASK_MEDIA_FOOTER,
+          buttons: [EVENT_EDIT.MEDIA_CANCEL_BUTTON],
         })
       }
       const media = [item]
@@ -2318,23 +2390,46 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     }
     if (msg.type === 'text') {
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_EDIT_ASK_MEDIA,
-        footer: EVENT_EDIT_ASK_MEDIA_FOOTER,
-        buttons: [EVENT_EDIT_MEDIA_CANCEL_BUTTON],
+        body: EVENT_EDIT.ASK_MEDIA,
+        footer: EVENT_EDIT.ASK_MEDIA_FOOTER,
+        buttons: [EVENT_EDIT.MEDIA_CANCEL_BUTTON],
       })
     }
     return Promise.resolve()
   }
 
+  if (step === STEPS.EVENT_ADD_EDIT_CATEGORIES_CHOICE) {
+    if (buttonId === EVENT_EDIT.EXTRA_BACK_BUTTON.id) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+    }
+    if (buttonId === EVENT_EDIT.CATEGORIES_MAIN_BUTTON.id) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP })
+      const groupListPayload = buildCategoryGroupListPayload()
+      return sendInteractiveList(phoneNumberId, from, groupListPayload)
+    }
+    if (buttonId === EVENT_EDIT.CATEGORIES_EXTRA_BUTTON.id) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES })
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: getExtraCategoriesBody(state.eventAddFormattedPreview),
+        buttons: [EVENT_EDIT.EXTRA_ADD_BUTTON, EVENT_EDIT.EXTRA_REMOVE_BUTTON, EVENT_EDIT.EXTRA_BACK_BUTTON],
+      })
+    }
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_EDIT.CATEGORIES_CHOICE_BODY,
+      buttons: [EVENT_EDIT.CATEGORIES_MAIN_BUTTON, EVENT_EDIT.CATEGORIES_EXTRA_BUTTON, EVENT_EDIT.EXTRA_BACK_BUTTON],
+    })
+  }
+
   if (step === STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP) {
     const groupListPayload = buildCategoryGroupListPayload()
     if (listReplyId && !VALID_GROUP_IDS.has(listReplyId)) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY_GROUP, () =>
         sendInteractiveList(phoneNumberId, from, groupListPayload),
       )
     }
     if (!listReplyId) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY_GROUP, () =>
         sendInteractiveList(phoneNumberId, from, groupListPayload),
       )
     }
@@ -2347,20 +2442,20 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY) {
-    if (buttonId === EVENT_ADD_CHANGE_GROUP_BUTTON.id || listReplyId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
+    if (buttonId === EVENT_ADD.CHANGE_GROUP_BUTTON.id || listReplyId === EVENT_ADD.CHANGE_GROUP_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MAIN_CATEGORY_GROUP })
       const groupListPayload = buildCategoryGroupListPayload()
       return sendInteractiveList(phoneNumberId, from, groupListPayload)
     }
     if (listReplyId && !VALID_CATEGORY_IDS.has(listReplyId)) {
       const groupId = state.eventAddMainCategoryGroupId
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY, () =>
         sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(groupId, { addChangeGroupRow: true })),
       )
     }
     if (!listReplyId) {
       const groupId = state.eventAddMainCategoryGroupId
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY, () =>
         sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(groupId, { addChangeGroupRow: true })),
       )
     }
@@ -2371,7 +2466,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     if (!categories.includes(newMain)) categories.unshift(newMain)
     const result = await patchDraft(draftId, { mainCategory: newMain, categories })
     if (!result.success) {
-      await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+      await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
@@ -2381,8 +2476,8 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       eventAddMainCategoryGroupId: undefined,
     })
     const updatedEvent = result.event || state.eventAddFormattedPreview
-    let body = EVENT_EDIT_SUCCESS_MESSAGES.mainCategory + '\n\n' + buildEditSuccessValueBlock('mainCategory', updatedEvent || {}, EVENT_CATEGORIES)
-    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.mainCategory
+    let body = EVENT_EDIT.SUCCESS_MESSAGES.mainCategory + '\n\n' + buildEditSuccessValueBlock('mainCategory', updatedEvent || {}, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.mainCategory
     return sendEditSuccessQuickReplies(phoneNumberId, from, body)
   }
 
@@ -2390,42 +2485,42 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     const current = conversationState.get(from)
     return sendInteractiveButtons(phoneNumberId, from, {
       body: getExtraCategoriesBody(current.eventAddFormattedPreview),
-      buttons: [EVENT_EDIT_EXTRA_ADD_BUTTON, EVENT_EDIT_EXTRA_REMOVE_BUTTON, EVENT_EDIT_EXTRA_BACK_BUTTON],
+      buttons: [EVENT_EDIT.EXTRA_ADD_BUTTON, EVENT_EDIT.EXTRA_REMOVE_BUTTON, EVENT_EDIT.EXTRA_BACK_BUTTON],
     })
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES) {
-    if (buttonId === EVENT_EDIT_EXTRA_BACK_BUTTON.id) {
+    if (buttonId === EVENT_EDIT.EXTRA_BACK_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
-    if (buttonId === EVENT_EDIT_EXTRA_ADD_BUTTON.id) {
+    if (buttonId === EVENT_EDIT.EXTRA_ADD_BUTTON.id) {
       const preview = state.eventAddFormattedPreview
       const categories = Array.isArray(preview?.categories) ? preview.categories : []
-      if (categories.length >= EVENT_ADD_MAX_CATEGORIES) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_EXTRA_MAX_REACHED(EVENT_ADD_MAX_EXTRA_CATEGORIES))
+      if (categories.length >= EVENT_ADD.MAX_CATEGORIES) {
+        await sendText(phoneNumberId, from, EVENT_EDIT.EXTRA_MAX_REACHED(EVENT_ADD.MAX_EXTRA_CATEGORIES))
         return sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_EDIT_SUCCESS_CHOOSE_BODY,
-          buttons: [EVENT_EDIT_EXTRA_REMOVE_BUTTON, EVENT_EDIT_EXTRA_BACK_BUTTON],
+          body: EVENT_EDIT.SUCCESS_CHOOSE_BODY,
+          buttons: [EVENT_EDIT.EXTRA_REMOVE_BUTTON, EVENT_EDIT.EXTRA_BACK_BUTTON],
         })
       }
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_ADD_GROUP })
       const groupListPayload = buildCategoryGroupListPayload()
       return sendInteractiveList(phoneNumberId, from, groupListPayload)
     }
-    if (buttonId === EVENT_EDIT_EXTRA_REMOVE_BUTTON.id) {
+    if (buttonId === EVENT_EDIT.EXTRA_REMOVE_BUTTON.id) {
       const preview = state.eventAddFormattedPreview
       const mainId = preview?.mainCategory
       const cats = Array.isArray(preview?.categories) ? preview.categories : []
       const extraIds = mainId ? cats.filter((id) => id !== mainId) : [...cats]
       if (extraIds.length === 0) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_EXTRA_NO_REMOVE)
+        await sendText(phoneNumberId, from, EVENT_EDIT.EXTRA_NO_REMOVE)
         return sendExtraCategoriesScreen()
       }
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_REMOVE })
       const rows = extraIds.map((id) => ({ id, title: EVENT_CATEGORIES[id]?.label ?? id }))
       return sendInteractiveList(phoneNumberId, from, {
-        body: EVENT_EDIT_EXTRA_REMOVE_ASK,
+        body: EVENT_EDIT.EXTRA_REMOVE_ASK,
         button: 'בחר',
         sections: [{ title: 'קטגוריות', rows }],
       })
@@ -2436,12 +2531,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_EDIT_EXTRA_ADD_GROUP) {
     const groupListPayload = buildCategoryGroupListPayload()
     if (listReplyId && !VALID_GROUP_IDS.has(listReplyId)) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY_GROUP, () =>
         sendInteractiveList(phoneNumberId, from, groupListPayload),
       )
     }
     if (!listReplyId) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY_GROUP, () =>
         sendInteractiveList(phoneNumberId, from, groupListPayload),
       )
     }
@@ -2454,14 +2549,14 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_EXTRA_ADD_CATEGORY) {
-    if (buttonId === EVENT_ADD_CHANGE_GROUP_BUTTON.id || listReplyId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
+    if (buttonId === EVENT_ADD.CHANGE_GROUP_BUTTON.id || listReplyId === EVENT_ADD.CHANGE_GROUP_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_ADD_GROUP })
       const groupListPayload = buildCategoryGroupListPayload()
       return sendInteractiveList(phoneNumberId, from, groupListPayload)
     }
     if (!listReplyId || !VALID_CATEGORY_IDS.has(listReplyId)) {
       const groupId = state.eventAddMainCategoryGroupId
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY, () =>
         sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(groupId, { addChangeGroupRow: true })),
       )
     }
@@ -2474,7 +2569,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     if (!result.success) {
       const reason = typeof result.reason === 'string' ? result.reason : ''
       const isMaxCategories = /maximum|exceed/i.test(reason)
-      const errMsg = isMaxCategories ? EVENT_EDIT_EXTRA_MAX_REACHED(EVENT_ADD_MAX_EXTRA_CATEGORIES) : EVENT_EDIT_PATCH_ERROR
+      const errMsg = isMaxCategories ? EVENT_EDIT.EXTRA_MAX_REACHED(EVENT_ADD.MAX_EXTRA_CATEGORIES) : getPatchFailureUserMessage(result)
       await sendText(phoneNumberId, from, errMsg)
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES })
       return sendExtraCategoriesScreen()
@@ -2499,13 +2594,13 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     const draftId = state.eventAddDraftId
     const newCategories = cats.filter((id) => id !== listReplyId)
     if (newCategories.length === 0) {
-      await sendText(phoneNumberId, from, EVENT_EDIT_EXTRA_CANNOT_REMOVE_LAST)
+      await sendText(phoneNumberId, from, EVENT_EDIT.EXTRA_CANNOT_REMOVE_LAST)
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES })
       return sendExtraCategoriesScreen()
     }
     const result = await patchDraft(draftId, { categories: newCategories })
     if (!result.success) {
-      await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
+      await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_EXTRA_CATEGORIES })
       return sendExtraCategoriesScreen()
     }
@@ -2516,196 +2611,303 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     return sendExtraCategoriesScreen()
   }
 
-  if (step === STEPS.EVENT_ADD_EDIT_LOCATION_MENU) {
-    if (listReplyId === EVENT_EDIT_LOCATION_DONE_ROW.id) {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_SUCCESS })
-      const updatedEvent = state.eventAddFormattedPreview
-      let body = EVENT_EDIT_SUCCESS_MESSAGES.location + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.location
-      return sendEditSuccessQuickReplies(phoneNumberId, from, body, {
-        addLocationOption: true,
-      })
+  if (step === STEPS.EVENT_ADD_EDIT_LOCATION_PLACE) {
+    if (buttonId === EVENT_ADD.SKIP_BUTTON.id) {
+      conversationState.set(from, { eventEditPlaceName: '', step: STEPS.EVENT_ADD_EDIT_LOCATION_CITY })
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_CITY)
     }
-    if (listReplyId === EVENT_EDIT_LOCATION_BACK_ROW.id) {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
-    }
-    const fieldConfig = LOCATION_FIELD_MAP[listReplyId]
-    if (fieldConfig) {
-      conversationState.set(from, {
-        step: STEPS.EVENT_ADD_EDIT_LOCATION_FIELD,
-        eventEditLocationFieldKey: fieldConfig.key,
-      })
-      if (fieldConfig.inputType === 'region_buttons') {
-        return sendInteractiveButtons(phoneNumberId, from, {
-          body: fieldConfig.ask,
-          buttons: [...EVENT_ADD_REGION_BUTTONS],
-        })
+    if (textBody) {
+      if (textBody.length > VALIDATION.PLACE_NAME_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_PLACE_NAME, () =>
+          sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_EDIT.LOCATION_ASK_PLACE_NAME,
+            buttons: [EVENT_ADD.SKIP_BUTTON],
+          }),
+        )
       }
-      return sendText(phoneNumberId, from, fieldConfig.ask)
+      conversationState.set(from, { eventEditPlaceName: textBody, step: STEPS.EVENT_ADD_EDIT_LOCATION_CITY })
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD.ASK_CITY,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
+      })
     }
-    return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_EDIT.LOCATION_ASK_PLACE_NAME,
+      buttons: [EVENT_ADD.SKIP_BUTTON],
+    })
   }
 
-  if (step === STEPS.EVENT_ADD_EDIT_LOCATION_FIELD) {
-    const fieldKey = state.eventEditLocationFieldKey
-    const draftId = state.eventAddDraftId
-
-    if (!draftId) {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
-    }
-
-    const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
-    if (fieldKey === 'region' && buttonId && validRegionIds.includes(buttonId)) {
-      const locationPatch = { region: buttonId }
-      const result = await patchDraft(draftId, { location: locationPatch })
-      if (!result.success) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
-        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
-      }
+  if (step === STEPS.EVENT_ADD_EDIT_LOCATION_CITY) {
+    const placeName = (state.eventEditPlaceName ?? '').trim()
+    const cityCanSkip = !!placeName
+    if (cityCanSkip && buttonId === EVENT_ADD.SKIP_BUTTON.id) {
       conversationState.set(from, {
-        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
-        eventEditLocationFieldKey: undefined,
+        eventEditCity: '',
+        eventEditCityResult: null,
+        step: STEPS.EVENT_ADD_EDIT_LOCATION_REGION,
       })
-      const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT_SUCCESS_MESSAGES.location + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.location
-      return sendEditSuccessQuickReplies(phoneNumberId, from, body, { addLocationOption: true })
+      return sendRegionStep(phoneNumberId, from)
     }
-
     if (!textBody) {
-      const rowId = Object.keys(LOCATION_FIELD_MAP).find((id) => LOCATION_FIELD_MAP[id].key === fieldKey)
-      const fieldConfig = rowId ? LOCATION_FIELD_MAP[rowId] : null
-      const ask = fieldConfig?.ask ?? EVENT_EDIT_LOCATION_ASK_PLACE_NAME
-      if (fieldConfig?.inputType === 'region_buttons') {
-        return sendInteractiveButtons(phoneNumberId, from, { body: ask, buttons: [...EVENT_ADD_REGION_BUTTONS] })
+      if (cityCanSkip) {
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD.ASK_CITY,
+          buttons: [EVENT_ADD.SKIP_BUTTON],
+        })
       }
-      return sendText(phoneNumberId, from, ask)
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_CITY)
     }
-
-    let locationPatch = {}
-
-    if (fieldKey === 'locationName' || fieldKey === 'addressLine1' || fieldKey === 'addressLine2' || fieldKey === 'locationDetails') {
-      locationPatch[fieldKey] = textBody.trim() || null
-    } else if (fieldKey === 'city') {
-      const parsed = await normalizeCityToListedOrCustom(textBody, CITIES_LIST, {
+    if (textBody.length > VALIDATION.CITY_MAX) {
+      const reaskCity = cityCanSkip
+        ? () => sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD.ASK_CITY,
+            buttons: [EVENT_ADD.SKIP_BUTTON],
+          })
+        : () => sendText(phoneNumberId, from, EVENT_ADD.ASK_CITY)
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_CITY, reaskCity)
+    }
+    const parsed = await normalizeCityToListedOrCustom(textBody, CITIES_LIST, {
+      openaiApiKey: config.openaiApiKey,
+      openaiModel: config.openaiModel,
+      correlationId: from,
+    })
+    if (parsed.type === 'listed') {
+      const { cityId, cityTitle, region } = parsed.value
+      conversationState.set(from, {
+        eventEditCity: cityTitle,
+        eventEditCityResult: parsed,
+        eventEditRegion: region,
+        step: STEPS.EVENT_ADD_EDIT_LOCATION_ADDRESS,
+      })
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD.ASK_ADDRESS,
+        footer: EVENT_ADD.ASK_ADDRESS_FOOTER,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
+      })
+    }
+    if (parsed.type === 'custom' && parsed.value) {
+      const { inRegion, certain } = await verifyCityInNorthernIsrael(parsed.value, {
         openaiApiKey: config.openaiApiKey,
         openaiModel: config.openaiModel,
         correlationId: from,
       })
-      if (parsed.type === 'listed') {
-        const { cityId, cityTitle, region } = parsed.value
-        locationPatch = { city: cityId, cityType: 'listed' }
-      } else if (parsed.type === 'custom' && parsed.value) {
-        const { inRegion, certain } = await verifyCityInNorthernIsrael(parsed.value, {
-          openaiApiKey: config.openaiApiKey,
-          openaiModel: config.openaiModel,
-          correlationId: from,
-        })
-        if (!inRegion && certain) {
-          return sendValidationAndReask(phoneNumberId, from, EVENT_EDIT_CITY_OUTSIDE_REGION, () =>
-            sendText(phoneNumberId, from, EVENT_EDIT_LOCATION_ASK_CITY),
-          )
-        }
-        conversationState.set(from, {
-          eventEditPendingCity: parsed.value,
-          step: STEPS.EVENT_ADD_EDIT_REGION,
-        })
-        const imageUrl = getRegionMapImageUrl()
-        const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD_ASK_REGION)
-        if (imgRes && !imgRes.success) {
-          logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
-        }
-        return sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_ADD_ASK_REGION,
-          buttons: [...EVENT_ADD_REGION_BUTTONS],
-        })
+      if (!inRegion && certain) {
+        const reaskCityRegion = cityCanSkip
+          ? () => sendInteractiveButtons(phoneNumberId, from, {
+              body: EVENT_ADD.ASK_CITY,
+              buttons: [EVENT_ADD.SKIP_BUTTON],
+            })
+          : () => sendText(phoneNumberId, from, EVENT_ADD.ASK_CITY)
+        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD.CITY_OUTSIDE_REGION, reaskCityRegion)
       }
-    } else if (fieldKey === 'gmapsNavLink' || fieldKey === 'wazeNavLink') {
-      const extracted = extractNavLinksFromRaw(
-        fieldKey === 'wazeNavLink' ? textBody : '',
-        fieldKey === 'gmapsNavLink' ? textBody : ''
-      )
-      if (fieldKey === 'gmapsNavLink') {
-        locationPatch.gmapsNavLink = extracted.gmapsNavLink || null
-      } else {
-        locationPatch.wazeNavLink = extracted.wazeNavLink || null
-      }
-    } else if (fieldKey !== 'city') {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU, eventEditLocationFieldKey: undefined })
-      return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
     }
+    conversationState.set(from, {
+      eventEditCity: parsed.value,
+      eventEditCityResult: parsed,
+      step: STEPS.EVENT_ADD_EDIT_LOCATION_REGION,
+    })
+    return sendRegionStep(phoneNumberId, from)
+  }
 
+  if (step === STEPS.EVENT_ADD_EDIT_LOCATION_REGION) {
+    const validRegionIds = EVENT_ADD.REGION_BUTTONS.map((b) => b.id)
+    if (!buttonId || !validRegionIds.includes(buttonId)) {
+      return sendRegionStep(phoneNumberId, from)
+    }
+    conversationState.set(from, { eventEditRegion: buttonId, step: STEPS.EVENT_ADD_EDIT_LOCATION_ADDRESS })
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_ADD.ASK_ADDRESS,
+      footer: EVENT_ADD.ASK_ADDRESS_FOOTER,
+      buttons: [EVENT_ADD.SKIP_BUTTON],
+    })
+  }
+
+  if (step === STEPS.EVENT_ADD_EDIT_LOCATION_ADDRESS) {
+    const addressCanSkip = true
+
+    if (buttonId === EVENT_ADD.SKIP_BUTTON.id && addressCanSkip) {
+      conversationState.set(from, {
+        eventEditAddressLine1: '',
+        eventEditAddressLine2: '',
+        step: STEPS.EVENT_ADD_EDIT_LOCATION_NOTES,
+      })
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD.ASK_LOCATION_NOTES,
+        footer: EVENT_ADD.ASK_LOCATION_NOTES_FOOTER,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
+      })
+    }
+    if (!textBody) {
+      if (addressCanSkip) {
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD.ASK_ADDRESS,
+          footer: EVENT_ADD.ASK_ADDRESS_FOOTER,
+          buttons: [EVENT_ADD.SKIP_BUTTON],
+        })
+      }
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_ADDRESS + '\n_' + EVENT_ADD.ASK_ADDRESS_FOOTER + '_')
+    }
+    const lines = textBody.split(/\n/).map((s) => s.trim()).filter(Boolean)
+    const firstLine = (lines[0] ?? '').trim()
+    if (lines.length === 0 || firstLine === '') {
+      if (addressCanSkip) {
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD.ASK_ADDRESS,
+          footer: EVENT_ADD.ASK_ADDRESS_FOOTER,
+          buttons: [EVENT_ADD.SKIP_BUTTON],
+        })
+      }
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_ADDRESS + '\n_' + EVENT_ADD.ASK_ADDRESS_FOOTER + '_')
+    }
+    const reaskAddress = () =>
+      addressCanSkip
+        ? sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD.ASK_ADDRESS,
+            footer: EVENT_ADD.ASK_ADDRESS_FOOTER,
+            buttons: [EVENT_ADD.SKIP_BUTTON],
+          })
+        : sendText(phoneNumberId, from, EVENT_ADD.ASK_ADDRESS + '\n_' + EVENT_ADD.ASK_ADDRESS_FOOTER + '_')
+    if (lines.length > 2) {
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_ADDRESS, reaskAddress)
+    }
+    const line1 = (lines[0] ?? '').trim()
+    const line2 = (lines[1] ?? '').trim()
+    const line1TooLong = line1.length > VALIDATION.ADDRESS_MAX
+    const line2TooLong = line2.length > VALIDATION.ADDRESS_MAX
+    if (line1TooLong || line2TooLong) {
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_ADDRESS, reaskAddress)
+    }
+    conversationState.set(from, {
+      eventEditAddressLine1: line1,
+      eventEditAddressLine2: line2,
+      step: STEPS.EVENT_ADD_EDIT_LOCATION_NOTES,
+    })
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_ADD.ASK_LOCATION_NOTES,
+      footer: EVENT_ADD.ASK_LOCATION_NOTES_FOOTER,
+      buttons: [EVENT_ADD.SKIP_BUTTON],
+    })
+  }
+
+  if (step === STEPS.EVENT_ADD_EDIT_LOCATION_NOTES) {
+    if (buttonId === EVENT_ADD.SKIP_BUTTON.id) {
+      conversationState.set(from, { eventEditLocationNotes: '' })
+    } else if (textBody) {
+      if (textBody.length > VALIDATION.LOCATION_NOTES_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_LOCATION_NOTES, () =>
+          sendInteractiveButtons(phoneNumberId, from, {
+            body: EVENT_ADD.ASK_LOCATION_NOTES,
+            footer: EVENT_ADD.ASK_LOCATION_NOTES_FOOTER,
+            buttons: [EVENT_ADD.SKIP_BUTTON],
+          }),
+        )
+      }
+      conversationState.set(from, { eventEditLocationNotes: textBody })
+    } else {
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD.ASK_LOCATION_NOTES,
+        footer: EVENT_ADD.ASK_LOCATION_NOTES_FOOTER,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
+      })
+    }
+    const s = conversationState.get(from)
+    const draftId = s.eventAddDraftId
+    if (!draftId) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+    }
+    const cityResult = s.eventEditCityResult
+    const region = s.eventEditRegion ?? ''
+    let locCity = ''
+    let locCityType
+    let locRegion
+    if (cityResult && cityResult.type === 'listed') {
+      locCity = cityResult.value?.cityId ?? (s.eventEditCity ?? '').trim()
+      locCityType = 'listed'
+    } else if ((s.eventEditCity ?? '').trim()) {
+      locCity = (s.eventEditCity ?? '').trim()
+      locRegion = region || undefined
+      locCityType = 'custom'
+    } else if (region) {
+      locRegion = region
+    }
+    const location = {
+      locationName: (s.eventEditPlaceName ?? '').trim() || null,
+      city: locCity || null,
+      cityType: locCityType ?? null,
+      region: locCityType === 'listed' ? null : (locRegion || null),
+      addressLine1: (s.eventEditAddressLine1 ?? '').trim() || null,
+      addressLine2: (s.eventEditAddressLine2 ?? '').trim() || null,
+      locationDetails: (s.eventEditLocationNotes ?? '').trim() || null,
+      wazeNavLink: null,
+      gmapsNavLink: null,
+    }
+    const result = await patchDraft(draftId, { location })
+    if (!result.success) {
+      await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+    }
+    conversationState.set(from, {
+      eventAddFormattedPreview: result.event || s.eventAddFormattedPreview,
+      step: STEPS.EVENT_ADD_EDIT_SUCCESS,
+      eventEditPlaceName: undefined,
+      eventEditCity: undefined,
+      eventEditCityResult: undefined,
+      eventEditRegion: undefined,
+      eventEditAddressLine1: undefined,
+      eventEditAddressLine2: undefined,
+      eventEditLocationNotes: undefined,
+    })
+    const updatedEvent = result.event || s.eventAddFormattedPreview
+    let body = EVENT_EDIT.SUCCESS_MESSAGES.location + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES)
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.location
+    return sendEditSuccessQuickReplies(phoneNumberId, from, body)
+  }
+
+  if (step === STEPS.EVENT_ADD_EDIT_NAV_LINKS) {
+    const draftId = state.eventAddDraftId
+    if (!draftId) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+    }
+    if (msg.type !== 'text' && !textBody) {
+      return sendText(phoneNumberId, from, EVENT_EDIT.NAV_LINKS_ASK)
+    }
+    const extracted = extractNavLinksFromRaw(textBody || '', textBody || '')
+    const currentLoc = state.eventAddFormattedPreview?.location || {}
+    const locationPatch = {
+      ...currentLoc,
+      wazeNavLink: extracted.wazeNavLink ?? null,
+      gmapsNavLink: extracted.gmapsNavLink ?? null,
+    }
     const result = await patchDraft(draftId, { location: locationPatch })
     if (!result.success) {
-      await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
+      await sendText(phoneNumberId, from, getPatchFailureUserMessage(result))
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     conversationState.set(from, {
       eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
       step: STEPS.EVENT_ADD_EDIT_SUCCESS,
-      eventEditLocationFieldKey: undefined,
     })
     const updatedEvent = result.event || state.eventAddFormattedPreview
-    let body = EVENT_EDIT_SUCCESS_MESSAGES.location + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES)
-    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.location
-    return sendEditSuccessQuickReplies(phoneNumberId, from, body, {
-      addLocationOption: true,
-    })
-  }
-
-  if (step === STEPS.EVENT_ADD_EDIT_REGION) {
-    const draftId = state.eventAddDraftId
-    const pendingCity = state.eventEditPendingCity
-    const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
-    if (!draftId || typeof pendingCity !== 'string') {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU, eventEditPendingCity: undefined })
-      return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
-    }
-    if (buttonId && validRegionIds.includes(buttonId)) {
-      const locationPatch = { city: pendingCity.trim(), region: buttonId, cityType: 'custom' }
-      const result = await patchDraft(draftId, { location: locationPatch })
-      conversationState.set(from, { eventEditPendingCity: undefined })
-      if (!result.success) {
-        await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
-        conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
-        return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
-      }
-      conversationState.set(from, {
-        eventAddFormattedPreview: result.event || state.eventAddFormattedPreview,
-        step: STEPS.EVENT_ADD_EDIT_SUCCESS,
-      })
-      const updatedEvent = result.event || state.eventAddFormattedPreview
-      let body = EVENT_EDIT_SUCCESS_MESSAGES.location + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES)
-      if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT_SUCCESS_MESSAGES.location
-      return sendEditSuccessQuickReplies(phoneNumberId, from, body, { addLocationOption: true })
-    }
-    const imageUrl = getRegionMapImageUrl()
-    const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD_ASK_REGION)
-    if (imgRes && !imgRes.success) {
-      logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
-    }
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_REGION,
-      buttons: [...EVENT_ADD_REGION_BUTTONS],
-    })
+    let body = EVENT_EDIT.SUCCESS_MESSAGES.navLinks + '\n\n' + buildEditSuccessValueBlock('location', updatedEvent || {}, EVENT_CATEGORIES, { includeNavLinks: true })
+    if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) body = EVENT_EDIT.SUCCESS_MESSAGES.navLinks
+    return sendEditSuccessQuickReplies(phoneNumberId, from, body)
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_SUCCESS) {
-    if (state.eventAddFromFreeLangSuccess && buttonId === EVENT_EDIT_FREE_LANG_SUCCESS_MORE_BUTTON.id) {
+    if (state.eventAddFromFreeLangSuccess && buttonId === EVENT_EDIT.FREE_LANG_SUCCESS_MORE_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddFromFreeLangSuccess: undefined })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
-    if (state.eventAddFromFreeLangSuccess && buttonId === EVENT_EDIT_FREE_LANG_SUCCESS_DONE_BUTTON.id) {
+    if (state.eventAddFromFreeLangSuccess && buttonId === EVENT_EDIT.FREE_LANG_SUCCESS_DONE_BUTTON.id) {
       conversationState.set(from, { eventAddFromFreeLangSuccess: undefined })
       if (state.eventUpdateMode) {
         conversationState.clear(from)
         conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
-        return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+        return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
       }
       conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
       const preview = state.eventAddFormattedPreview
@@ -2714,7 +2916,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       }
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
-    if (buttonId === EVENT_EDIT_SUCCESS_DONE_BUTTON.id) {
+    if (buttonId === EVENT_EDIT.SUCCESS_DONE_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_CONFIRM })
       const preview = state.eventAddFormattedPreview
       if (preview && typeof preview === 'object') {
@@ -2722,13 +2924,13 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       }
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
-    if (buttonId === EVENT_EDIT_SUCCESS_MORE_BUTTON.id) {
+    if (buttonId === EVENT_EDIT.SUCCESS_MORE_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
-    if (buttonId === EVENT_EDIT_SUCCESS_MORE_LOCATION_BUTTON.id) {
-      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU })
-      return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
+    if (buttonId === EVENT_EDIT.SUCCESS_MORE_LOCATION_BUTTON.id) {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU })
+      return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
     }
     return sendEditSuccessQuickReplies(phoneNumberId, from)
   }
@@ -2737,7 +2939,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     const order = Array.isArray(state.eventAddFlagFieldOrder) ? state.eventAddFlagFieldOrder : []
     const idx = typeof state.eventAddFlagIndex === 'number' ? state.eventAddFlagIndex : 0
     if (order.length === 0 || idx >= order.length) {
-      return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_TITLE)
     }
     const fieldKey = order[idx]
     const config = FLAG_FIELD_CONFIGS[fieldKey]
@@ -2746,20 +2948,73 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       const nextIdx = idx + 1
       if (nextIdx >= order.length) {
         const s = conversationState.get(from)
-        if (s.eventAddPendingMediaStep) {
-          conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA, eventAddPendingMediaStep: undefined })
-          return sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_MEDIA_FIRST,
-            buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
-          })
-        }
         return runProcessDraftAfterFlagInput(phoneNumberId, from, s, context)
       }
       return sendAskForFlagField(phoneNumberId, from, conversationState.get(from), order[nextIdx])
     }
+    if (fieldKey === 'rawLocation' && (state.eventAddRawLocationSubStep ?? 0) === 1 && (textBody ?? '').trim()) {
+      const cityStr = (textBody ?? '').trim()
+      if (cityStr.length > VALIDATION.CITY_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, config.validateCity, () =>
+          sendAskForFlagField(phoneNumberId, from, state, fieldKey),
+        )
+      }
+      const cityParsed = await normalizeCityToListedOrCustom(cityStr, CITIES_LIST, {
+        openaiApiKey: config.openaiApiKey,
+        openaiModel: config.openaiModel,
+        correlationId: from,
+      })
+      if (cityParsed.type === 'listed' && cityParsed.value) {
+        const { cityId, cityTitle, region } = cityParsed.value
+        conversationState.set(from, {
+          eventAddCity: cityTitle,
+          eventAddCityResult: { type: 'listed', value: { cityId, cityTitle, region: region || '' } },
+          eventAddRegion: region || '',
+          eventAddRawLocationSubStep: undefined,
+          eventAddFlagIndex: idx + 1,
+        })
+        const nextIdx = idx + 1
+        if (nextIdx >= order.length) {
+          const s = conversationState.get(from)
+          return runProcessDraftAfterFlagInput(phoneNumberId, from, s, context)
+        }
+        return sendAskForFlagField(phoneNumberId, from, conversationState.get(from), order[nextIdx])
+      }
+      if (cityParsed.type === 'custom' && cityParsed.value) {
+        const { inRegion, certain } = await verifyCityInNorthernIsrael(cityParsed.value, {
+          openaiApiKey: config.openaiApiKey,
+          openaiModel: config.openaiModel,
+          correlationId: from,
+        })
+        if (!inRegion && certain) {
+          return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_CITY_OUTSIDE_REGION, () =>
+            sendAskForFlagField(phoneNumberId, from, state, fieldKey),
+          )
+        }
+        conversationState.set(from, {
+          eventAddCity: cityParsed.value,
+          eventAddCityResult: { type: 'custom', value: cityParsed.value },
+          eventAddRawLocationSubStep: undefined,
+          step: STEPS.EVENT_ADD_REGION,
+          eventAddFlagRegionPending: true,
+          eventAddFlagIndex: idx,
+        })
+        return sendRegionStep(phoneNumberId, from)
+      }
+      const customValue = (cityParsed.type === 'custom' && cityParsed.value) ? cityParsed.value : cityStr
+      conversationState.set(from, {
+        eventAddCity: customValue,
+        eventAddCityResult: { type: 'custom', value: customValue },
+        eventAddRawLocationSubStep: undefined,
+        step: STEPS.EVENT_ADD_REGION,
+        eventAddFlagRegionPending: true,
+        eventAddFlagIndex: idx,
+      })
+      return sendRegionStep(phoneNumberId, from)
+    }
     if ((fieldKey === 'rawCity' || fieldKey === 'rawCityOutsideNorth') && (textBody ?? '').trim()) {
       const cityStr = (textBody ?? '').trim()
-      if (cityStr.length > EVENT_ADD_CITY_MAX) {
+      if (cityStr.length > VALIDATION.CITY_MAX) {
         return sendValidationAndReask(phoneNumberId, from, config.validate, () =>
           sendAskForFlagField(phoneNumberId, from, state, fieldKey),
         )
@@ -2780,13 +3035,6 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         const nextIdx = idx + 1
         if (nextIdx >= order.length) {
           const s = conversationState.get(from)
-          if (s.eventAddPendingMediaStep) {
-            conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA, eventAddPendingMediaStep: undefined })
-            return sendInteractiveButtons(phoneNumberId, from, {
-              body: EVENT_ADD_ASK_MEDIA_FIRST,
-              buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
-            })
-          }
           return runProcessDraftAfterFlagInput(phoneNumberId, from, s, context)
         }
         return sendAskForFlagField(phoneNumberId, from, conversationState.get(from), order[nextIdx])
@@ -2847,13 +3095,6 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     const nextIdx = idx + 1
     if (nextIdx >= order.length) {
       const s = conversationState.get(from)
-      if (s.eventAddPendingMediaStep) {
-        conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA, eventAddPendingMediaStep: undefined })
-        return sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_ADD_ASK_MEDIA_FIRST,
-          buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
-        })
-      }
       return runProcessDraftAfterFlagInput(phoneNumberId, from, s, context)
     }
     return sendAskForFlagField(phoneNumberId, from, conversationState.get(from), order[nextIdx])
@@ -2861,22 +3102,22 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_TITLE) {
     if (!config.isProduction && textBody === 'טסט') return applyEventAddTestModeAndGoToMedia(phoneNumberId, from)
-    if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
+    if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD.ASK_TITLE)
     const len = textBody.length
-    if (len < EVENT_ADD_TITLE_MIN || len > EVENT_ADD_TITLE_MAX) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_TITLE, () =>
-        sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE),
+    if (len < VALIDATION.TITLE_MIN || len > VALIDATION.TITLE_MAX) {
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_TITLE, () =>
+        sendText(phoneNumberId, from, EVENT_ADD.ASK_TITLE),
       )
     }
     conversationState.set(from, { eventAddTitle: textBody, step: STEPS.EVENT_ADD_DATETIME })
-    return sendText(phoneNumberId, from, EVENT_ADD_ASK_DATETIME + '\n' + EVENT_ADD_ASK_DATETIME_FOOTER)
+    return sendText(phoneNumberId, from, EVENT_ADD.ASK_DATETIME + '\n' + EVENT_ADD.ASK_DATETIME_FOOTER)
   }
 
   if (step === STEPS.EVENT_ADD_DATETIME) {
-    if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_DATETIME + '\n' + EVENT_ADD_ASK_DATETIME_FOOTER)
-    if (textBody.length > EVENT_ADD_DATETIME_MAX) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_DATETIME, () =>
-        sendText(phoneNumberId, from, EVENT_ADD_ASK_DATETIME + '\n' + EVENT_ADD_ASK_DATETIME_FOOTER),
+    if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD.ASK_DATETIME + '\n' + EVENT_ADD.ASK_DATETIME_FOOTER)
+    if (textBody.length > VALIDATION.DATETIME_MAX) {
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_DATETIME, () =>
+        sendText(phoneNumberId, from, EVENT_ADD.ASK_DATETIME + '\n' + EVENT_ADD.ASK_DATETIME_FOOTER),
       )
     }
     conversationState.set(from, { eventAddDateTime: textBody, step: STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP })
@@ -2887,12 +3128,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   if (step === STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP) {
     const groupListPayload = buildCategoryGroupListPayload()
     if (listReplyId && !VALID_GROUP_IDS.has(listReplyId)) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY_GROUP, () =>
         sendInteractiveList(phoneNumberId, from, groupListPayload),
       )
     }
     if (!listReplyId) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY_GROUP, () =>
         sendInteractiveList(phoneNumberId, from, groupListPayload),
       )
     }
@@ -2905,7 +3146,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_MAIN_CATEGORY) {
-    if (buttonId === EVENT_ADD_CHANGE_GROUP_BUTTON.id || listReplyId === EVENT_ADD_CHANGE_GROUP_BUTTON.id) {
+    if (buttonId === EVENT_ADD.CHANGE_GROUP_BUTTON.id || listReplyId === EVENT_ADD.CHANGE_GROUP_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_MAIN_CATEGORY_GROUP })
       const groupListPayload = buildCategoryGroupListPayload()
       return sendInteractiveList(phoneNumberId, from, groupListPayload)
@@ -2914,13 +3155,13 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       sendInteractiveList(phoneNumberId, from, buildCategoryListForGroup(groupId, { addChangeGroupRow: true }))
     if (listReplyId && !VALID_CATEGORY_IDS.has(listReplyId)) {
       const groupId = state.eventAddMainCategoryGroupId
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY, () =>
         sendCategoryList(groupId),
       )
     }
     if (!listReplyId) {
       const groupId = state.eventAddMainCategoryGroupId
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MAIN_CATEGORY, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MAIN_CATEGORY, () =>
         sendCategoryList(groupId),
       )
     }
@@ -2938,36 +3179,35 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_PLACE_NAME) {
-    if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
+    if (buttonId === EVENT_ADD.SKIP_BUTTON.id) {
       conversationState.set(from, { eventAddPlaceName: '', step: STEPS.EVENT_ADD_CITY })
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_CITY,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
-      })
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_CITY)
     }
     if (textBody) {
-      if (textBody.length > EVENT_ADD_PLACE_NAME_MAX) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_PLACE_NAME, () =>
+      if (textBody.length > VALIDATION.PLACE_NAME_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_PLACE_NAME, () =>
           sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_PLACE_NAME,
-            buttons: [EVENT_ADD_SKIP_BUTTON],
+            body: EVENT_ADD.ASK_PLACE_NAME,
+            buttons: [EVENT_ADD.SKIP_BUTTON],
           }),
         )
       }
       conversationState.set(from, { eventAddPlaceName: textBody, step: STEPS.EVENT_ADD_CITY })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_CITY,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
+        body: EVENT_ADD.ASK_CITY,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
       })
     }
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_PLACE_NAME,
-      buttons: [EVENT_ADD_SKIP_BUTTON],
+      body: EVENT_ADD.ASK_PLACE_NAME,
+      buttons: [EVENT_ADD.SKIP_BUTTON],
     })
   }
 
   if (step === STEPS.EVENT_ADD_CITY) {
-    if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
+    const placeName = (state.eventAddPlaceName ?? '').trim()
+    const cityCanSkip = !!placeName
+    if (cityCanSkip && buttonId === EVENT_ADD.SKIP_BUTTON.id) {
       conversationState.set(from, {
         eventAddCity: '',
         eventAddCityResult: null,
@@ -2976,25 +3216,25 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return sendRegionStep(phoneNumberId, from)
     }
     if (!textBody) {
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_CITY,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
-      })
+      if (cityCanSkip) {
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: EVENT_ADD.ASK_CITY,
+          buttons: [EVENT_ADD.SKIP_BUTTON],
+        })
+      }
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_CITY)
     }
-    if (textBody.length > EVENT_ADD_CITY_MAX) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_CITY, () =>
-        sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_ADD_ASK_CITY,
-          buttons: [EVENT_ADD_SKIP_BUTTON],
-        }),
-      )
+    if (textBody.length > VALIDATION.CITY_MAX) {
+      const reaskCityAdd = cityCanSkip
+        ? () => sendInteractiveButtons(phoneNumberId, from, { body: EVENT_ADD.ASK_CITY, buttons: [EVENT_ADD.SKIP_BUTTON] })
+        : () => sendText(phoneNumberId, from, EVENT_ADD.ASK_CITY)
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_CITY, reaskCityAdd)
     }
     const parsed = await normalizeCityToListedOrCustom(textBody, CITIES_LIST, {
       openaiApiKey: config.openaiApiKey,
       openaiModel: config.openaiModel,
       correlationId: from,
     })
-    const placeName = (state.eventAddPlaceName ?? '').trim()
     if (parsed.type === 'listed') {
       const { cityId, cityTitle, region } = parsed.value
       conversationState.set(from, {
@@ -3003,14 +3243,11 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         eventAddRegion: region,
         step: STEPS.EVENT_ADD_ADDRESS,
       })
-      if (placeName) {
-        return sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_ADD_ASK_ADDRESS,
-          footer: EVENT_ADD_ASK_ADDRESS_FOOTER,
-          buttons: [EVENT_ADD_SKIP_BUTTON],
-        })
-      }
-      return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS + '\n_' + EVENT_ADD_ASK_ADDRESS_FOOTER + '_')
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD.ASK_ADDRESS,
+        footer: EVENT_ADD.ASK_ADDRESS_FOOTER,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
+      })
     }
     if (parsed.type === 'custom' && parsed.value) {
       const { inRegion, certain } = await verifyCityInNorthernIsrael(parsed.value, {
@@ -3019,12 +3256,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         correlationId: from,
       })
       if (!inRegion && certain) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_CITY_OUTSIDE_REGION, () =>
-          sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_CITY,
-            buttons: [EVENT_ADD_SKIP_BUTTON],
-          }),
-        )
+        const reaskCityAddRegion = cityCanSkip
+          ? () => sendInteractiveButtons(phoneNumberId, from, { body: EVENT_ADD.ASK_CITY, buttons: [EVENT_ADD.SKIP_BUTTON] })
+          : () => sendText(phoneNumberId, from, EVENT_ADD.ASK_CITY)
+        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_CITY_OUTSIDE_REGION, reaskCityAddRegion)
       }
     }
     conversationState.set(from, {
@@ -3036,7 +3271,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_REGION) {
-    const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
+    const validRegionIds = EVENT_ADD.REGION_BUTTONS.map((b) => b.id)
     if (!buttonId || !validRegionIds.includes(buttonId)) {
       return sendRegionStep(phoneNumberId, from)
     }
@@ -3054,81 +3289,76 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         if (s.eventAddPendingMediaStep) {
           conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA, eventAddPendingMediaStep: undefined })
           return sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_MEDIA_FIRST,
-            buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
+            body: EVENT_ADD.ASK_MEDIA_FIRST,
+            buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
           })
         }
         return runProcessDraftAfterFlagInput(phoneNumberId, from, s, context)
       }
       return sendAskForFlagField(phoneNumberId, from, conversationState.get(from), order[nextIdx])
     }
-    const placeName = (state.eventAddPlaceName ?? '').trim()
     conversationState.set(from, { eventAddRegion: buttonId, step: STEPS.EVENT_ADD_ADDRESS })
-    if (placeName) {
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_ADDRESS,
-        footer: EVENT_ADD_ASK_ADDRESS_FOOTER,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
-      })
-    }
-    return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS + '\n_' + EVENT_ADD_ASK_ADDRESS_FOOTER + '_')
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_ADD.ASK_ADDRESS,
+      footer: EVENT_ADD.ASK_ADDRESS_FOOTER,
+      buttons: [EVENT_ADD.SKIP_BUTTON],
+    })
   }
 
   if (step === STEPS.EVENT_ADD_ADDRESS) {
-    const placeName = (state.eventAddPlaceName ?? '').trim()
-    const addressCanSkip = !!placeName
+    const addressCanSkip = true
 
-    if (buttonId === EVENT_ADD_SKIP_BUTTON.id && addressCanSkip) {
+    if (buttonId === EVENT_ADD.SKIP_BUTTON.id && addressCanSkip) {
       conversationState.set(from, {
         eventAddAddressLine1: '',
         eventAddAddressLine2: '',
         step: STEPS.EVENT_ADD_LOCATION_NOTES,
       })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_LOCATION_NOTES,
-        footer: EVENT_ADD_ASK_LOCATION_NOTES_FOOTER,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
+        body: EVENT_ADD.ASK_LOCATION_NOTES,
+        footer: EVENT_ADD.ASK_LOCATION_NOTES_FOOTER,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
       })
     }
     if (!textBody) {
       if (addressCanSkip) {
         return sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_ADD_ASK_ADDRESS,
-          footer: EVENT_ADD_ASK_ADDRESS_FOOTER,
-          buttons: [EVENT_ADD_SKIP_BUTTON],
+          body: EVENT_ADD.ASK_ADDRESS,
+          footer: EVENT_ADD.ASK_ADDRESS_FOOTER,
+          buttons: [EVENT_ADD.SKIP_BUTTON],
         })
       }
-      return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS + '\n_' + EVENT_ADD_ASK_ADDRESS_FOOTER + '_')
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_ADDRESS + '\n_' + EVENT_ADD.ASK_ADDRESS_FOOTER + '_')
     }
     const lines = textBody.split(/\n/).map((s) => s.trim()).filter(Boolean)
     const firstLine = (lines[0] ?? '').trim()
     if (lines.length === 0 || firstLine === '') {
       if (addressCanSkip) {
         return sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_ADD_ASK_ADDRESS,
-          footer: EVENT_ADD_ASK_ADDRESS_FOOTER,
-          buttons: [EVENT_ADD_SKIP_BUTTON],
+          body: EVENT_ADD.ASK_ADDRESS,
+          footer: EVENT_ADD.ASK_ADDRESS_FOOTER,
+          buttons: [EVENT_ADD.SKIP_BUTTON],
         })
       }
-      return sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS + '\n_' + EVENT_ADD_ASK_ADDRESS_FOOTER + '_')
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_ADDRESS + '\n_' + EVENT_ADD.ASK_ADDRESS_FOOTER + '_')
     }
     const reaskAddress = () =>
       addressCanSkip
         ? sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_ADDRESS,
-            footer: EVENT_ADD_ASK_ADDRESS_FOOTER,
-            buttons: [EVENT_ADD_SKIP_BUTTON],
+            body: EVENT_ADD.ASK_ADDRESS,
+            footer: EVENT_ADD.ASK_ADDRESS_FOOTER,
+            buttons: [EVENT_ADD.SKIP_BUTTON],
           })
-        : sendText(phoneNumberId, from, EVENT_ADD_ASK_ADDRESS + '\n_' + EVENT_ADD_ASK_ADDRESS_FOOTER + '_')
+        : sendText(phoneNumberId, from, EVENT_ADD.ASK_ADDRESS + '\n_' + EVENT_ADD.ASK_ADDRESS_FOOTER + '_')
     if (lines.length > 2) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_ADDRESS, reaskAddress)
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_ADDRESS, reaskAddress)
     }
     const line1 = (lines[0] ?? '').trim()
     const line2 = (lines[1] ?? '').trim()
-    const line1TooLong = line1.length > EVENT_ADD_ADDRESS_MAX
-    const line2TooLong = line2.length > EVENT_ADD_ADDRESS_MAX
+    const line1TooLong = line1.length > VALIDATION.ADDRESS_MAX
+    const line2TooLong = line2.length > VALIDATION.ADDRESS_MAX
     if (line1TooLong || line2TooLong) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_ADDRESS, reaskAddress)
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_ADDRESS, reaskAddress)
     }
     conversationState.set(from, {
       eventAddAddressLine1: line1,
@@ -3136,26 +3366,26 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       step: STEPS.EVENT_ADD_LOCATION_NOTES,
     })
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_LOCATION_NOTES,
-      buttons: [EVENT_ADD_SKIP_BUTTON],
+      body: EVENT_ADD.ASK_LOCATION_NOTES,
+      buttons: [EVENT_ADD.SKIP_BUTTON],
     })
   }
 
   if (step === STEPS.EVENT_ADD_LOCATION_NOTES) {
-    if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
+    if (buttonId === EVENT_ADD.SKIP_BUTTON.id) {
       conversationState.set(from, { eventAddLocationNotes: '', step: STEPS.EVENT_ADD_WAZE_GMAPS })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_WAZE_GMAPS,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
+        body: EVENT_ADD.ASK_WAZE_GMAPS,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
       })
     }
     if (textBody) {
-      if (textBody.length > EVENT_ADD_LOCATION_NOTES_MAX) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_LOCATION_NOTES, () =>
+      if (textBody.length > VALIDATION.LOCATION_NOTES_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_LOCATION_NOTES, () =>
           sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_LOCATION_NOTES,
-            footer: EVENT_ADD_ASK_LOCATION_NOTES_FOOTER,
-            buttons: [EVENT_ADD_SKIP_BUTTON],
+            body: EVENT_ADD.ASK_LOCATION_NOTES,
+            footer: EVENT_ADD.ASK_LOCATION_NOTES_FOOTER,
+            buttons: [EVENT_ADD.SKIP_BUTTON],
           }),
         )
       }
@@ -3164,28 +3394,28 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         step: STEPS.EVENT_ADD_WAZE_GMAPS,
       })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_WAZE_GMAPS,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
+        body: EVENT_ADD.ASK_WAZE_GMAPS,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
       })
     }
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_LOCATION_NOTES,
-      footer: EVENT_ADD_ASK_LOCATION_NOTES_FOOTER,
-      buttons: [EVENT_ADD_SKIP_BUTTON],
+      body: EVENT_ADD.ASK_LOCATION_NOTES,
+      footer: EVENT_ADD.ASK_LOCATION_NOTES_FOOTER,
+      buttons: [EVENT_ADD.SKIP_BUTTON],
     })
   }
 
   if (step === STEPS.EVENT_ADD_WAZE_GMAPS) {
-    if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
+    if (buttonId === EVENT_ADD.SKIP_BUTTON.id) {
       conversationState.set(from, { eventAddNavLinks: '', step: STEPS.EVENT_ADD_PRICE })
-      return sendText(phoneNumberId, from, EVENT_ADD_ASK_PRICE + '\n' + EVENT_ADD_ASK_PRICE_FOOTER)
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_PRICE + '\n' + EVENT_ADD.ASK_PRICE_FOOTER)
     }
     if (textBody) {
-      if (textBody.length > EVENT_ADD_WAZE_GMAPS_MAX) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_WAZE_GMAPS, () =>
+      if (textBody.length > VALIDATION.WAZE_GMAPS_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_WAZE_GMAPS, () =>
           sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_WAZE_GMAPS,
-            buttons: [EVENT_ADD_SKIP_BUTTON],
+            body: EVENT_ADD.ASK_WAZE_GMAPS,
+            buttons: [EVENT_ADD.SKIP_BUTTON],
           }),
         )
       }
@@ -3193,75 +3423,75 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         eventAddNavLinks: textBody,
         step: STEPS.EVENT_ADD_PRICE,
       })
-      return sendText(phoneNumberId, from, EVENT_ADD_ASK_PRICE + '\n' + EVENT_ADD_ASK_PRICE_FOOTER)
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_PRICE + '\n' + EVENT_ADD.ASK_PRICE_FOOTER)
     }
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_WAZE_GMAPS,
-      buttons: [EVENT_ADD_SKIP_BUTTON],
+      body: EVENT_ADD.ASK_WAZE_GMAPS,
+      buttons: [EVENT_ADD.SKIP_BUTTON],
     })
   }
 
   if (step === STEPS.EVENT_ADD_PRICE) {
     if (textBody) {
-      if (textBody.length > EVENT_ADD_PRICE_MAX) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_PRICE, () =>
-          sendText(phoneNumberId, from, EVENT_ADD_ASK_PRICE + '\n' + EVENT_ADD_ASK_PRICE_FOOTER),
+      if (textBody.length > VALIDATION.PRICE_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_PRICE, () =>
+          sendText(phoneNumberId, from, EVENT_ADD.ASK_PRICE + '\n' + EVENT_ADD.ASK_PRICE_FOOTER),
         )
       }
       conversationState.set(from, { eventAddPrice: textBody, step: STEPS.EVENT_ADD_DESCRIPTION })
-      return sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION)
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_DESCRIPTION)
     }
-    return sendText(phoneNumberId, from, EVENT_ADD_ASK_PRICE + '\n' + EVENT_ADD_ASK_PRICE_FOOTER)
+    return sendText(phoneNumberId, from, EVENT_ADD.ASK_PRICE + '\n' + EVENT_ADD.ASK_PRICE_FOOTER)
   }
 
   if (step === STEPS.EVENT_ADD_DESCRIPTION) {
-    if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION)
-    if (textBody.length < EVENT_ADD_DESCRIPTION_MIN || textBody.length > EVENT_ADD_DESCRIPTION_MAX) {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_DESCRIPTION, () =>
-        sendText(phoneNumberId, from, EVENT_ADD_ASK_DESCRIPTION),
+    if (!textBody) return sendText(phoneNumberId, from, EVENT_ADD.ASK_DESCRIPTION)
+    if (textBody.length < VALIDATION.DESCRIPTION_MIN || textBody.length > VALIDATION.DESCRIPTION_MAX) {
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_DESCRIPTION, () =>
+        sendText(phoneNumberId, from, EVENT_ADD.ASK_DESCRIPTION),
       )
     }
     conversationState.set(from, { eventAddDescription: textBody, step: STEPS.EVENT_ADD_LINKS })
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_LINKS,
-      footer: EVENT_ADD_ASK_LINKS_FOOTER,
-      buttons: [EVENT_ADD_SKIP_BUTTON],
+      body: EVENT_ADD.ASK_LINKS,
+      footer: EVENT_ADD.ASK_LINKS_FOOTER,
+      buttons: [EVENT_ADD.SKIP_BUTTON],
     })
   }
 
   if (step === STEPS.EVENT_ADD_LINKS) {
-    if (buttonId === EVENT_ADD_SKIP_BUTTON.id) {
+    if (buttonId === EVENT_ADD.SKIP_BUTTON.id) {
       conversationState.set(from, { eventAddLinks: '', step: STEPS.EVENT_ADD_MEDIA })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_MEDIA_FIRST,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
+        body: EVENT_ADD.ASK_MEDIA_FIRST,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
       })
     }
     if (textBody) {
-      if (textBody.length > EVENT_ADD_LINKS_MAX) {
-        return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_LINKS, () =>
+      if (textBody.length > VALIDATION.LINKS_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_LINKS, () =>
           sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_LINKS,
-            footer: EVENT_ADD_ASK_LINKS_FOOTER,
-            buttons: [EVENT_ADD_SKIP_BUTTON],
+            body: EVENT_ADD.ASK_LINKS,
+            footer: EVENT_ADD.ASK_LINKS_FOOTER,
+            buttons: [EVENT_ADD.SKIP_BUTTON],
           }),
         )
       }
       conversationState.set(from, { eventAddLinks: textBody, step: STEPS.EVENT_ADD_MEDIA })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD_ASK_MEDIA_FIRST,
-        buttons: [EVENT_ADD_SKIP_BUTTON],
+        body: EVENT_ADD.ASK_MEDIA_FIRST,
+        buttons: [EVENT_ADD.SKIP_BUTTON],
       })
     }
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD_ASK_LINKS,
-      footer: EVENT_ADD_ASK_LINKS_FOOTER,
-      buttons: [EVENT_ADD_SKIP_BUTTON],
+      body: EVENT_ADD.ASK_LINKS,
+      footer: EVENT_ADD.ASK_LINKS_FOOTER,
+      buttons: [EVENT_ADD.SKIP_BUTTON],
     })
   }
 
   if (step === STEPS.EVENT_ADD_MEDIA) {
-    if (msg.type === 'interactive' && buttonId === EVENT_ADD_MEDIA_DONE_BUTTON.id) {
+    if (msg.type === 'interactive' && buttonId === EVENT_ADD.MEDIA_DONE_BUTTON.id) {
       if (state.eventAddConfirmPending) return Promise.resolve()
       conversationState.set(from, { eventAddConfirmPending: true })
       conversationState.set(from, { eventAddMedia: [] })
@@ -3281,8 +3511,8 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         return sendText(phoneNumberId, from, EVENT_ADD_MEDIA_UPLOAD_FAILED).then((r) => {
           if (r && !r.success) return r
           return sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD_ASK_MEDIA_FIRST,
-            buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
+            body: EVENT_ADD.ASK_MEDIA_FIRST,
+            buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
           })
         })
       }
@@ -3298,10 +3528,10 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return Promise.resolve()
     }
     if (msg.type === 'text') {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MEDIA, () =>
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MEDIA, () =>
         sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_ADD_ASK_MEDIA_FIRST,
-          buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
+          body: EVENT_ADD.ASK_MEDIA_FIRST,
+          buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
         }),
       )
     }
@@ -3309,7 +3539,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   if (step === STEPS.EVENT_ADD_MEDIA_MORE) {
-    if (msg.type === 'interactive' && buttonId === EVENT_ADD_MEDIA_DONE_BUTTON.id) {
+    if (msg.type === 'interactive' && buttonId === EVENT_ADD.MEDIA_DONE_BUTTON.id) {
       if (state.eventAddConfirmPending) return Promise.resolve()
       conversationState.set(from, { eventAddConfirmPending: true })
       const s = conversationState.get(from)
@@ -3330,7 +3560,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
           const count = (state.eventAddMedia || []).length
           return sendInteractiveButtons(phoneNumberId, from, {
             body: buildMediaMoreBody(MAX_MEDIA - count),
-            buttons: [EVENT_ADD_MEDIA_DONE_BUTTON],
+            buttons: [EVENT_ADD.MEDIA_DONE_BUTTON],
           })
         })
       }
@@ -3345,11 +3575,11 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return Promise.resolve()
     }
     if (msg.type === 'text') {
-      return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_VALIDATE_MEDIA, () => {
+      return sendValidationAndReask(phoneNumberId, from, VALIDATION.VALIDATE_MEDIA, () => {
         const count = (state.eventAddMedia || []).length
         return sendInteractiveButtons(phoneNumberId, from, {
           body: buildMediaMoreBody(MAX_MEDIA - count),
-          buttons: [EVENT_ADD_MEDIA_DONE_BUTTON],
+          buttons: [EVENT_ADD.MEDIA_DONE_BUTTON],
         })
       })
     }
@@ -3357,7 +3587,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   }
 
   // Fallback when step is unknown or unexpected (e.g. EVENT_ADD_INITIAL or corrupted state)
-  return sendText(phoneNumberId, from, EVENT_ADD_ASK_TITLE)
+  return sendText(phoneNumberId, from, EVENT_ADD.ASK_TITLE)
 }
 
 export { isEventAddStep }

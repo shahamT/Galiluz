@@ -1,6 +1,6 @@
 import { config } from '../config.js'
-import { logger } from '../utils/logger.js'
 import { LOG_PREFIXES } from '../consts/index.js'
+import { logger } from '../utils/logger.js'
 
 /**
  * Upload media buffer to Nuxt upload-media API (which uploads to Cloudinary).

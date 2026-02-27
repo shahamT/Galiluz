@@ -53,8 +53,35 @@ export function normalizePublisherFormattedEvent(
       continue
     }
 
-    const startTime = typeof occ.startTime === 'string' ? occ.startTime.trim() : ''
-    if (!startTime || !ISO_DATETIME.test(startTime)) continue
+    let startTime = typeof occ.startTime === 'string' ? occ.startTime.trim() : ''
+    if (!startTime || !ISO_DATETIME.test(startTime)) {
+      const d = startTime ? new Date(startTime) : null
+      if (d && !Number.isNaN(d.getTime())) {
+        const h = parseInt(
+          d.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }),
+          10
+        )
+        const m = parseInt(
+          d.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', minute: '2-digit' }),
+          10
+        )
+        const timeStr = `${h}:${String(m).padStart(2, '0')}`
+        const rebuilt = localTimeIsraelToUtcIso(dateStr, timeStr)
+        if (rebuilt) {
+          occ.startTime = rebuilt
+          startTime = rebuilt
+        }
+      }
+      if (!startTime || !ISO_DATETIME.test(startTime)) {
+        occ.hasTime = false
+        const midnight = israelMidnightToUtcIso(dateStr)
+        if (midnight) {
+          occ.startTime = midnight
+          occ.endTime = null
+        }
+        continue
+      }
+    }
 
     const startDateIsrael = getDateInIsraelFromIso(startTime)
     if (startDateIsrael && startDateIsrael !== dateStr) {
@@ -74,13 +101,15 @@ export function normalizePublisherFormattedEvent(
       }
     }
 
+    // Use occ.startTime for comparison: it may have been rebuilt above to match occ.date
+    const startForCompare = typeof occ.startTime === 'string' ? occ.startTime.trim() : startTime
     let endTime = occ.endTime
     if (endTime != null && typeof endTime === 'string' && endTime.trim()) {
       const endTrimmed = endTime.trim()
       if (!ISO_DATETIME.test(endTrimmed)) {
         occ.endTime = null
       } else {
-        const startMs = new Date(startTime).getTime()
+        const startMs = new Date(startForCompare).getTime()
         const endMs = new Date(endTrimmed).getTime()
         if (Number.isNaN(endMs) || endMs <= startMs) {
           occ.endTime = null
@@ -118,8 +147,10 @@ export function validatePublisherFormattedEvent(event: unknown): { valid: true }
     return { valid: false, reason: 'Missing location' }
   }
   const loc = e.location as Record<string, unknown>
-  if (typeof loc.city !== 'string') {
-    return { valid: false, reason: 'Missing location.city' }
+  const hasLocationName = typeof loc.locationName === 'string' && String(loc.locationName).trim().length > 0
+  const hasCity = typeof loc.city === 'string' && String(loc.city).trim().length > 0
+  if (!hasLocationName && !hasCity) {
+    return { valid: false, reason: 'Location must have at least locationName or city' }
   }
   if (!Array.isArray(e.occurrences) || e.occurrences.length === 0) {
     return { valid: false, reason: 'Missing or empty occurrences' }

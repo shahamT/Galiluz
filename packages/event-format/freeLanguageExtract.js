@@ -6,6 +6,7 @@ import OpenAI from 'openai'
 import { convertMessageToHtml } from './whatsappFormatToHtml.js'
 import { getCurrentIsraelUtcOffset } from './israelDate.js'
 import { normalizeCityToListedOrCustom } from './index.js'
+import { normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
@@ -153,7 +154,7 @@ export async function detectEventFromFreeText(text, options = {}) {
   }
 }
 
-const FREE_LANG_FLAG_KEYS = ['rawOccurrences', 'rawPrice', 'rawLocation', 'rawMainCategory', 'rawCity', 'rawCityOutsideNorth']
+const FREE_LANG_FLAG_KEYS = ['rawOccurrences', 'rawPrice', 'rawLocation', 'rawMainCategory', 'rawCity', 'rawCityOutsideNorth', 'rawRegion']
 
 const EXTRACTION_SCHEMA = {
   name: 'free_lang_extraction',
@@ -273,18 +274,20 @@ NORTHERN ISRAEL ONLY: This calendar is for Northern Israel only (הגליל הע
 
 RULES:
 1. rawTitle: Event name only. No price, dates, location (unless clearly part of event name). Generate from content if no clear title.
-2. rawFullDescription: Output as HTML only. Use only these tags: <p>, <br>, <strong>, <em>, <s>, <ul>, <ol>, <li>, <blockquote>, <code>. Use <strong> for bold, <em> for italic, <ul><li> for bullet lists. Do not use * or _ in the output; use only these HTML tags. Min 70 chars. Preserve structure; add formatting (bold, italic, bullets, paragraphs) for readability when helpful. FOR EACH LINK you extract to urls: REMOVE from rawFullDescription both (a) the URL itself and (b) the label/reference text that introduces it (e.g. "אינסטגרם - ", "כרטיסים >> "). Remove any connector (dash, arrows, colon) that only links the label to the URL. KEEP generic phrases like "כרטיסים למטה בלינק" when they do not repeat a specific extracted link. Do NOT add any content that is not in the original text. TYPOS: You may fix clear typos only when 100% certain (e.g. "בילןי נחמד בסופש" → "בילוי נחמד בסופש"). Do NOT change wordplay, puns, or intentional phrasing.
+2. rawFullDescription: Output as HTML only. Use only these tags: <p>, <br>, <strong>, <em>, <s>, <ul>, <ol>, <li>, <blockquote>, <code>. Use <strong> for bold, <em> for italic, <ul><li> for bullet lists. Do not use * or _ in the output; use only these HTML tags. Min 70 chars. Preserve structure; add formatting (bold, italic, bullets, paragraphs) for readability when helpful. FOR EACH LINK OR PHONE you extract to urls: REMOVE from rawFullDescription both (a) the URL or phone number itself and (b) the label/reference text that introduces it (e.g. "אינסטגרם - ", "כרטיסים >> ", "טלפון להרשמה - ", "להזמנה: "). Remove any connector (dash, arrows, colon) that only links the label to the URL or phone. KEEP generic phrases like "כרטיסים למטה בלינק" when they do not repeat a specific extracted link. Do NOT add any content that is not in the original text. TYPOS: You may fix clear typos only when 100% certain (e.g. "בילןי נחמד בסופש" → "בילוי נחמד בסופש"). Do NOT change wordplay, puns, or intentional phrasing.
 3. shortDescription: 1-2 sentences Hebrew, no location/price/dates.
-4. rawOccurrences: String representation of dates/times from message (e.g. "25/02 20:00" or "5 במרץ משמונה עד 10").
-5. occurrences: Structured array. date=YYYY-MM-DD, startTime/endTime=ISO UTC. Israel timezone. When multiple times appear for the same date (e.g. "12:00 - פתיחה, 13:00 - הופעה, 15:00 - סעודה"), infer the correct startTime from what the event is advertising: if the whole day/event is advertised, use the first time; if the event is specifically the show or the feast, use that time. Do not default to the first time when the main advertised activity is clearly later (e.g. poster for "הופעה" with "13:00 - הופעה" → use 13:00). endTime: Set only when there is an explicit end time or when duration clearly implies it (e.g. "מתחילים בשעה 6 בערב ל3 שעות" → 21:00). When there is no clear ending time and no implied duration, leave endTime as null.
+4. rawOccurrences: String representation of dates/times from message. rawOccurrences must capture BOTH date AND time from the ENTIRE message. Date and time often appear in different places (e.g. date in header "28.2.26", times later "18:00", "18:30"). Scan the full message: extract the calendar date from one part, extract the start time from another, and synthesize rawOccurrences as a combined string (e.g. "28.2.26 18:00" or "28.2 במוצ״ש 18:00"). Do NOT output only the date when times exist elsewhere.
+5. occurrences: Structured array. date=YYYY-MM-DD. startTime and endTime must be full ISO 8601 UTC strings (e.g. 2026-02-28T16:00:00.000Z for 18:00 Israel on 28 Feb). When date and time appear in different parts of the message (e.g. date in header "28.2.26", time "18:00" in body), combine them into one startTime. Israel timezone. Hebrew: "שש בערב" = 18:00, "שבע בערב" = 19:00, "שמונה בערב" = 20:00, "תשע" = 21:00, "עשר" = 22:00.
+OCCURRENCES — NO HALLUCINATION: You cannot invent. If you cannot reliably extract a date, flag rawOccurrences. If no clear start time is stated → hasTime: false, startTime = date at Israel midnight (UTC), endTime: null. This displays as "כל היום". If end time is stated but no start time (rare) → same: hasTime: false, startTime = Israel midnight, endTime: null. Do not use the end time alone. If start time is stated but no clear end time (very common) → hasTime: true, startTime = extracted, endTime: null. NEVER invent endTime (e.g. do not assume "same hour" or "one hour"). endTime: Set ONLY when there is an explicit end time or duration that clearly implies it (e.g. "ל3 שעות"). Otherwise leave null. CRITICAL: End time is OPTIONAL. NEVER flag rawOccurrences for missing end time ("שעה סופית"). When you have date + start time, do NOT add rawOccurrences to flags.
+When multiple times appear for the same date (e.g. "12:00 - פתיחה, 13:00 - הופעה, 15:00 - סעודה"), infer the correct startTime from what the event is advertising: if the whole day/event is advertised, use the first stated time; if the event is specifically the show or the feast, use that time. Do not default to the first time when the main advertised activity is clearly later (e.g. poster for "הופעה" with "13:00 - הופעה" → use 13:00). When multiple times exist for one date, use the first stated time as startTime unless the main activity is clearly later. Example: event with 18:00 (פתיחת מרחב), 18:30 (חימום), 18:45–21:00 (מסע), 21:00 (הופעה) — the event starts at 18:00. No single clear end → endTime: null.
 6. rawPrice: String from message (e.g. "50" or "חינם"). price: number or 0 (free) or null. Use the MAIN/STANDARD price only — NOT last-minute or day-of price (e.g. "50 ש״ח עד למועד האירוע, 60 ש״ח ביום האירוע" → use 50), NOT bundle price (e.g. "100 ש״ח לכרטיס, 180 ש״ח לשני כרטיסים" → use 100). Prefer the single-ticket or advance price when multiple options exist.
 7. mainCategory/categories: ALWAYS try to infer from content first (event type, topic, keywords). Use the category list above. mainCategory = primary best-fit. categories = [mainCategory] + up to ${MAX_EXTRA_CATEGORIES} additional ids ONLY when the event clearly fits (e.g. concert → music + show). Do not add extras unless the event genuinely matches multiple categories. Only flag rawMainCategory when you truly cannot infer any suitable category (e.g. completely generic "אירוע" with zero context).
 8. location: Extract locationName, addressLine1, addressLine2, wazeNavLink, gmapsNavLink. rawLocationName/rawAddressLine1 = raw strings. IMPORTANT: Do NOT repeat the city name in locationName or addressLine1 — City is stored separately. locationName = venue/place name only (e.g. "מרכז קהילתי", "פאב השכונה"); addressLine1 = street/address or specific detail (e.g. "רחוב הרצל 5"), NOT the city. If the only location info is the city, leave locationName and addressLine1 empty.
-9. urls: Event links and phones only. type=link|phone. Exclude Waze/Gmaps (those go to rawNavLinks).
+9. urls: Event links and phones only. type=link|phone. For phones: Title = short Hebrew label (e.g. "טלפון להרשמה", "להזמנה", "הרשמה"); Url = digits only. Exclude Waze/Gmaps (those go to rawNavLinks).
 10. rawNavLinks: Newline-separated Waze and Google Maps URLs if present. Else "".
 11. rawUrls: Newline-separated other URLs and phone numbers. Else "".
 
-FLAGS: Add to flags ONLY when UNABLE to extract OR when you are CERTAIN the city is outside Northern Israel (per rule above — when in doubt, do not flag rawCityOutsideNorth). Flag rawOccurrences when no date/time. Flag rawPrice when no price nor free. Flag rawLocation when BOTH locationName AND addressLine1/addressLine2 are empty. Flag rawMainCategory ONLY when category truly cannot be inferred from content.
+FLAGS: Add to flags ONLY when UNABLE to extract OR when you are CERTAIN the city is outside Northern Israel (per rule above — when in doubt, do not flag rawCityOutsideNorth). Flag rawOccurrences ONLY when no date/time at all. NEVER flag for missing end time — end time is optional. If you output occurrences with date and startTime, do NOT add rawOccurrences to flags. Flag rawPrice ONLY when no price nor free — do NOT flag when you extracted a numeric price or free (0); if you output price, do not flag rawPrice. Flag rawLocation ONLY when BOTH locationName AND city are empty (we need at least one). Flag rawCity when city could not be extracted but locationName exists (user can provide city or skip to go to region). Do NOT flag rawLocation when we have city (city only is valid). Do NOT flag rawCity when both are missing (rawLocation compound will collect city). Flag rawMainCategory ONLY when category truly cannot be inferred from content.
 Include ALL qualifying flags. reason = short Hebrew explanation.`
 }
 
@@ -429,6 +432,9 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
       const fullDescriptionValue = rawDesc
         ? (looksLikeHtml ? rawDesc : convertMessageToHtml(rawDesc))
         : ''
+      const rawOccurrences = Array.isArray(parsed.occurrences) && parsed.occurrences.length > 0 ? parsed.occurrences : []
+      const rawOccurrencesStr = (parsed.rawOccurrences ?? '').trim() || undefined
+      const normalizedOccurrences = normalizeFormattedEventOccurrences(rawOccurrences, rawOccurrencesStr)
       const formattedEvent = {
         Title: (parsed.rawTitle ?? '').trim() || 'אירוע',
         shortDescription: (parsed.shortDescription ?? '').trim() || 'אירוע',
@@ -436,22 +442,66 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
         mainCategory,
         categories,
         location,
-        occurrences: Array.isArray(parsed.occurrences) && parsed.occurrences.length > 0 ? parsed.occurrences : [],
+        occurrences: normalizedOccurrences,
         price: parsed.price,
         urls: Array.isArray(parsed.urls)
           ? parsed.urls.filter((u) => u?.Title && u?.Url).map((u) => ({ Title: u.Title, Url: u.Url, type: u.type === 'phone' ? 'phone' : 'link' }))
           : [],
+        media: [],
       }
 
-      const flags = Array.isArray(parsed.flags)
+      let flags = Array.isArray(parsed.flags)
         ? parsed.flags
             .filter((f) => f && FREE_LANG_FLAG_KEYS.includes(f.fieldKey) && typeof f.reason === 'string' && f.reason.trim())
             .map((f) => ({ fieldKey: f.fieldKey, reason: f.reason.trim() }))
         : []
 
+      // Post-process: drop rawOccurrences flag when we have valid occurrences and the flag is only about missing end time (which is optional)
+      const hasValidOccurrences = Array.isArray(parsed.occurrences) && parsed.occurrences.length > 0 && parsed.occurrences.some((o) => o?.date && (o?.startTime || !o?.hasTime))
+      const endTimeFlagPhrases = ['שעה סופית', 'שעת סיום', 'שעה סיום', 'end time']
+      flags = flags.filter((f) => {
+        if (f.fieldKey !== 'rawOccurrences') return true
+        if (!hasValidOccurrences) return true
+        const r = (f.reason || '').toLowerCase()
+        const isEndTimeOnly = endTimeFlagPhrases.some((phrase) => r.includes(phrase.toLowerCase()))
+        return !isEndTimeOnly
+      })
+
+      // Post-process location/city flags by scenario
+      const hasLocationName = !!(strippedLocationName && strippedLocationName.trim())
+      const hasCity = !!(locCity && locCity.trim())
+      if (!hasRawCityOutsideNorth) {
+        if (hasLocationName && !hasCity) {
+          // Scenario 1: location only -> rawRegion only (ask region)
+          flags = flags.filter((f) => f.fieldKey !== 'rawLocation')
+          if (!flags.some((f) => f.fieldKey === 'rawRegion')) {
+            flags.push({ fieldKey: 'rawRegion', reason: 'נדרש לאזור כאשר יש מקום ללא יישוב' })
+          }
+        } else if (hasCity && !hasLocationName) {
+          // Scenario 2: city only -> rawRegion if custom city
+          flags = flags.filter((f) => f.fieldKey !== 'rawLocation')
+          if (rawCityType === 'custom' && !flags.some((f) => f.fieldKey === 'rawRegion')) {
+            flags.push({ fieldKey: 'rawRegion', reason: 'נדרש לאזור כאשר היישוב לא ברשימה' })
+          }
+        } else if (!hasLocationName && !hasCity) {
+          // Scenario 3: both missing -> rawLocation only (compound collects place + city)
+          flags = flags.filter((f) => f.fieldKey !== 'rawCity')
+          if (!flags.some((f) => f.fieldKey === 'rawLocation')) {
+            flags.push({ fieldKey: 'rawLocation', reason: 'מיקום ויישוב חסרים' })
+          }
+        }
+      }
+
       log(correlationId, 'info', 'extractEventFromFreeText: ok', {
         title: formattedEvent.Title,
         flagsCount: flags.length,
+        ...(flags.length > 0 && {
+          flags: flags.map((f) => ({ fieldKey: f.fieldKey, reason: f.reason })),
+          rawOccurrences: rawEventSupplement?.rawOccurrences ?? '(none)',
+          occurrencesFromAI: parsed.occurrences?.map((o) => ({ date: o.date, hasTime: o.hasTime, startTime: o.startTime?.slice(0, 19), endTime: o.endTime?.slice(0, 19) ?? null })),
+          rawPrice: rawEventSupplement?.rawPrice ?? '(none)',
+          priceFromAI: parsed.price ?? null,
+        }),
       })
       return { rawEventSupplement, formattedEvent, flags }
     } catch (err) {

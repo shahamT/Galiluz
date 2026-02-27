@@ -11,43 +11,14 @@ import { getEventsMessageForDateAndCategory, getDateIsrael } from '../services/e
 import { logger } from '../utils/logger.js'
 import {
   LOG_PREFIXES,
-  WELCOME_INTERACTIVE,
-  CONTACT_MESSAGE,
-  DISCOVER_ASK_CATEGORY,
-  DISCOVER_ASK_TIME,
-  DISCOVER_AFTER_LIST,
-  PUBLISH_NOT_REGISTERED,
-  PUBLISH_CONNECTION_ERROR,
-  PUBLISH_ASK_FULL_NAME,
-  PUBLISH_ASK_PUBLISHING_AS,
-  PUBLISH_ASK_EVENT_TYPES,
-  PUBLISH_ASK_COMMITMENT,
-  PUBLISH_THANK_YOU,
-  PUBLISH_PENDING_MESSAGE,
-  PUBLISH_REGISTER_ERROR,
-  PUBLISH_EXPECT_TEXT,
-  APPROVER_REQUEST_BODY_TEMPLATE,
-  APPROVER_BUTTONS,
-  APPROVER_ASK_REASON,
-  PUBLISHER_APPROVED,
-  PUBLISHER_HOW_TO_CONTINUE,
-  PUBLISHER_REJECTED_BODY,
-  PUBLISHER_REJECTED_REASON_LINE,
-  PUBLISHER_REJECTED_FOOTER,
-  PUBLISHER_REJECTED_BUTTON,
-  APPROVER_CONFIRM_APPROVED,
-  APPROVER_CONFIRM_REJECTED,
-  EVENT_LIST_NO_FUTURE_EVENTS,
-  EVENT_LIST_FETCH_ERROR,
-  EVENT_UPDATE_SELECT_BODY,
-  EVENT_DELETE_SELECT_BODY,
-  EVENT_LIST_NO_EVENTS_BUTTONS,
-  EVENT_DELETE_CONFIRM_PROMPT,
-  EVENT_DELETE_CONFIRM_KEYWORD,
-  EVENT_DELETE_SUCCESS,
-  EVENT_DELETE_SUCCESS_BUTTONS,
-  MAIN_MENU_INTENT_IRRELEVANT,
-  MAIN_MENU_INTENT_UNCLEAR,
+  WELCOME,
+  CONTACT,
+  DISCOVER,
+  PUBLISH,
+  APPROVER,
+  PUBLISHER,
+  EVENT_LIST,
+  MAIN_MENU,
   BATCH_FLUSH_MS,
 } from '../consts/index.js'
 import {
@@ -147,7 +118,7 @@ function normalizeLoadedEventForEdit(loaded) {
 
 /** Category list for discover flow: הכל first, then 4 groups */
 const DISCOVER_CATEGORY_LIST = {
-  body: DISCOVER_ASK_CATEGORY,
+  body: DISCOVER.ASK_CATEGORY,
   button: 'בחר',
   sections: [
     {
@@ -167,23 +138,34 @@ function handleDiscoverButton(phoneNumberId, from) {
 
 function handleDiscoverListReply(phoneNumberId, from, listReplyId) {
   conversationState.set(from, { step: conversationState.STEPS.DISCOVER_TIME, categoryGroupId: listReplyId })
-  return sendInteractiveButtons(phoneNumberId, from, DISCOVER_ASK_TIME)
+  return sendInteractiveButtons(phoneNumberId, from, DISCOVER.ASK_TIME)
 }
 
 function handleDiscoverTimeChoice(phoneNumberId, from, timeChoice) {
   const state = conversationState.get(from)
   const categoryGroupId = state.categoryGroupId || CATEGORY_ALL_ID
+  const prevSearched = state.discoverSearchedTimesByCategory?.[categoryGroupId] || []
+  const searchedTimesForCategory = [...new Set([...prevSearched, timeChoice])]
   const dateString = getDateIsrael(timeChoice)
   return getEventsMessageForDateAndCategory(dateString, categoryGroupId, timeChoice)
     .then((messageBody) => sendText(phoneNumberId, from, messageBody))
     .then((result) => {
       if (result?.success) {
+        const nextSearchedByCategory = {
+          ...(state.discoverSearchedTimesByCategory || {}),
+          [categoryGroupId]: searchedTimesForCategory,
+        }
         conversationState.set(from, {
           step: conversationState.STEPS.DISCOVER_AFTER_LIST,
           categoryGroupId,
           timeChoice,
+          discoverSearchedTimesByCategory: nextSearchedByCategory,
         })
-        return sendInteractiveButtons(phoneNumberId, from, DISCOVER_AFTER_LIST)
+        return sendInteractiveButtons(
+          phoneNumberId,
+          from,
+          DISCOVER.getAfterListPayload(timeChoice, searchedTimesForCategory),
+        )
       }
       return result
     })
@@ -194,8 +176,8 @@ async function handleEventUpdateChoice(phoneNumberId, from) {
   if (error || !events || events.length === 0) {
     conversationState.clear(from)
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: error ? EVENT_LIST_FETCH_ERROR : EVENT_LIST_NO_FUTURE_EVENTS,
-      buttons: EVENT_LIST_NO_EVENTS_BUTTONS,
+      body: error ? EVENT_LIST.FETCH_ERROR : EVENT_LIST.NO_FUTURE_EVENTS,
+      buttons: EVENT_LIST.NO_EVENTS_BUTTONS,
     })
   }
   conversationState.set(from, {
@@ -203,7 +185,7 @@ async function handleEventUpdateChoice(phoneNumberId, from) {
     eventUpdateList: events,
     eventUpdateListOffset: 0,
   })
-  const payload = buildPublisherEventListPayload(events, 0, EVENT_UPDATE_SELECT_BODY, 'ev_up_')
+  const payload = buildPublisherEventListPayload(events, 0, EVENT_LIST.UPDATE_SELECT_BODY, 'ev_up_')
   return sendInteractiveList(phoneNumberId, from, payload)
 }
 
@@ -212,8 +194,8 @@ async function handleEventDeleteChoice(phoneNumberId, from) {
   if (error || !events || events.length === 0) {
     conversationState.clear(from)
     return sendInteractiveButtons(phoneNumberId, from, {
-      body: error ? EVENT_LIST_FETCH_ERROR : EVENT_LIST_NO_FUTURE_EVENTS,
-      buttons: EVENT_LIST_NO_EVENTS_BUTTONS,
+      body: error ? EVENT_LIST.FETCH_ERROR : EVENT_LIST.NO_FUTURE_EVENTS,
+      buttons: EVENT_LIST.NO_EVENTS_BUTTONS,
     })
   }
   conversationState.set(from, {
@@ -221,30 +203,30 @@ async function handleEventDeleteChoice(phoneNumberId, from) {
     eventDeleteList: events,
     eventDeleteListOffset: 0,
   })
-  const payload = buildPublisherEventListPayload(events, 0, EVENT_DELETE_SELECT_BODY, 'ev_del_')
+  const payload = buildPublisherEventListPayload(events, 0, EVENT_LIST.DELETE_SELECT_BODY, 'ev_del_')
   return sendInteractiveList(phoneNumberId, from, payload)
 }
 
 async function handlePublishButton(phoneNumberId, from, profileName) {
   const result = await checkPublisher(from)
   if (result.connectionError) {
-    return sendInteractiveButtons(phoneNumberId, from, PUBLISH_CONNECTION_ERROR)
+    return sendInteractiveButtons(phoneNumberId, from, PUBLISH.CONNECTION_ERROR)
   }
   const { status } = result
   if (status === 'approved') {
     conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
-    return sendInteractiveButtons(phoneNumberId, from, PUBLISHER_HOW_TO_CONTINUE)
+    return sendInteractiveButtons(phoneNumberId, from, PUBLISHER.HOW_TO_CONTINUE)
   }
   if (status === 'pending') {
-    return sendText(phoneNumberId, from, PUBLISH_PENDING_MESSAGE)
+    return sendText(phoneNumberId, from, PUBLISH.PENDING_MESSAGE)
   }
-  return sendInteractiveButtons(phoneNumberId, from, PUBLISH_NOT_REGISTERED)
+  return sendInteractiveButtons(phoneNumberId, from, PUBLISH.NOT_REGISTERED)
 }
 
 function handleBackToMenu(phoneNumberId, from) {
   conversationState.clear(from)
   conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
-  return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+  return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
 }
 
 function handlePublishSignMeUp(phoneNumberId, from, profileName) {
@@ -252,12 +234,12 @@ function handlePublishSignMeUp(phoneNumberId, from, profileName) {
     step: conversationState.STEPS.PUBLISH_ASK_FULL_NAME,
     ...(profileName && { profileName }),
   })
-  return sendText(phoneNumberId, from, PUBLISH_ASK_FULL_NAME)
+  return sendText(phoneNumberId, from, PUBLISH.ASK_FULL_NAME)
 }
 
 function handlePublishCommitNo(phoneNumberId, from) {
   conversationState.clear(from)
-  return sendInteractiveButtons(phoneNumberId, from, PUBLISH_NOT_REGISTERED)
+  return sendInteractiveButtons(phoneNumberId, from, PUBLISH.NOT_REGISTERED)
 }
 
 async function handlePublishCommitYes(phoneNumberId, from) {
@@ -276,24 +258,24 @@ async function handlePublishCommitYes(phoneNumberId, from) {
     eventTypesDescription,
   })
   if (!result.success) {
-    return sendText(phoneNumberId, from, PUBLISH_REGISTER_ERROR)
+    return sendText(phoneNumberId, from, PUBLISH.REGISTER_ERROR)
   }
-  const thankYouPromise = sendInteractiveButtons(phoneNumberId, from, PUBLISH_THANK_YOU)
+  const thankYouPromise = sendInteractiveButtons(phoneNumberId, from, PUBLISH.THANK_YOU)
   const approverWaId = config.publishersApproverWaNumber
     ? normalizePhone(config.publishersApproverWaNumber)
     : ''
   if (approverWaId) {
     storePublisherNameForApprover(approverWaId, waId, fullName)
-    const body = APPROVER_REQUEST_BODY_TEMPLATE.replace('{fullName}', fullName)
+    const body = APPROVER.REQUEST_BODY_TEMPLATE.replace('{fullName}', fullName)
       .replace('{publishingAs}', publishingAs)
       .replace('{eventTypes}', eventTypesDescription)
       .replace('{waId}', waId)
     const buttons = [
-      { id: APPROVER_BUTTONS.approve.idPrefix + waId, title: APPROVER_BUTTONS.approve.title },
-      { id: APPROVER_BUTTONS.reject.idPrefix + waId, title: APPROVER_BUTTONS.reject.title },
+      { id: APPROVER.BUTTONS.approve.idPrefix + waId, title: APPROVER.BUTTONS.approve.title },
+      { id: APPROVER.BUTTONS.reject.idPrefix + waId, title: APPROVER.BUTTONS.reject.title },
       {
-        id: APPROVER_BUTTONS.rejectNoReason.idPrefix + waId,
-        title: APPROVER_BUTTONS.rejectNoReason.title,
+        id: APPROVER.BUTTONS.rejectNoReason.idPrefix + waId,
+        title: APPROVER.BUTTONS.rejectNoReason.title,
       },
     ]
     const sendResult = await sendInteractiveButtons(phoneNumberId, approverWaId, { body, buttons })
@@ -344,14 +326,14 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       conversationState.clear(from)
       if (ok.success) {
         await sendInteractiveButtons(phoneNumberId, waId, {
-          body: PUBLISHER_APPROVED.body,
-          buttons: PUBLISHER_APPROVED.buttons,
+          body: PUBLISHER.APPROVED.body,
+          buttons: PUBLISHER.APPROVED.buttons,
         })
       }
       await sendText(
         phoneNumberId,
         from,
-        APPROVER_CONFIRM_APPROVED.replace('{fullName}', fullName),
+        APPROVER.CONFIRM_APPROVED.replace('{fullName}', fullName),
       )
       return
     }
@@ -360,15 +342,15 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       const fullName = getAndRemovePublisherName(from, waId)
       await rejectPublisher(waId)
       conversationState.clear(from)
-      const rejectedBody = `${PUBLISHER_REJECTED_BODY}\n\n${PUBLISHER_REJECTED_FOOTER}`
+      const rejectedBody = `${PUBLISHER.REJECTED_BODY}\n\n${PUBLISHER.REJECTED_FOOTER}`
       await sendInteractiveButtons(phoneNumberId, waId, {
         body: rejectedBody,
-        buttons: [PUBLISHER_REJECTED_BUTTON],
+        buttons: [PUBLISHER.REJECTED_BUTTON],
       })
       await sendText(
         phoneNumberId,
         from,
-        APPROVER_CONFIRM_REJECTED.replace('{fullName}', fullName),
+        APPROVER.CONFIRM_REJECTED.replace('{fullName}', fullName),
       )
       return
     }
@@ -379,11 +361,11 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
         publisherWaId: waId,
       })
       return sendInteractiveButtons(phoneNumberId, from, {
-        body: APPROVER_ASK_REASON.body,
+        body: APPROVER.ASK_REASON.body,
         buttons: [
           {
-            id: APPROVER_ASK_REASON.noReasonButton.idPrefix + waId,
-            title: APPROVER_ASK_REASON.noReasonButton.title,
+            id: APPROVER.ASK_REASON.noReasonButton.idPrefix + waId,
+            title: APPROVER.ASK_REASON.noReasonButton.title,
           },
         ],
       })
@@ -393,15 +375,15 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       const fullName = getAndRemovePublisherName(from, waId)
       await rejectPublisher(waId)
       conversationState.clear(from)
-      const rejectedBody = `${PUBLISHER_REJECTED_BODY}\n\n${PUBLISHER_REJECTED_FOOTER}`
+      const rejectedBody = `${PUBLISHER.REJECTED_BODY}\n\n${PUBLISHER.REJECTED_FOOTER}`
       await sendInteractiveButtons(phoneNumberId, waId, {
         body: rejectedBody,
-        buttons: [PUBLISHER_REJECTED_BUTTON],
+        buttons: [PUBLISHER.REJECTED_BUTTON],
       })
       await sendText(
         phoneNumberId,
         from,
-        APPROVER_CONFIRM_REJECTED.replace('{fullName}', fullName),
+        APPROVER.CONFIRM_REJECTED.replace('{fullName}', fullName),
       )
       return
     }
@@ -415,23 +397,23 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       await rejectPublisher(waId, reason)
       conversationState.clear(from)
       const body = reason
-        ? `${PUBLISHER_REJECTED_BODY}\n${PUBLISHER_REJECTED_REASON_LINE}${reason}\n\n${PUBLISHER_REJECTED_FOOTER}`
-        : `${PUBLISHER_REJECTED_BODY}\n\n${PUBLISHER_REJECTED_FOOTER}`
+        ? `${PUBLISHER.REJECTED_BODY}\n${PUBLISHER.REJECTED_REASON_LINE}${reason}\n\n${PUBLISHER.REJECTED_FOOTER}`
+        : `${PUBLISHER.REJECTED_BODY}\n\n${PUBLISHER.REJECTED_FOOTER}`
       await sendInteractiveButtons(phoneNumberId, waId, {
         body,
-        buttons: [PUBLISHER_REJECTED_BUTTON],
+        buttons: [PUBLISHER.REJECTED_BUTTON],
       })
       await sendText(
         phoneNumberId,
         from,
-        APPROVER_CONFIRM_REJECTED.replace('{fullName}', fullName),
+        APPROVER.CONFIRM_REJECTED.replace('{fullName}', fullName),
       )
       return
     }
   }
 
   conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
-  return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+  return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
 }
 
 async function processOneMessage(phoneNumberId, from, msg, context = {}) {
@@ -459,7 +441,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       return handlePublishButton(phoneNumberId, from, profileName)
     }
     if (id === 'contact') {
-      return sendText(phoneNumberId, from, CONTACT_MESSAGE)
+      return sendText(phoneNumberId, from, CONTACT.MESSAGE)
     }
     if (id === 'back_to_menu' || id === 'back_to_main') {
       return handleBackToMenu(phoneNumberId, from)
@@ -510,7 +492,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         if (!Number.isNaN(nextOffset)) {
           conversationState.set(from, { eventUpdateListOffset: nextOffset })
           const list = state.eventUpdateList || []
-          const payload = buildPublisherEventListPayload(list, nextOffset, EVENT_UPDATE_SELECT_BODY, 'ev_up_')
+          const payload = buildPublisherEventListPayload(list, nextOffset, EVENT_LIST.UPDATE_SELECT_BODY, 'ev_up_')
           return sendInteractiveList(phoneNumberId, from, payload)
         }
       }
@@ -519,7 +501,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         const loaded = await getEventById(eventId, from)
         if (!loaded) {
           conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
-          return sendInteractiveButtons(phoneNumberId, from, PUBLISHER_HOW_TO_CONTINUE)
+          return sendInteractiveButtons(phoneNumberId, from, PUBLISHER.HOW_TO_CONTINUE)
         }
         const normalized = normalizeLoadedEventForEdit(loaded)
         conversationState.set(from, {
@@ -539,7 +521,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         if (!Number.isNaN(nextOffset)) {
           conversationState.set(from, { eventDeleteListOffset: nextOffset })
           const list = state.eventDeleteList || []
-          const payload = buildPublisherEventListPayload(list, nextOffset, EVENT_DELETE_SELECT_BODY, 'ev_del_')
+          const payload = buildPublisherEventListPayload(list, nextOffset, EVENT_LIST.DELETE_SELECT_BODY, 'ev_del_')
           return sendInteractiveList(phoneNumberId, from, payload)
         }
       }
@@ -551,7 +533,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           eventDeleteList: undefined,
           eventDeleteListOffset: undefined,
         })
-        return sendText(phoneNumberId, from, EVENT_DELETE_CONFIRM_PROMPT)
+        return sendText(phoneNumberId, from, EVENT_LIST.DELETE_CONFIRM_PROMPT)
       }
     }
   }
@@ -563,7 +545,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if ((isWelcome || isPublisherChoice) && config.allowMainMenuFreeLanguage && textBody) {
       if (isWelcome && !state.welcomeShown) {
         conversationState.set(from, { welcomeShown: true })
-        return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+        return sendInteractiveButtons(phoneNumberId, from, WELCOME.INTERACTIVE)
       }
       try {
         const { intent } = await classifyMainMenuIntent(textBody, {
@@ -576,7 +558,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         }
         if (intent === 'contact') {
           if (isPublisherChoice) conversationState.clear(from)
-          return sendText(phoneNumberId, from, CONTACT_MESSAGE)
+          return sendText(phoneNumberId, from, CONTACT.MESSAGE)
         }
         if (intent === 'publish') {
           return handlePublishButton(phoneNumberId, from, profileName)
@@ -603,35 +585,35 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'irrelevant') {
-          return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU_INTENT_IRRELEVANT)
+          return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU.INTENT_IRRELEVANT)
         }
         if (intent === 'unclear') {
-          return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU_INTENT_UNCLEAR)
+          return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU.INTENT_UNCLEAR)
         }
       } catch (err) {
         logger.error(LOG_PREFIXES.WEBHOOK, 'Main menu intent handling failed', err)
-        return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU_INTENT_UNCLEAR)
+        return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU.INTENT_UNCLEAR)
       }
     }
     if (state.step === conversationState.STEPS.EVENT_DELETE_CONFIRM) {
-      if (textBody === EVENT_DELETE_CONFIRM_KEYWORD) {
+      if (textBody === EVENT_LIST.DELETE_CONFIRM_KEYWORD) {
         const eventId = state.eventDeleteSelectedId
         const result = await deleteEvent(eventId)
         conversationState.clear(from)
         return sendInteractiveButtons(phoneNumberId, from, {
-          body: EVENT_DELETE_SUCCESS,
-          buttons: EVENT_DELETE_SUCCESS_BUTTONS,
+          body: EVENT_LIST.DELETE_SUCCESS,
+          buttons: EVENT_LIST.DELETE_SUCCESS_BUTTONS,
         })
       }
-      return sendText(phoneNumberId, from, EVENT_DELETE_CONFIRM_PROMPT)
+      return sendText(phoneNumberId, from, EVENT_LIST.DELETE_CONFIRM_PROMPT)
     }
     if (state.step === conversationState.STEPS.PUBLISH_ASK_FULL_NAME) {
       conversationState.set(from, { fullName: textBody, step: conversationState.STEPS.PUBLISH_ASK_PUBLISHING_AS })
-      return sendText(phoneNumberId, from, PUBLISH_ASK_PUBLISHING_AS)
+      return sendText(phoneNumberId, from, PUBLISH.ASK_PUBLISHING_AS)
     }
     if (state.step === conversationState.STEPS.PUBLISH_ASK_PUBLISHING_AS) {
       conversationState.set(from, { publishingAs: textBody, step: conversationState.STEPS.PUBLISH_ASK_EVENT_TYPES })
-      return sendText(phoneNumberId, from, PUBLISH_ASK_EVENT_TYPES)
+      return sendText(phoneNumberId, from, PUBLISH.ASK_EVENT_TYPES)
     }
     if (state.step === conversationState.STEPS.PUBLISH_ASK_EVENT_TYPES) {
       conversationState.set(from, {
@@ -652,11 +634,11 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     conversationState.STEPS.PUBLISH_ASK_COMMITMENT,
   ]
   if (publishSteps.includes(state.step) && msg.type !== 'text') {
-    return sendText(phoneNumberId, from, PUBLISH_EXPECT_TEXT)
+    return sendText(phoneNumberId, from, PUBLISH.EXPECT_TEXT)
   }
 
   conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
-  return sendInteractiveButtons(phoneNumberId, from, WELCOME_INTERACTIVE)
+  return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
 }
 
 /** Per-user message queue: process one message at a time per user so state updates correctly (e.g. bulk media). */
@@ -879,7 +861,7 @@ export function handlePost(req, res) {
           )
         }
       } else {
-        logger.info(LOG_PREFIXES.WEBHOOK, 'POST body received', JSON.stringify(body).slice(0, 500))
+        logger.debug(LOG_PREFIXES.WEBHOOK, 'POST body received', JSON.stringify(body).slice(0, 500))
       }
       processWebhookBody(body)
     } catch (err) {

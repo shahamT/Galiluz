@@ -3,35 +3,15 @@
  * Used by event-add "עריכת פרטים" and future update-event flow.
  * Per-field logic (validation, patch, ask messages) lives in the calling flow (eventAddFlow.js) for now.
  */
-import {
-  EVENT_EDIT_MENU_BODY,
-  EVENT_EDIT_MENU_FOOTER,
-  EVENT_EDIT_MENU_ROWS,
-  EVENT_EDIT_DONE_ROW,
-  EVENT_EDIT_LIST_BUTTON,
-  EVENT_EDIT_SECTION_DONE,
-  EVENT_EDIT_SECTION_FIELDS,
-  EVENT_EDIT_LOCATION_MENU_BODY,
-  EVENT_EDIT_LOCATION_MENU_FOOTER,
-  EVENT_EDIT_LOCATION_BACK_ROW,
-  EVENT_EDIT_LOCATION_DONE_ROW,
-  EVENT_EDIT_LOCATION_FIELD_ROWS,
-  EVENT_EDIT_SECTION_NAV,
-  EVENT_EDIT_SECTION_LOCATION_FIELDS,
-  EVENT_EDIT_MENU_FIRST_BODY,
-  EVENT_EDIT_MENU_FIRST_FOOTER,
-  EVENT_LIST_ROW_TITLE_MAX,
-  EVENT_LIST_MORE_ROW_TITLE,
-  EVENT_SELECT_EVENT_LIST_BUTTON,
-} from '../consts/index.js'
+import { EVENT_EDIT, EVENT_LIST } from '../consts/index.js'
 
 /** Row id for "סיימתי לעדכן פרטים" — exit edit flow. */
 export const EDIT_DONE_ID = 'edit_done'
 
 /** All edit menu row ids (for validation): done + field rows. */
 export const EDIT_FIELD_IDS = new Set([
-  EVENT_EDIT_DONE_ROW.id,
-  ...EVENT_EDIT_MENU_ROWS.map((r) => r.id),
+  EVENT_EDIT.DONE_ROW.id,
+  ...EVENT_EDIT.MENU_ROWS.map((r) => r.id),
 ])
 
 /**
@@ -42,17 +22,17 @@ export const EDIT_FIELD_IDS = new Set([
  */
 export function buildEditMenuListPayload() {
   return {
-    body: EVENT_EDIT_MENU_BODY,
-    footer: EVENT_EDIT_MENU_FOOTER,
-    button: EVENT_EDIT_LIST_BUTTON,
+    body: EVENT_EDIT.MENU_BODY,
+    footer: EVENT_EDIT.MENU_FOOTER,
+    button: EVENT_EDIT.LIST_BUTTON,
     sections: [
       {
-        title: EVENT_EDIT_SECTION_DONE,
-        rows: [EVENT_EDIT_DONE_ROW],
+        title: EVENT_EDIT.SECTION_DONE,
+        rows: [EVENT_EDIT.DONE_ROW],
       },
       {
-        title: EVENT_EDIT_SECTION_FIELDS,
-        rows: EVENT_EDIT_MENU_ROWS,
+        title: EVENT_EDIT.SECTION_FIELDS,
+        rows: EVENT_EDIT.MENU_ROWS,
       },
     ],
   }
@@ -65,17 +45,17 @@ export function buildEditMenuListPayload() {
  */
 export function buildEditMenuFirstMessagePayload() {
   return {
-    body: EVENT_EDIT_MENU_FIRST_BODY,
-    footer: EVENT_EDIT_MENU_FIRST_FOOTER,
-    button: EVENT_EDIT_LIST_BUTTON,
+    body: EVENT_EDIT.MENU_FIRST_BODY,
+    footer: EVENT_EDIT.MENU_FIRST_FOOTER,
+    button: EVENT_EDIT.LIST_BUTTON,
     sections: [
       {
-        title: EVENT_EDIT_SECTION_DONE,
-        rows: [EVENT_EDIT_DONE_ROW],
+        title: EVENT_EDIT.SECTION_DONE,
+        rows: [EVENT_EDIT.DONE_ROW],
       },
       {
-        title: EVENT_EDIT_SECTION_FIELDS,
-        rows: EVENT_EDIT_MENU_ROWS,
+        title: EVENT_EDIT.SECTION_FIELDS,
+        rows: EVENT_EDIT.MENU_ROWS,
       },
     ],
   }
@@ -84,45 +64,22 @@ export function buildEditMenuFirstMessagePayload() {
 /**
  * Build interactive list payload for the edit menu when free-language was unclear.
  * Same list as edit menu, but body = unclear message and footer = first message footer.
- * @param {string} body - Unclear message (e.g. EVENT_EDIT_FREE_LANG_UNCLEAR or LLM message)
+ * @param {string} body - Unclear message (e.g. EVENT_EDIT.FREE_LANG_UNCLEAR or LLM message)
  * @returns {{ body: string, footer: string, button: string, sections: Array<{ title: string, rows: Array<{ id: string, title: string }> }> }}
  */
 export function buildEditMenuUnclearPayload(body) {
   return {
-    body: typeof body === 'string' ? body : EVENT_EDIT_MENU_BODY,
-    footer: EVENT_EDIT_MENU_FIRST_FOOTER,
-    button: EVENT_EDIT_LIST_BUTTON,
+    body: typeof body === 'string' ? body : EVENT_EDIT.MENU_BODY,
+    footer: EVENT_EDIT.MENU_FIRST_FOOTER,
+    button: EVENT_EDIT.LIST_BUTTON,
     sections: [
       {
-        title: EVENT_EDIT_SECTION_DONE,
-        rows: [EVENT_EDIT_DONE_ROW],
+        title: EVENT_EDIT.SECTION_DONE,
+        rows: [EVENT_EDIT.DONE_ROW],
       },
       {
-        title: EVENT_EDIT_SECTION_FIELDS,
-        rows: EVENT_EDIT_MENU_ROWS,
-      },
-    ],
-  }
-}
-
-/**
- * Build interactive list payload for the location edit sub-menu.
- * Two sections: back/done, then the six location fields.
- * @returns {{ body: string, footer: string, button: string, sections: Array<{ title: string, rows: Array<{ id: string, title: string }> }> }}
- */
-export function buildLocationEditMenuPayload() {
-  return {
-    body: EVENT_EDIT_LOCATION_MENU_BODY,
-    footer: EVENT_EDIT_LOCATION_MENU_FOOTER,
-    button: EVENT_EDIT_LIST_BUTTON,
-    sections: [
-      {
-        title: EVENT_EDIT_SECTION_NAV,
-        rows: [EVENT_EDIT_LOCATION_BACK_ROW, EVENT_EDIT_LOCATION_DONE_ROW],
-      },
-      {
-        title: EVENT_EDIT_SECTION_LOCATION_FIELDS,
-        rows: EVENT_EDIT_LOCATION_FIELD_ROWS,
+        title: EVENT_EDIT.SECTION_FIELDS,
+        rows: EVENT_EDIT.MENU_ROWS,
       },
     ],
   }
@@ -134,7 +91,7 @@ export function buildLocationEditMenuPayload() {
  * @param {number} maxLen
  * @returns {string}
  */
-function cropEventTitleForRow(title, maxLen = EVENT_LIST_ROW_TITLE_MAX) {
+function cropEventTitleForRow(title, maxLen = EVENT_LIST.ROW_TITLE_MAX) {
   const s = typeof title === 'string' ? title.trim() : ''
   if (s.length <= maxLen) return s
   return s.slice(0, maxLen - 1) + '…'
@@ -161,11 +118,11 @@ export function buildPublisherEventListPayload(events, offset, bodyText, rowIdPr
   }))
   if (hasMore) {
     const nextOffset = off + 9
-    rows.push({ id: `event_list_more_${nextOffset}`, title: EVENT_LIST_MORE_ROW_TITLE })
+    rows.push({ id: `event_list_more_${nextOffset}`, title: EVENT_LIST.MORE_ROW_TITLE })
   }
   return {
     body: typeof bodyText === 'string' ? bodyText : 'איזה אירוע?',
-    button: EVENT_SELECT_EVENT_LIST_BUTTON,
+    button: EVENT_LIST.SELECT_EVENT_LIST_BUTTON,
     sections: [{ title: 'אירועים', rows }],
   }
 }

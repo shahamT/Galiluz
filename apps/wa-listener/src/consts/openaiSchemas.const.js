@@ -24,11 +24,12 @@ export const EVENT_SCHEMA_PROPERTIES = {
     type: 'array',
     items: {
       type: 'object',
-      required: ['Title', 'Url'],
+      required: ['Title', 'Url', 'type'],
       additionalProperties: false,
       properties: {
         Title: { type: 'string' },
         Url: { type: 'string' },
+        type: { type: 'string', enum: ['link', 'phone'] },
       },
     },
   },
@@ -162,11 +163,12 @@ export const DESCRIPTION_BUILDER_SCHEMA = {
         type: 'array',
         items: {
           type: 'object',
-          required: ['Title', 'Url'],
+          required: ['Title', 'Url', 'type'],
           additionalProperties: false,
           properties: {
             Title: { type: 'string' },
             Url: { type: 'string' },
+            type: { type: 'string', enum: ['link', 'phone'] },
           },
         },
       },

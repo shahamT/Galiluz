@@ -174,7 +174,11 @@ async function processEventPipelineVerificationFirst(eventId, rawMessage, cloudi
     price: priceResult.price,
     occurrences,
     media: [],
-    urls: descResult.urls || [],
+    urls: (descResult.urls || []).map((u) => ({
+      Title: u.Title,
+      Url: u.Url,
+      type: u.type === 'phone' ? 'phone' : 'link',
+    })),
     justifications: {
       date: occurrences[0]?.evidenceQuote || 'Not stated in message or image.',
       location: locationResult.evidenceQuote || 'Not stated in message or image.',

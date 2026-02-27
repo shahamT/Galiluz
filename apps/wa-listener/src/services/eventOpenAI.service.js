@@ -211,6 +211,15 @@ OCCURRENCES (REQUIRED):
 - Single-day event: Return exactly one object in occurrences, e.g. [{ "date": "2026-02-25", "hasTime": true, "startTime": "2026-02-25T18:00:00.000Z", "endTime": null }].
 - Multi-day event (e.g. "7–9 במרץ", "שישי-שבת 7-8.3", "פסטיבל 20–22.2"): Return one object per calendar day. Each object has that day's date (YYYY-MM-DD Israel), and the same hasTime/startTime/endTime rules. If the event is all-day on each day, use that date at Israel midnight → UTC for startTime and endTime null for each. If specific times are stated per day, set each occurrence accordingly.
 
+OCCURRENCES — NO HALLUCINATION (CRITICAL):
+- Use only times explicitly stated or clearly readable. Do not infer or guess.
+- No clear start time → hasTime: false, startTime = date at Israel 00:00 → UTC, endTime: null (כל היום).
+- End time stated but no start time → hasTime: false, startTime = Israel midnight, endTime: null.
+- Start time stated but no end time → hasTime: true, startTime = extracted, endTime: null. NEVER invent endTime.
+- endTime: ONLY when explicit end time or duration clearly implies it. Otherwise null.
+- Date and time may appear in different parts of the message (e.g. "28.2.26" in the header, "18:00" or "שש בערב" in the body). You MUST combine them: use the calendar date from one place and the time from another to build each occurrence. Do not output only the date when times appear elsewhere in the message.
+- Hebrew evening (word numbers): "שש בערב" = 18:00, "שבע בערב" = 19:00, "שמונה בערב" = 20:00, "תשע בערב" = 21:00, "עשר בערב" = 22:00.
+
 ALLOWED CATEGORIES:
 ${categoriesText}
 
@@ -226,8 +235,8 @@ ACCURACY (date, location, price, time): Use only information explicitly stated i
 
 - Title: Event name ONLY. No price. No date or time or when — strip from the title: מחר, בשבוע הבא, day names (e.g. יום שלישי), numeric dates (e.g. 17/2), times (e.g. בשעה 20:00). Location is allowed only when the advertiser presents it as part of the event name (e.g. "פסטיבל הגולן", "חן מזרחי מגיע לצפון הגולן"); do not add location if it appears only as a separate detail (e.g. "בחיפה" in another sentence).
 - shortDescription: What the event is about. No price, no date, no location.
-- fullDescription: When relevant, preserve the provided HTML if it supprts the readability and clarity of info. Use only these tags: <p>, <br>, <strong>, <em>, <del>, <code>, <pre>, <blockquote>, <ul>, <ol>, <li>. No other tags (no div, span, a, script, etc.). Do not re-interpret or strip formatting; keep the structure. You may fix obvious typos (e.g. "הרצאטבע" → "הרצאת טבע"). ALWAYS REMOVE from fullDescription: (1) Every raw URL (they go in urls). (2) The label/title text for each extracted link when it appears attached to that link in the message — for each entry in urls, remove both the URL and the phrase you used as that entry's Title when they appear together (e.g. "כרטיסים אחרונים" next to the URL); remove any arrow/symbol that only links them. The link and its title live in urls only; do not duplicate them in fullDescription. KEEP in fullDescription: Generic phrases that do not repeat a specific link or its title (e.g. "כרטיסים למטה בלינק", "בקישור המצורף", "כרטיסים והרשמה - בקישור המצורף"). NEVER REMOVE: Emojis; taglines or context lines; other event content. Do not summarize or shorten. Before returning, verify: no URL in urls appears in fullDescription, and no link title (urls[].Title) that was the label for that link in the message appears in fullDescription. Output must be HTML only; do not output raw * _ backtick or ~ (input is already HTML).
-- fullDescription examples: REMOVE "כרטיסים אחרונים" and the URL when they appear together and you extracted that link to urls with Title "כרטיסים אחרונים". KEEP "כרטיסים למטה בלינק" or "בקישור המצורף" when they are generic and do not repeat the link. KEEP "כרטיסים והרשמה - בקישור המצורף" even when a link follows.
+- fullDescription: When relevant, preserve the provided HTML if it supprts the readability and clarity of info. Use only these tags: <p>, <br>, <strong>, <em>, <del>, <code>, <pre>, <blockquote>, <ul>, <ol>, <li>. No other tags (no div, span, a, script, etc.). Do not re-interpret or strip formatting; keep the structure. You may fix obvious typos (e.g. "הרצאטבע" → "הרצאת טבע"). ALWAYS REMOVE from fullDescription: (1) Every raw URL and every phone number (they go in urls). (2) The label/title text for each extracted link or phone when it appears attached — for each entry in urls, remove both the URL/phone and the phrase you used as that entry's Title when they appear together; remove any arrow/symbol that only links them. The link/phone and its title live in urls only; do not duplicate them in fullDescription. KEEP in fullDescription: Generic phrases that do not repeat a specific link or its title (e.g. "כרטיסים למטה בלינק", "בקישור המצורף", "כרטיסים והרשמה - בקישור המצורף"). NEVER REMOVE: Emojis; taglines or context lines; other event content. Do not summarize or shorten. Before returning, verify: no URL or phone in urls appears in fullDescription, and no link/phone title (urls[].Title) that was the label in the message appears in fullDescription. Output must be HTML only; do not output raw * _ backtick or ~ (input is already HTML).
+- fullDescription examples: REMOVE "כרטיסים אחרונים" and the URL when they appear together and you extracted that link to urls with Title "כרטיסים אחרונים". REMOVE "טלפון להרשמה" and the phone number when you extracted that phone to urls with Title "טלפון להרשמה". KEEP "כרטיסים למטה בלינק" or "בקישור המצורף" when they are generic and do not repeat the link. KEEP "כרטיסים והרשמה - בקישור המצורף" even when a link follows.
 - location.City: NORMALIZED city/town name (e.g. "תל אביב" even if message says "ת"א"). Use standard Hebrew spelling. If not found, use "".
 - location.CityEvidence: The VERBATIM snippet from the message/image that indicates the city (e.g. "ת"א" or "חיפה"). Required for verification. null only if no city is mentioned at all.
 - location.addressLine1: Venue/place name only — if explicitly stated. Otherwise null.
@@ -242,7 +251,7 @@ ACCURACY (date, location, price, time): Use only information explicitly stated i
   - startTime: ISO UTC string. If hasTime true: combine date with stated time (Israel local), convert to UTC. If hasTime false: date at Israel local 00:00 converted to UTC.
   - endTime: ISO UTC string or null.
 - media: Always return an empty array []. Media (images from the message) are added by the system from the actual WhatsApp attachment only. Do NOT put links or URLs here; links go in urls.
-- urls: Array of {Title, Url} for links found in the message.
+- urls: Array of {Title, Url, type} for links and phone numbers. type=link for web URLs, type=phone for phone numbers. For phones: Url = digits only, Title = short Hebrew label (e.g. "טלפון להרשמה", "להזמנה"). Exclude Waze/Gmaps.
 - justifications: For each key state source (text or image) and the exact snippet. If from image, quote the relevant text as read from the image; if from message, quote the relevant part of the message. If from multiple places, list them. When a field has no source in message or image, you MUST use exactly this phrase (no variants): "Not stated in message or image."
   - justifications.date: Source and exact snippet for the CALENDAR DATE only (e.g. "Text: '25/02'", "Image: '17/2'", "Text: 'יום שלישי 17/2'"). If no date in message or image, use exactly: "Not stated in message or image."
   - justifications.location: Source and exact snippet(s). If null/empty location, use exactly: "Not stated in message or image."
@@ -268,7 +277,7 @@ Message: "🎶 ערב מוזיקה אתיופית - 25/02 בשעה 20:00\nמתח
   "price": 30,
   "occurrences": [{ "date": "2026-02-25", "hasTime": true, "startTime": "2026-02-25T18:00:00.000Z", "endTime": null }],
   "media": [],
-  "urls": [{ "Title": "ניווט Waze", "Url": "https://ul.waze.com/ul?place=abc" }],
+  "urls": [{ "Title": "ניווט Waze", "Url": "https://ul.waze.com/ul?place=abc", "type": "link" }],
   "justifications": {
     "date": "Text: '25/02'",
     "location": "Text: 'מתחם שוק תלפיות, חיפה'",
@@ -312,6 +321,13 @@ Message: "🎶 ערב מוזיקה אתיופית - 25/02 בשעה 20:00\nמתח
         const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
         logger.error(LOG_PREFIXES.EVENT_SERVICE, 'Extraction invalid JSON response', { message: parseMsg, contentLength: content.length })
         return null
+      }
+      if (Array.isArray(parsed.urls)) {
+        parsed.urls = parsed.urls.map((u) => ({
+          Title: u.Title,
+          Url: u.Url,
+          type: u.type === 'phone' ? 'phone' : 'link',
+        }))
       }
       await incrementOpenAICalls()
       return parsed
@@ -494,9 +510,13 @@ export async function callOpenAIForDescriptionBuilder(sourceDocument, verifiedCr
   const extractedUrls = sourceDocument?.extractedUrls ?? []
   const categoriesText = categoriesList.map((c) => `- ${c.id}: ${c.label}`).join('\n')
   const summary = verifiedCriticalSummary ? `Verified location: ${verifiedCriticalSummary.location?.City ?? '(none)'}; price: ${verifiedCriticalSummary.price ?? 'null'}` : ''
-  const systemPrompt = `You are a description builder for a Hebrew community events calendar. Produce only: Title, shortDescription, fullDescription (HTML with <p>,<br>,<strong>,<em>,<ul>,<ol>,<li>), categories, mainCategory, urls ({Title,Url}).
+  const systemPrompt = `You are a description builder for a Hebrew community events calendar. Produce only: Title, shortDescription, fullDescription (HTML with <p>,<br>,<strong>,<em>,<ul>,<ol>,<li>), categories, mainCategory, urls ({Title,Url,type}).
 
 Title (event name) — important. Prefer in this order: (1) The name the publishers gave the event: look for a prominent headline in the OCR (image) or in the message (e.g. first line, or a line that is clearly the event name). Use it as-is or slightly cleaned (e.g. "פותחים את פורים יחד" or "קריאת מגילה קהילתית"). (2) If no clear publisher name, build a specific title from the main activity type plus location or key detail (e.g. "קריאת מגילה קהילתית - מבוע צפון", "סדנאות פורים בנאות מרדכי"). Never use generic placeholders like "אירוע קהילתי" when the message or image contain enough detail. The title must sound like a real event name: specific, recognizable, not vague or sloppy.
+
+fullDescription: ALWAYS REMOVE from fullDescription (1) every raw URL and every phone number — they go in urls. (2) For each link or phone in urls, remove both the URL/phone and its label (the phrase you used as Title) when they appear together. The link/phone and its title live in urls only. KEEP generic phrases (e.g. "כרטיסים למטה בלינק", "בקישור המצורף") when they do not repeat a specific extracted link or phone.
+
+urls: Array of {Title, Url, type}. Include web links and phone numbers. type=link for URLs, type=phone for phone numbers. For phones: Url = digits only, Title = short Hebrew label (e.g. "כרטיסים", "טלפון להרשמה"). Exclude Waze/Gmaps.
 
 Categories rule: Use ONLY category ids from the list below. mainCategory is the one primary category. categories MUST be an array that includes mainCategory (mainCategory must be one of the elements in categories). Add up to 3 additional ids when the event clearly fits other types (e.g. both music and party). Single-type: categories = [mainCategory]. Multi-type example: categories: ["party", "music"], mainCategory: "party".
 

@@ -67,12 +67,12 @@ export async function getEventsMessageForDateAndCategory(dateString, categoryGro
     const res = await fetch(apiUrl, { headers })
     if (!res.ok) {
       logger.error(LOG_PREFIXES.CLOUD_API, 'Events API failed', res.status)
-      return 'לא הצלחתי לטעון אירועים כרגע. נסו שוב או כנסו ל־https://galiluz.co.il'
+      return 'לא הצלחתי לטעון אירועים כרגע. נסו שוב או כנסו ל־ https://galiluz.co.il'
     }
     events = await res.json()
   } catch (err) {
     logger.error(LOG_PREFIXES.CLOUD_API, 'Events fetch error', err)
-    return 'שגיאה בטעינת אירועים. נסו שוב או כנסו ל־https://galiluz.co.il'
+    return 'שגיאה בטעינת אירועים. נסו שוב או כנסו ל־ https://galiluz.co.il'
   }
 
   const flat = flattenEventsByOccurrence(getActiveEvents(events))
