@@ -5,7 +5,7 @@ import { LOG_PREFIXES } from '../consts/index.js'
 /**
  * Check publisher status by WhatsApp user id.
  * @param {string} waId - WhatsApp user id (msg.from)
- * @returns {Promise<{ status: 'not_found' | 'pending' | 'approved' }>}
+ * @returns {Promise<{ status: 'not_found' | 'pending' | 'approved', connectionError?: boolean }>}
  */
 export async function checkPublisher(waId) {
   const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
@@ -24,7 +24,7 @@ export async function checkPublisher(waId) {
     return { status }
   } catch (err) {
     logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers check error', err)
-    return { status: 'not_found' }
+    return { status: 'not_found', connectionError: true }
   }
 }
 

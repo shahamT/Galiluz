@@ -6,11 +6,13 @@ import { MODAL_TEXT } from '~/consts/ui.const'
 
 /**
  * Builds an array of non-empty address parts from a location object.
+ * Order: locationName (venue), addressLine1, addressLine2, city.
  * @param {Object} loc - Location object
  * @returns {string[]}
  */
 function buildAddressParts(loc) {
   const parts = []
+  if (loc.locationName) parts.push(loc.locationName)
   if (loc.addressLine1) parts.push(loc.addressLine1)
   if (loc.addressLine2) parts.push(loc.addressLine2)
   if (loc.city) parts.push(loc.city)
@@ -52,21 +54,31 @@ export function useEventModalData(selectedEvent, selectedOccurrence) {
     const media = selectedEvent.value?.media
     if (!media || media.length === 0) return []
     return media
-      .map((item) => (typeof item === 'string' ? item : item?.url))
+      .map((item) =>
+        typeof item === 'string' ? item : item?.cloudinaryURL ?? item?.url
+      )
       .filter(Boolean)
   })
 
   const eventMedia = computed(() => {
-    const urls = eventImages.value
-    if (!urls.length) return []
-    return urls.map((url) => {
-      const isVideo = isVideoUrl(url)
-      return {
-        url,
-        isVideo,
-        displayUrl: isVideo ? getCloudinaryVideoThumbnailUrl(url) : url,
-      }
-    })
+    const media = selectedEvent.value?.media ?? []
+    if (!media.length) return []
+    const withUrls = media
+      .map((item) => {
+        const url =
+          typeof item === 'string' ? item : item?.cloudinaryURL ?? item?.url
+        if (!url) return null
+        const isVideo = isVideoUrl(url)
+        return {
+          url,
+          isVideo,
+          displayUrl: isVideo ? getCloudinaryVideoThumbnailUrl(url) : url,
+          isMain: typeof item === 'object' && item?.isMain === true,
+        }
+      })
+      .filter(Boolean)
+    const mainFirst = [...withUrls].sort((a, b) => (b.isMain ? 1 : 0) - (a.isMain ? 1 : 0))
+    return mainFirst
   })
 
   // --- Display info ---

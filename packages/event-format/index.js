@@ -56,7 +56,7 @@ OUTPUT LANGUAGE: All generated text (shortDescription, urls titles, etc.) must b
 RULES:
 1. Prefer best-effort interpretation: try to parse and fill every field from the raw data. Only when it is truly impossible to produce any reasonable value should you leave a field minimal or flag it (see FLAGS).
 2. Use the full raw event object only as context (keys: rawTitle, rawOccurrences, rawCity, rawLocationName, rawAddressLine1, rawAddressLine2, rawLocationDetails, rawNavLinks, rawPrice, rawFullDescription, rawUrls, rawMainCategory, rawCategories, rawMedia). Output only the fields defined in the schema.
-3. rawOccurrences: Parse into occurrences. All times are Israel (Asia/Jerusalem). Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, "3 בצהריים" = 15:00, "4 בצהריים" = 16:00, etc. Convert Israel time to UTC (Israel is UTC+2 in winter, UTC+3 in summer/DST — use the offset that applies to the occurrence date). Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (if hasTime: combine date with time in Israel then convert to UTC; if !hasTime: use Israel midnight for that date in UTC), endTime = ISO UTC or null if not given. Interpret flexibly (e.g. "סוף השבוע" → pick a reasonable weekend date from context); only flag when the text contains no date/time at all or an impossible date.
+3. rawOccurrences: Parse into occurrences. All times are Israel (Asia/Jerusalem). Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, "3 בצהריים" = 15:00, "4 בצהריים" = 16:00, etc. Convert Israel time to UTC (Israel is UTC+2 in winter, UTC+3 in summer/DST — use the offset that applies to the occurrence date). Each occurrence: date = YYYY-MM-DD (Israel), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string (if hasTime: combine date with time in Israel then convert to UTC; if !hasTime: use Israel midnight for that date in UTC), endTime = ISO UTC or null. Set endTime only when there is an explicit end time or when duration clearly implies it (e.g. "מתחילים בשעה 6 בערב ל3 שעות" → 21:00). Do not invent endTime when it is not stated or implied. Interpret flexibly (e.g. "סוף השבוע" → pick a reasonable weekend date from context); only flag when the text contains no date/time at all or an impossible date.
 4. city: The publisher may have provided a city, or it may be empty if they skipped. When provided: fix common Israeli place name typos (e.g. "קריעת שמונה" → "קריית שמונה", ת"א → תל אביב). Do not change correct names; only normalize obvious misspellings. Do not infer a different city. When rawCity is empty, output empty string.
 5. price: Convert to number or null. Free entry (e.g. חינם, בחינם, free, כניסה חופשית, ללא תשלום, אין תשלום) → 0. Ignore a number only when it is clearly not the event price (e.g. merchandise, food at event). If unclear or not a single number, use null. For rawPrice: Flag when the text is empty, or when it neither contains a price/number nor any free-entry phrase (e.g. חינם, בחינם, free, כניסה חופשית). Valid only when the raw text implies a specific price or free entry.
 6. shortDescription: Write in Hebrew (1–2 sentences) unless the event description was in English. Base shortDescription ONLY on the event name (rawTitle) and the full description (rawFullDescription). It must NOT contain or paraphrase: location (city, address, place name, nav links), price, or dates and times. Do not include categories or urls. Summarize only what the event is about — the name and the descriptive content of the event itself.
@@ -200,6 +200,43 @@ async function callOpenAIForPublisherFormat(rawEventWithAll, categoriesList, dat
 }
 
 /**
+ * Build event location object. city = city ID when listed, city name when custom; region only when custom.
+ */
+function buildEventLocation(rawEventWithAll, aiResult, navLinks) {
+  const cityType = rawEventWithAll.rawCityType === 'listed' || rawEventWithAll.rawCityType === 'custom'
+    ? rawEventWithAll.rawCityType
+    : undefined
+  let city = ''
+  let region
+  if (cityType === 'listed') {
+    city = typeof rawEventWithAll.rawCity === 'string' && rawEventWithAll.rawCity.trim()
+      ? rawEventWithAll.rawCity.trim()
+      : ''
+  } else if (cityType === 'custom') {
+    city = aiResult.city ?? rawEventWithAll.rawCity ?? ''
+    const rawRegion = typeof rawEventWithAll.rawRegion === 'string' && rawEventWithAll.rawRegion.trim()
+      ? rawEventWithAll.rawRegion.trim()
+      : undefined
+    region = rawRegion
+  } else {
+    city = aiResult.city ?? rawEventWithAll.rawCity ?? ''
+  }
+  return {
+    city: city || '',
+    region: region ?? undefined,
+    cityType,
+    locationName: typeof rawEventWithAll.rawLocationName === 'string' && rawEventWithAll.rawLocationName.trim()
+      ? rawEventWithAll.rawLocationName.trim()
+      : undefined,
+    addressLine1: rawEventWithAll.rawAddressLine1 ?? null,
+    addressLine2: rawEventWithAll.rawAddressLine2 ?? null,
+    locationDetails: rawEventWithAll.rawLocationDetails ?? null,
+    wazeNavLink: navLinks.wazeNavLink ?? null,
+    gmapsNavLink: navLinks.gmapsNavLink ?? null,
+  }
+}
+
+/**
  * Format a publisher raw event into a full event object using OpenAI.
  * Returns { formattedEvent } on success or { formattedEvent: null, errorReason } on failure.
  * Nuxt validates the result when wa-bot POSTs it; this package does minimal shape check only.
@@ -263,18 +300,7 @@ export async function formatPublisherEvent(rawEventWithAll, categoriesList, opti
     fullDescription,
     mainCategory,
     categories,
-    location: {
-      City: aiResult.city ?? rawEventWithAll.rawCity ?? '',
-      region: typeof rawEventWithAll.rawRegion === 'string' && rawEventWithAll.rawRegion.trim() ? rawEventWithAll.rawRegion.trim() : undefined,
-      cityId: typeof rawEventWithAll.rawCityId === 'string' && rawEventWithAll.rawCityId.trim() ? rawEventWithAll.rawCityId.trim() : undefined,
-      cityType: rawEventWithAll.rawCityType === 'listed' || rawEventWithAll.rawCityType === 'custom' ? rawEventWithAll.rawCityType : undefined,
-      locationName: typeof rawEventWithAll.rawLocationName === 'string' && rawEventWithAll.rawLocationName.trim() ? rawEventWithAll.rawLocationName.trim() : undefined,
-      addressLine1: rawEventWithAll.rawAddressLine1 ?? null,
-      addressLine2: rawEventWithAll.rawAddressLine2 ?? null,
-      locationDetails: rawEventWithAll.rawLocationDetails ?? null,
-      wazeNavLink: navLinks.wazeNavLink ?? null,
-      gmapsNavLink: navLinks.gmapsNavLink ?? null,
-    },
+    location: buildEventLocation(rawEventWithAll, aiResult, navLinks),
     occurrences: normalizedOccurrences,
     price: aiResult.price,
     media: Array.isArray(rawEventWithAll.rawMedia) ? rawEventWithAll.rawMedia : [],
@@ -294,7 +320,7 @@ export async function formatPublisherEvent(rawEventWithAll, categoriesList, opti
   const flags = normalizeFlags(aiResult.flags)
   log(correlationId, 'info', 'format complete', {
     occurrencesCount: event.occurrences.length,
-    city: event.location.City,
+    city: event.location.city,
     mainCategory: event.mainCategory,
     price: event.price,
     flagsCount: flags.length,
@@ -491,7 +517,7 @@ function normalizeOccurrenceTime(s) {
   return s
 }
 
-const PARSE_OCCURRENCES_SYSTEM_PROMPT = `You parse free-text dates and times (Hebrew or English) into event occurrences. All times are Israel (Asia/Jerusalem). Convert Israel time to UTC: subtract the Israel UTC offset (UTC+2 winter, UTC+3 summer) from the time. Each occurrence: date = YYYY-MM-DD (Israel date), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string in this exact form: YYYY-MM-DDTHH:mm:ssZ (e.g. 2025-02-25T08:00:00Z — always include seconds and trailing Z), endTime = same format or null if not given. Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, etc. If the text cannot be reliably parsed into at least one occurrence, set valid to false and provide reason: a short Hebrew explanation (e.g. "לא הצלחתי לזהות תאריך או שעה ברורה"). When valid is true, set reason to "". Output valid JSON only.`
+const PARSE_OCCURRENCES_SYSTEM_PROMPT = `You parse free-text dates and times (Hebrew or English) into event occurrences. All times are Israel (Asia/Jerusalem). Convert Israel time to UTC: subtract the Israel UTC offset (UTC+2 winter, UTC+3 summer) from the time. Each occurrence: date = YYYY-MM-DD (Israel date), hasTime = true if a specific time was given else false, startTime = ISO 8601 UTC string in this exact form: YYYY-MM-DDTHH:mm:ssZ (e.g. 2025-02-25T08:00:00Z — always include seconds and trailing Z), endTime = same format or null. Set endTime only when there is an explicit end time or when duration clearly implies it (e.g. "מתחילים בשעה 6 בערב ל3 שעות" → 21:00). Do not invent endTime when it is not stated or implied. Hebrew afternoon: "1 בצהריים" = 13:00, "2 בצהריים" = 14:00, etc. If the text cannot be reliably parsed into at least one occurrence, set valid to false and provide reason: a short Hebrew explanation (e.g. "לא הצלחתי לזהות תאריך או שעה ברורה"). When valid is true, set reason to "". Output valid JSON only.`
 
 /**
  * Parse free-text dates/times into occurrences (edit flow).
@@ -819,5 +845,5 @@ export async function verifyCityInNorthernIsrael(cityName, options = {}) {
   }
 }
 
-export { extractNavLinksFromRaw, htmlToWhatsAppMessage, parseFreeLanguageEditRequest }
+export { extractNavLinksFromRaw, htmlToWhatsAppMessage, parseFreeLanguageEditRequest, convertMessageToHtml }
 export { detectEventFromFreeText, extractEventFromFreeText } from './freeLanguageExtract.js'

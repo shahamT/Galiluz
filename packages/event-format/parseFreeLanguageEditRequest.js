@@ -17,7 +17,7 @@ const ALLOWED_FIELD_KEYS = new Set([
   'categories',
   'location',
   'locationName',
-  'City',
+  'city',
   'addressLine1',
   'addressLine2',
   'locationDetails',
@@ -80,12 +80,12 @@ ${currentEventSummary}
 Allowed field keys for edits (use exactly these when proposing edits):
 - title (string) — event title
 - shortDescription (string) — short summary
-- fullDescription (string) — full description (may contain HTML)
+- fullDescription (string) — full description. Output as HTML only. Use only these tags: <p>, <br>, <strong>, <em>, <s>, <ul>, <ol>, <li>, <blockquote>, <code>. Use <strong> for bold, <em> for italic, <ul><li> for bullet lists. Do not use * or _ in the output; use only these HTML tags. newValueStr is the raw HTML string (JSON-escaped when in JSON).
 - mainCategory (string) — main category id
 - categories (array of strings) — category ids
-- location (object) — full location: { City, locationName?, addressLine1?, addressLine2?, locationDetails?, wazeNavLink?, gmapsNavLink?, region?, cityId?, cityType? }. region = center|golan|upper; cityType = listed|custom.
-- locationName, City, addressLine1, addressLine2, locationDetails, wazeNavLink, gmapsNavLink, region (strings) — single location sub-fields
-- datetime or occurrences (array) — the COMPLETE new occurrences array after applying the user's requested changes. Each item: { date: "YYYY-MM-DD", hasTime: true/false, startTime: "YYYY-MM-DDTHH:mm:ssZ", endTime: "YYYY-MM-DDTHH:mm:ssZ" or null }. All times in UTC. See "Date/time (occurrences) edits" below.
+- location (object) — full location: { city, locationName?, addressLine1?, addressLine2?, locationDetails?, wazeNavLink?, gmapsNavLink?, region?, cityType? }. city = city ID when listed, city name when custom; region only when custom (center|golan|upper); cityType = listed|custom.
+- locationName, city, addressLine1, addressLine2, locationDetails, wazeNavLink, gmapsNavLink, region (strings) — single location sub-fields
+- datetime or occurrences (array) — the COMPLETE new occurrences array after applying the user's requested changes. Each item: { date: "YYYY-MM-DD", hasTime: true/false, startTime: "YYYY-MM-DDTHH:mm:ssZ", endTime: "YYYY-MM-DDTHH:mm:ssZ" or null }. All times in UTC. Set endTime only when there is an explicit end time or duration that implies it; do not invent endTime. See "Date/time (occurrences) edits" below.
 - price (number or null)
 - links (array) — urls and phones: [{ Title: "string", Url: "string", type: "link"|"phone" }]. For phone change use type "phone" and Url as digits (e.g. "0507153850").
 - media (array) — list of media items
@@ -97,7 +97,7 @@ Date/time (occurrences) edits — the user can request any combination in one me
 - Add occurrence(s): add one or more new dates/times (e.g. "add March 8 1pm–3pm", "להוסיף עוד יום ב8 למרץ בשעה 1 עד 3 בצהריים").
 - Remove occurrence(s): remove one or more existing occurrences (e.g. "cancel the event on March 5", "לבטל את ה5 למרץ").
 - Combine: e.g. add one day, change another day's time, and remove a third in the same message.
-Always output exactly ONE edit with fieldKey "datetime" (or "occurrences"): take "occurrences (current)" from CURRENT EVENT above as the starting array, apply the requested changes (modify in place, append new, delete removed), then set newValueStr to JSON.stringify of the complete new array. Keep any occurrence not mentioned by the user unchanged. All times must be in UTC (Israel offset given above). Hebrew: "ה5 למרץ" = 5th March, "ה8 למרץ" = 8th March, "בצהריים" = afternoon (13:00), "שבע בערב" = 19:00, "עשר" = 22:00.
+Always output exactly ONE edit with fieldKey "datetime" (or "occurrences"): take "occurrences (current)" from CURRENT EVENT above as the starting array, apply the requested changes (modify in place, append new, delete removed), then set newValueStr to JSON.stringify of the complete new array. Keep any occurrence not mentioned by the user unchanged. All times must be in UTC (Israel offset given above). endTime: set only when there is an explicit end time or duration that implies it (e.g. "ל3 שעות"); do not invent endTime. Hebrew: "ה5 למרץ" = 5th March, "ה8 למרץ" = 8th March, "בצהריים" = afternoon (13:00), "שבע בערב" = 19:00, "עשר" = 22:00.
 
 Respond with valid JSON only. You must always include "message" and "edits" in your response. For type "unclear" set message to your clarification (or ""); set edits to []. For type "complete_update" set message to "" and edits to []. For type "edits" set message to "" and edits to your array of changes. Choose exactly one type:
 
@@ -105,7 +105,7 @@ Respond with valid JSON only. You must always include "message" and "edits" in y
 
 2) type: "complete_update" — when the user clearly indicates they are done updating (e.g. "סיימתי לעדכן", "זהו", "מספיק"). Set message: "" and edits: [].
 
-3) type: "edits" — when the user requests any specific field update(s). Set message: "" and "edits" to an array of { "fieldKey", "justification", "newValueStr" }. You may have multiple items (e.g. one for links, one for location, one for datetime). justification: short Hebrew snippet from the user message. newValueStr: JSON string of the value (JSON.stringify). Examples: phone "0507153850" → links: [{"Title":"טלפון","Url":"0507153850","type":"phone"}]; location text → location: {"locationName":"מקום המטבח","addressLine1":"לקפה פילוסופ"} or use locationName + addressLine1; for date/time changes use a single datetime edit with the full merged occurrences array (see "Date/time (occurrences) edits" above).
+3) type: "edits" — when the user requests any specific field update(s). Set message: "" and "edits" to an array of { "fieldKey", "justification", "newValueStr" }. You may have multiple items (e.g. one for links, one for location, one for datetime). justification: short Hebrew snippet from the user message. newValueStr: JSON string of the value (JSON.stringify). For fullDescription use an HTML string (allowed tags: <p>, <br>, <strong>, <em>, <s>, <ul>, <ol>, <li>, <blockquote>, <code>; no * or _); escape as needed in JSON. Examples: phone "0507153850" → links: [{"Title":"טלפון","Url":"0507153850","type":"phone"}]; location text → location: {"locationName":"מקום המטבח","addressLine1":"לקפה פילוסופ"} or use locationName + addressLine1; for date/time changes use a single datetime edit with the full merged occurrences array (see "Date/time (occurrences) edits" above).
 
 Output only valid JSON matching the schema.`
 }
@@ -125,7 +125,7 @@ function buildCurrentEventSummary(currentEvent) {
     `mainCategory: ${ev.mainCategory ?? ''}`,
     `categories: ${Array.isArray(ev.categories) ? ev.categories.join(', ') : ''}`,
     `locationName: ${loc.locationName ?? ''}`,
-    `City: ${loc.City ?? ''}`,
+    `city: ${loc.city ?? ''}`,
     `addressLine1: ${loc.addressLine1 ?? ''}`,
     `addressLine2: ${loc.addressLine2 ?? ''}`,
     `locationDetails: ${loc.locationDetails ?? ''}`,

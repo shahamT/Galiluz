@@ -56,14 +56,16 @@ export function formatEventPrice(event) {
 /**
  * Format event location for display
  * @param {Object} event - Event object with location property
- * @returns {string} Formatted location string (city, address) or empty string
+ * @returns {string} Formatted location string (venue, address, city) or empty string
  */
 export function formatEventLocation(event) {
   if (!event.location) return ''
 
   const parts = []
-  if (event.location.city) parts.push(event.location.city)
+  if (event.location.locationName) parts.push(event.location.locationName)
   if (event.location.addressLine1) parts.push(event.location.addressLine1)
+  if (event.location.addressLine2) parts.push(event.location.addressLine2)
+  if (event.location.city) parts.push(event.location.city)
 
   return parts.join(', ')
 }
@@ -75,7 +77,7 @@ export function formatEventLocation(event) {
  */
 export function formatEventLocationForChip(event) {
   const loc = event?.location
-  const name = loc?.addressLine1?.trim()
+  const name = (loc?.locationName || loc?.addressLine1)?.trim()
   const city = loc?.city?.trim()
   if (name && city) return `${name} - ${city}`
   if (city) return city

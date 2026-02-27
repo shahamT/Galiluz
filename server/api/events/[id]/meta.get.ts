@@ -34,13 +34,19 @@ function getImageUrlForMeta(url: string | null | undefined): string | null {
 
 /**
  * Gets the first media URL from event media array.
+ * Prefers item with isMain === true; else uses first item.
  */
 function getFirstMediaUrl(media: unknown[]): string | null {
   if (!Array.isArray(media) || media.length === 0) return null
-  const first = media[0]
-  if (typeof first === 'string') return getImageUrlForMeta(first)
-  if (first && typeof first === 'object') {
-    const url = (first as Record<string, unknown>).url ?? (first as Record<string, unknown>).cloudinaryURL
+  const mainItem = media.find(
+    (m) => m && typeof m === 'object' && (m as Record<string, unknown>).isMain === true
+  )
+  const chosen = mainItem ?? media[0]
+  if (typeof chosen === 'string') return getImageUrlForMeta(chosen)
+  if (chosen && typeof chosen === 'object') {
+    const url =
+      (chosen as Record<string, unknown>).cloudinaryURL ??
+      (chosen as Record<string, unknown>).url
     if (typeof url === 'string') return getImageUrlForMeta(url)
   }
   return null

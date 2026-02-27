@@ -29,12 +29,16 @@ export interface PublisherRawEvent {
 }
 
 /**
- * Event location details
+ * Event location details.
+ * city: city ID (from CITIES) when listed, city name string when custom.
+ * region: only when custom; resolved for listed on frontend.
  */
 export interface EventLocation {
   city?: string
-  /** Region key e.g. 'center' | 'golan' | 'upper' */
+  /** Region key e.g. 'center' | 'golan' | 'upper' — only for custom cities */
   region?: string
+  /** 'listed' | 'custom' — how to interpret city (ID vs name) */
+  cityType?: 'listed' | 'custom'
   /** Venue or place name (from rawLocationName) */
   locationName?: string
   addressLine1?: string

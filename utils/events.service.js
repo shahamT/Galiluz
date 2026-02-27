@@ -2,6 +2,7 @@
  * Event domain logic: filtering, flattening by occurrence, date/active and category/time-range filtering.
  */
 import { MINUTES_PER_DAY } from '~/consts/calendar.const'
+import { CITIES } from '~/consts/regions.const'
 import { getDateInIsraelFromIso } from './israelDate'
 import { formatDateToYYYYMMDD } from './date.helpers'
 
@@ -144,14 +145,21 @@ export function eventMatchesCategories(event, categoryIds) {
 }
 
 /**
- * Check if event matches region filter. When event has no region, include it (show until data exists).
- * @param {Object} event - Event object with optional location.region
+ * Check if event matches region filter.
+ * For listed cities: resolve region from location.city (id) via CITIES.
+ * For custom cities: use location.region directly.
+ * When event has no region, include it (show until data exists).
+ * @param {Object} event - Event object with optional location.region, location.city, location.cityType
  * @param {string[]} regionKeys - Array of region keys to filter by
  * @returns {boolean} - True if event matches
  */
 export function eventMatchesRegions(event, regionKeys) {
   if (!regionKeys || regionKeys.length === 0) return true
-  const eventRegion = event?.location?.region
+  let eventRegion = event?.location?.region
+  if (!eventRegion && event?.location?.cityType === 'listed' && event?.location?.city) {
+    const cityEntry = CITIES[event.location.city]
+    eventRegion = cityEntry?.region
+  }
   if (!eventRegion) return true
   return regionKeys.includes(eventRegion)
 }

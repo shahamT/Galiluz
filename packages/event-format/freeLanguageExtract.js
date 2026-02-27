@@ -5,6 +5,7 @@
 import OpenAI from 'openai'
 import { convertMessageToHtml } from './whatsappFormatToHtml.js'
 import { getCurrentIsraelUtcOffset } from './israelDate.js'
+import { normalizeCityToListedOrCustom } from './index.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
@@ -46,6 +47,38 @@ function sanitizeText(text) {
   let s = text.trim()
   if (s.length > MAX_TEXT_LENGTH) s = s.slice(0, MAX_TEXT_LENGTH)
   return s
+}
+
+/**
+ * Strip redundant city name from locationName/addressLine1 when they repeat the city.
+ * City is stored in City field; avoid duplication (e.g. locationName "בית הלל" when City is "בית הלל").
+ * @param {string} city - City name (from City field)
+ * @param {string|null|undefined} locationName
+ * @param {string|null|undefined} addressLine1
+ * @returns {{ locationName: string|null, addressLine1: string|null }}
+ */
+function stripCityFromLocationFields(city, locationName, addressLine1) {
+  const cityNorm = (city ?? '').trim()
+  if (!cityNorm) return { locationName: locationName ?? null, addressLine1: addressLine1 ?? null }
+  const norm = (s) => (s ?? '').trim().replace(/\s+/g, ' ')
+  const cityLower = norm(cityNorm).toLowerCase()
+
+  const strip = (val) => {
+    const v = norm(val)
+    if (!v) return null
+    const vLower = v.toLowerCase()
+    if (vLower === cityLower) return null
+    if (vLower.startsWith(cityLower)) {
+      const rest = v.slice(cityNorm.length).replace(/^[\s,]+/, '').trim()
+      return rest || null
+    }
+    return v || null
+  }
+
+  return {
+    locationName: strip(locationName) ?? null,
+    addressLine1: strip(addressLine1) ?? null,
+  }
 }
 
 const DETECTION_SCHEMA = {
@@ -120,7 +153,7 @@ export async function detectEventFromFreeText(text, options = {}) {
   }
 }
 
-const FREE_LANG_FLAG_KEYS = ['rawOccurrences', 'rawPrice', 'rawLocation', 'rawMainCategory', 'rawCity']
+const FREE_LANG_FLAG_KEYS = ['rawOccurrences', 'rawPrice', 'rawLocation', 'rawMainCategory', 'rawCity', 'rawCityOutsideNorth']
 
 const EXTRACTION_SCHEMA = {
   name: 'free_lang_extraction',
@@ -145,8 +178,6 @@ const EXTRACTION_SCHEMA = {
       'mainCategory',
       'categories',
       'city',
-      'cityType',
-      'cityId',
       'locationName',
       'addressLine1',
       'addressLine2',
@@ -189,8 +220,6 @@ const EXTRACTION_SCHEMA = {
       mainCategory: { type: 'string' },
       categories: { type: 'array', items: { type: 'string' }, minItems: 0 },
       city: { type: 'string' },
-      cityType: { type: 'string', enum: ['listed', 'custom', ''] },
-      cityId: { type: ['string', 'null'] },
       locationName: { type: ['string', 'null'] },
       addressLine1: { type: ['string', 'null'] },
       addressLine2: { type: ['string', 'null'] },
@@ -230,7 +259,7 @@ const MAX_EXTRA_CATEGORIES = 3
 
 function buildExtractionSystemPrompt(categoriesList, citiesList, dateContext) {
   const categoriesText = categoriesList.map((c) => `- ${c.id}: ${c.label}`).join('\n')
-  const citiesSample = citiesList.slice(0, 30).map((c) => c.title).join(', ')
+  const citiesText = (citiesList || []).map((c) => c.title).join(', ')
   return `You extract event data from a single WhatsApp message (Hebrew community events calendar).
 
 ${dateContext}
@@ -238,25 +267,24 @@ ${dateContext}
 CATEGORIES (you MUST use ONLY these ids — mainCategory + categories):
 ${categoriesText}
 
-CITIES: Match to listed cities when possible. Sample: ${citiesSample}
-When city matches a known city, set cityType="listed" and cityId to the city id. Otherwise cityType="custom".
+CITY: Extract the city/town name. Use standard spelling. If the message mentions a city from this list, use that exact name: ${citiesText}. Otherwise use the city name as stated. Fix obvious typos (e.g. קריעת שמונה → קריית שמונה).
 
-NORTHERN ISRAEL ONLY: This calendar is for Northern Israel only (הגליל העליון, רמת הגולן, אצבע הגליל). If you have NO DOUBT that the extracted city is NOT in Northern Israel (e.g. clearly תל אביב, ירושלים, באר שבע, נתניה, ראשון לציון), do NOT save it: set rawCity and city to empty string, cityType to "", cityId to null. Add flag: fieldKey="rawCity", reason="העיר שזוהתה אינה באזור הצפון". When in doubt, accept the city — only flag when you are certain it is outside the North.
+NORTHERN ISRAEL ONLY: This calendar is for Northern Israel only (הגליל העליון, רמת הגולן, אצבע הגליל). If you have NO DOUBT that the extracted city is NOT in Northern Israel (e.g. clearly תל אביב, ירושלים, באר שבע, נתניה, ראשון לציון), set city to empty string and add flag: fieldKey="rawCityOutsideNorth", reason="העיר שזוהתה אינה באזור הצפון". When in doubt, accept the city — only flag when you are certain it is outside the North.
 
 RULES:
 1. rawTitle: Event name only. No price, dates, location (unless clearly part of event name). Generate from content if no clear title.
-2. rawFullDescription: Preserve the message segment as description. Keep WhatsApp formatting (* _ ~) and emojis. Remove raw URLs; min 70 chars. Do not include link titles.
+2. rawFullDescription: Output as HTML only. Use only these tags: <p>, <br>, <strong>, <em>, <s>, <ul>, <ol>, <li>, <blockquote>, <code>. Use <strong> for bold, <em> for italic, <ul><li> for bullet lists. Do not use * or _ in the output; use only these HTML tags. Min 70 chars. Preserve structure; add formatting (bold, italic, bullets, paragraphs) for readability when helpful. FOR EACH LINK you extract to urls: REMOVE from rawFullDescription both (a) the URL itself and (b) the label/reference text that introduces it (e.g. "אינסטגרם - ", "כרטיסים >> "). Remove any connector (dash, arrows, colon) that only links the label to the URL. KEEP generic phrases like "כרטיסים למטה בלינק" when they do not repeat a specific extracted link. Do NOT add any content that is not in the original text. TYPOS: You may fix clear typos only when 100% certain (e.g. "בילןי נחמד בסופש" → "בילוי נחמד בסופש"). Do NOT change wordplay, puns, or intentional phrasing.
 3. shortDescription: 1-2 sentences Hebrew, no location/price/dates.
 4. rawOccurrences: String representation of dates/times from message (e.g. "25/02 20:00" or "5 במרץ משמונה עד 10").
-5. occurrences: Structured array. date=YYYY-MM-DD, startTime/endTime=ISO UTC. Israel timezone.
-6. rawPrice: String from message (e.g. "50" or "חינם"). price: number or 0 (free) or null.
+5. occurrences: Structured array. date=YYYY-MM-DD, startTime/endTime=ISO UTC. Israel timezone. When multiple times appear for the same date (e.g. "12:00 - פתיחה, 13:00 - הופעה, 15:00 - סעודה"), infer the correct startTime from what the event is advertising: if the whole day/event is advertised, use the first time; if the event is specifically the show or the feast, use that time. Do not default to the first time when the main advertised activity is clearly later (e.g. poster for "הופעה" with "13:00 - הופעה" → use 13:00). endTime: Set only when there is an explicit end time or when duration clearly implies it (e.g. "מתחילים בשעה 6 בערב ל3 שעות" → 21:00). When there is no clear ending time and no implied duration, leave endTime as null.
+6. rawPrice: String from message (e.g. "50" or "חינם"). price: number or 0 (free) or null. Use the MAIN/STANDARD price only — NOT last-minute or day-of price (e.g. "50 ש״ח עד למועד האירוע, 60 ש״ח ביום האירוע" → use 50), NOT bundle price (e.g. "100 ש״ח לכרטיס, 180 ש״ח לשני כרטיסים" → use 100). Prefer the single-ticket or advance price when multiple options exist.
 7. mainCategory/categories: ALWAYS try to infer from content first (event type, topic, keywords). Use the category list above. mainCategory = primary best-fit. categories = [mainCategory] + up to ${MAX_EXTRA_CATEGORIES} additional ids ONLY when the event clearly fits (e.g. concert → music + show). Do not add extras unless the event genuinely matches multiple categories. Only flag rawMainCategory when you truly cannot infer any suitable category (e.g. completely generic "אירוע" with zero context).
-8. location: Extract locationName, addressLine1, addressLine2, wazeNavLink, gmapsNavLink. rawLocationName/rawAddressLine1 = raw strings.
+8. location: Extract locationName, addressLine1, addressLine2, wazeNavLink, gmapsNavLink. rawLocationName/rawAddressLine1 = raw strings. IMPORTANT: Do NOT repeat the city name in locationName or addressLine1 — City is stored separately. locationName = venue/place name only (e.g. "מרכז קהילתי", "פאב השכונה"); addressLine1 = street/address or specific detail (e.g. "רחוב הרצל 5"), NOT the city. If the only location info is the city, leave locationName and addressLine1 empty.
 9. urls: Event links and phones only. type=link|phone. Exclude Waze/Gmaps (those go to rawNavLinks).
 10. rawNavLinks: Newline-separated Waze and Google Maps URLs if present. Else "".
 11. rawUrls: Newline-separated other URLs and phone numbers. Else "".
 
-FLAGS: Add to flags ONLY when UNABLE to extract OR when you are CERTAIN the city is outside Northern Israel (per rule above — when in doubt, do not flag rawCity). Flag rawOccurrences when no date/time. Flag rawPrice when no price nor free. Flag rawLocation when BOTH locationName AND addressLine1/addressLine2 are empty. Flag rawMainCategory ONLY when category truly cannot be inferred from content.
+FLAGS: Add to flags ONLY when UNABLE to extract OR when you are CERTAIN the city is outside Northern Israel (per rule above — when in doubt, do not flag rawCityOutsideNorth). Flag rawOccurrences when no date/time. Flag rawPrice when no price nor free. Flag rawLocation when BOTH locationName AND addressLine1/addressLine2 are empty. Flag rawMainCategory ONLY when category truly cannot be inferred from content.
 Include ALL qualifying flags. reason = short Hebrew explanation.`
 }
 
@@ -312,17 +340,65 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
       }
       const parsed = JSON.parse(content)
 
+      const hasRawCityOutsideNorth = Array.isArray(parsed.flags) && parsed.flags.some(
+        (f) => f && f.fieldKey === 'rawCityOutsideNorth',
+      )
+      const cityStr = (parsed.city ?? parsed.rawCity ?? '').trim()
+      const parsedLocationName = (parsed.rawLocationName ?? parsed.locationName ?? '').trim() || null
+      const parsedAddressLine1 = (parsed.rawAddressLine1 ?? parsed.addressLine1 ?? '').trim() || null
+      const { locationName: strippedLocationName, addressLine1: strippedAddressLine1 } = stripCityFromLocationFields(
+        cityStr,
+        parsedLocationName,
+        parsedAddressLine1,
+      )
+
+      let rawCity, rawRegion, rawCityType
+      let locCity = ''
+      let locRegion
+      let locCityType
+
+      if (hasRawCityOutsideNorth) {
+        rawCity = undefined
+        rawRegion = undefined
+        rawCityType = undefined
+        locCity = ''
+        locRegion = undefined
+        locCityType = undefined
+      } else {
+        const norm = await normalizeCityToListedOrCustom(cityStr, citiesList || [], {
+          openaiApiKey: apiKey,
+          openaiModel: model,
+          correlationId,
+        })
+        if (norm.type === 'listed') {
+          rawCity = norm.value.cityId || undefined
+          rawCityType = 'listed'
+          rawRegion = undefined
+          locCity = norm.value.cityId || ''
+          locRegion = undefined
+          locCityType = 'listed'
+        } else {
+          const customCity = (norm.value ?? '').trim() || undefined
+          rawCity = customCity
+          rawCityType = customCity ? 'custom' : undefined
+          rawRegion = customCity ? undefined : undefined
+          locCity = customCity || ''
+          locRegion = undefined
+          locCityType = customCity ? 'custom' : undefined
+        }
+      }
+
       const rawEventSupplement = {
         rawTitle: (parsed.rawTitle ?? '').trim(),
         rawOccurrences: (parsed.rawOccurrences ?? '').trim(),
         rawFullDescription: (parsed.rawFullDescription ?? '').trim(),
         rawMainCategory: (parsed.rawMainCategory ?? '').trim() || 'community_meetup',
         rawPrice: (parsed.rawPrice ?? '').trim(),
-        rawCity: (parsed.rawCity ?? '').trim() || undefined,
-        rawCityId: parsed.cityId ?? undefined,
-        rawCityType: parsed.cityType === 'listed' || parsed.cityType === 'custom' ? parsed.cityType : undefined,
-        rawLocationName: (parsed.rawLocationName ?? parsed.locationName ?? '').trim() || undefined,
-        rawAddressLine1: (parsed.rawAddressLine1 ?? parsed.addressLine1 ?? '').trim() || undefined,
+        rawCity,
+        rawRegion,
+        rawCityType,
+        rawLocationName: strippedLocationName ? (strippedLocationName.trim() || undefined) : undefined,
+        rawAddressLine1: strippedAddressLine1 ? (strippedAddressLine1.trim() || undefined) : undefined,
         rawAddressLine2: (parsed.rawAddressLine2 ?? parsed.addressLine2 ?? '').trim() || undefined,
         rawLocationDetails: (parsed.locationDetails ?? '').trim() || undefined,
         rawNavLinks: (parsed.rawNavLinks ?? '').trim() || undefined,
@@ -337,22 +413,26 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
       categories = categories.slice(0, 1 + MAX_EXTRA_CATEGORIES)
 
       const location = {
-        City: (parsed.city ?? '').trim(),
-        region: undefined,
-        cityId: parsed.cityId ?? undefined,
-        cityType: parsed.cityType === 'listed' || parsed.cityType === 'custom' ? parsed.cityType : undefined,
-        locationName: parsed.locationName ?? null,
-        addressLine1: parsed.addressLine1 ?? null,
+        city: locCity || '',
+        region: locRegion ?? undefined,
+        cityType: locCityType ?? undefined,
+        locationName: strippedLocationName,
+        addressLine1: strippedAddressLine1,
         addressLine2: parsed.addressLine2 ?? null,
         locationDetails: parsed.locationDetails ?? null,
         wazeNavLink: parsed.wazeNavLink ?? null,
         gmapsNavLink: parsed.gmapsNavLink ?? null,
       }
 
+      const rawDesc = (parsed.rawFullDescription ?? '').trim()
+      const looksLikeHtml = rawDesc && /<\w/.test(rawDesc)
+      const fullDescriptionValue = rawDesc
+        ? (looksLikeHtml ? rawDesc : convertMessageToHtml(rawDesc))
+        : ''
       const formattedEvent = {
         Title: (parsed.rawTitle ?? '').trim() || 'אירוע',
         shortDescription: (parsed.shortDescription ?? '').trim() || 'אירוע',
-        fullDescription: (parsed.rawFullDescription ?? '').trim() || '',
+        fullDescription: fullDescriptionValue,
         mainCategory,
         categories,
         location,

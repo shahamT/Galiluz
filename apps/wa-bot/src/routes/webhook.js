@@ -17,6 +17,7 @@ import {
   DISCOVER_ASK_TIME,
   DISCOVER_AFTER_LIST,
   PUBLISH_NOT_REGISTERED,
+  PUBLISH_CONNECTION_ERROR,
   PUBLISH_ASK_FULL_NAME,
   PUBLISH_ASK_PUBLISHING_AS,
   PUBLISH_ASK_EVENT_TYPES,
@@ -65,6 +66,7 @@ import {
   rejectPublisher,
 } from '../services/publishers.service.js'
 import { CATEGORY_GROUPS, CATEGORY_ALL_ID } from '../consts/categories.const.js'
+import { CITIES_LIST } from '../consts/cities.const.js'
 import {
   getPhoneNumberId,
   shouldForwardToDev,
@@ -120,19 +122,25 @@ function isPrivateMessage(message) {
 }
 
 /**
- * Normalize event from GET /api/events/[id] (frontend shape) to edit-flow shape (Title, location.City).
+ * Normalize event from GET /api/events/[id] (frontend shape) to edit-flow shape (Title, location.city).
+ * API returns resolved city (display name for listed); edit flow needs canonical city (id when listed).
  * @param {Record<string, unknown>} loaded
  * @returns {Record<string, unknown>}
  */
 function normalizeLoadedEventForEdit(loaded) {
   if (!loaded || typeof loaded !== 'object') return {}
   const loc = loaded.location && typeof loaded.location === 'object' ? loaded.location : {}
+  let city = loc.city ?? ''
+  if (loc.cityType === 'listed' && city) {
+    const entry = CITIES_LIST.find((c) => c.title === city)
+    if (entry) city = entry.id
+  }
   return {
     ...loaded,
     Title: loaded.Title ?? loaded.title ?? '',
     location: {
       ...loc,
-      City: loc.City ?? loc.city ?? '',
+      city,
     },
   }
 }
@@ -218,7 +226,11 @@ async function handleEventDeleteChoice(phoneNumberId, from) {
 }
 
 async function handlePublishButton(phoneNumberId, from, profileName) {
-  const { status } = await checkPublisher(from)
+  const result = await checkPublisher(from)
+  if (result.connectionError) {
+    return sendInteractiveButtons(phoneNumberId, from, PUBLISH_CONNECTION_ERROR)
+  }
+  const { status } = result
   if (status === 'approved') {
     conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
     return sendInteractiveButtons(phoneNumberId, from, PUBLISHER_HOW_TO_CONTINUE)

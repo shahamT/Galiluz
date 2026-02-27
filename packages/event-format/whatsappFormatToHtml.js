@@ -55,7 +55,12 @@ export function convertMessageToHtml(plainText) {
     if (paraLines.length > 0) {
       blocks.push('<p>' + paraLines.join('<br>') + '</p>')
     }
-    while (i < lines.length && lines[i] === '') i++
+    let blankCount = 0
+    while (i < lines.length && lines[i] === '') {
+      blankCount++
+      i++
+    }
+    for (let j = 1; j < blankCount; j++) blocks.push('<p><br></p>')
   }
 
   return blocks.join('')

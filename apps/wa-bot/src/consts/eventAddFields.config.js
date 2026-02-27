@@ -22,8 +22,10 @@ import {
   EVENT_ADD_VALIDATE_DATETIME,
   EVENT_ADD_VALIDATE_PLACE_NAME,
   EVENT_ADD_VALIDATE_ADDRESS,
+  EVENT_ADD_ASK_REGION,
   EVENT_ADD_VALIDATE_MAIN_CATEGORY,
   EVENT_ADD_VALIDATE_CITY,
+  EVENT_ADD_VALIDATE_REGION,
   EVENT_ADD_VALIDATE_WAZE_GMAPS,
   EVENT_ADD_VALIDATE_PRICE,
   EVENT_ADD_VALIDATE_DESCRIPTION,
@@ -41,11 +43,13 @@ import {
   EVENT_ADD_ADDRESS_MAX,
 } from './index.js'
 
-/** Canonical order of flaggable field keys (only those the AI may flag). */
+/** Canonical order of flaggable field keys (only those the AI may flag). rawRegion is injected when custom city. rawCityOutsideNorth same as rawCity. */
 export const FLAG_FIELD_ORDER = [
   'rawTitle',
   'rawOccurrences',
   'rawCity',
+  'rawCityOutsideNorth',
+  'rawRegion',
   'rawLocation',
   'rawNavLinks',
   'rawPrice',
@@ -55,9 +59,10 @@ export const FLAG_FIELD_ORDER = [
 ]
 
 /**
- * @typedef {'text' | 'text_skip' | 'list' | 'compound_category'} FlagInputType
+ * @typedef {'text' | 'text_skip' | 'list' | 'compound_category' | 'region_buttons'} FlagInputType
  * text = required text, text_skip = text or skip button, list = interactive list (category)
  * compound_category = group choice then category choice (same as regular add flow)
+ * region_buttons = region map + buttons (for custom city)
  */
 
 /**
@@ -98,6 +103,22 @@ export const FLAG_FIELD_CONFIGS = {
     validate: EVENT_ADD_VALIDATE_CITY,
     inputType: 'text_skip',
     lengthLimits: { max: EVENT_ADD_CITY_MAX },
+  },
+  rawCityOutsideNorth: {
+    label: 'יישוב',
+    stateKeys: ['eventAddCity'],
+    ask: EVENT_ADD_ASK_CITY,
+    footer: 'ניתן לדלג ולבחור אזור בלחיצה',
+    validate: EVENT_ADD_VALIDATE_CITY,
+    inputType: 'text_skip',
+    lengthLimits: { max: EVENT_ADD_CITY_MAX },
+  },
+  rawRegion: {
+    label: 'אזור',
+    stateKeys: ['eventAddRegion'],
+    ask: EVENT_ADD_ASK_REGION,
+    validate: EVENT_ADD_VALIDATE_REGION,
+    inputType: 'region_buttons',
   },
   /** Compound: place name (can skip) then address (required if place skipped, can skip if place filled). */
   rawLocation: {

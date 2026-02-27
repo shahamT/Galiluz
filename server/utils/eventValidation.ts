@@ -118,8 +118,8 @@ export function validatePublisherFormattedEvent(event: unknown): { valid: true }
     return { valid: false, reason: 'Missing location' }
   }
   const loc = e.location as Record<string, unknown>
-  if (typeof loc.City !== 'string') {
-    return { valid: false, reason: 'Missing location.City' }
+  if (typeof loc.city !== 'string') {
+    return { valid: false, reason: 'Missing location.city' }
   }
   if (!Array.isArray(e.occurrences) || e.occurrences.length === 0) {
     return { valid: false, reason: 'Missing or empty occurrences' }

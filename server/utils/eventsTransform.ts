@@ -1,10 +1,31 @@
 import { getDateInIsraelFromIso } from '~/utils/israelDate'
+import { CITIES } from '~/consts/regions.const'
 
 const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/
 
+/** Resolve location city and region for frontend display and filtering. */
+function resolveLocationForFrontend(loc: Record<string, unknown> | null | undefined): { city: string; region?: string } {
+  if (!loc || typeof loc !== 'object') return { city: '', region: undefined }
+  const cityType = loc.cityType === 'listed' || loc.cityType === 'custom' ? loc.cityType : undefined
+  const cityRaw = typeof loc.city === 'string' ? loc.city.trim() : ''
+  if (cityType === 'listed') {
+    if (cityRaw) {
+      const entry = CITIES[cityRaw as keyof typeof CITIES]
+      if (entry) return { city: entry.title, region: entry.region }
+      return { city: cityRaw, region: undefined }
+    }
+    return { city: '', region: undefined }
+  }
+  if (cityType === 'custom') {
+    const region = typeof loc.region === 'string' && loc.region.trim() ? loc.region.trim() : undefined
+    return { city: cityRaw, region }
+  }
+  return { city: cityRaw, region: typeof loc.region === 'string' && loc.region.trim() ? loc.region.trim() : undefined }
+}
+
 /**
  * Transforms backend event document to frontend format.
- * - Title → title, location.City → location.city, _id → id (string)
+ * - Title → title, location.city (resolved for display), location.region (resolved for listed), _id → id (string)
  * - occurrence.date preserved when present; otherwise derived from startTime (Israel)
  */
 export function transformEventForFrontend(doc: any): Record<string, unknown> | null {
@@ -38,9 +59,7 @@ export function transformEventForFrontend(doc: any): Record<string, unknown> | n
     media: backendEvent.media || [],
     urls: backendEvent.urls || [],
     location: {
-      city: backendEvent.location?.City || '',
-      region: backendEvent.location?.region || undefined,
-      cityId: backendEvent.location?.cityId || undefined,
+      ...resolveLocationForFrontend(backendEvent.location),
       cityType: backendEvent.location?.cityType || undefined,
       locationName: backendEvent.location?.locationName || undefined,
       addressLine1: backendEvent.location?.addressLine1 || undefined,

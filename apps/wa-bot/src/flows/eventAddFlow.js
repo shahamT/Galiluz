@@ -30,6 +30,7 @@ import {
   parseUrlsFromText,
   parseFreeLanguageEditRequest,
   htmlToWhatsAppMessage,
+  convertMessageToHtml,
   detectEventFromFreeText,
   extractEventFromFreeText,
 } from 'event-format'
@@ -198,7 +199,7 @@ const VALID_GROUP_IDS = new Set(CATEGORY_GROUPS.map((g) => g.id))
 /** Map from location edit list row id to { key: location field key, ask: prompt string }. */
 const LOCATION_FIELD_MAP = {
   loc_place_name: { key: 'locationName', ask: EVENT_EDIT_LOCATION_ASK_PLACE_NAME },
-  loc_city: { key: 'City', ask: EVENT_EDIT_LOCATION_ASK_CITY },
+  loc_city: { key: 'city', ask: EVENT_EDIT_LOCATION_ASK_CITY },
   loc_region: { key: 'region', ask: EVENT_EDIT_LOCATION_ASK_REGION, inputType: 'region_buttons' },
   loc_address: { key: 'addressLine1', ask: EVENT_EDIT_LOCATION_ASK_ADDRESS },
   loc_details: { key: 'locationDetails', ask: EVENT_EDIT_LOCATION_ASK_DETAILS },
@@ -395,11 +396,10 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
   const loc = formattedEvent.location && typeof formattedEvent.location === 'object' ? formattedEvent.location : {}
   const locLines = []
   if (loc.locationName) locLines.push(String(loc.locationName))
-  if (loc.City) locLines.push(String(loc.City))
-  if (loc.region) {
-    const regionLabel = EVENT_ADD_REGION_BUTTONS.find((b) => b.id === loc.region)?.title ?? loc.region
-    locLines.push(String(regionLabel))
-  }
+  const cityDisplay = getCityDisplayName(loc)
+  if (cityDisplay) locLines.push(String(cityDisplay))
+  const regionDisplay = getRegionDisplayName(loc)
+  if (regionDisplay) locLines.push(String(regionDisplay))
   if (loc.addressLine1) locLines.push(String(loc.addressLine1))
   if (loc.addressLine2) locLines.push(String(loc.addressLine2))
   if (loc.locationDetails) locLines.push(String(loc.locationDetails))
@@ -458,7 +458,7 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
   ].join('\n')
 
   const part2 = [
-    `*תאריכים ושעה:*`,
+    `*תאריכים ושעות:*`,
     datesBlock,
     '',
     `*מחיר:*`,
@@ -518,11 +518,10 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, o
     const loc = ev.location && typeof ev.location === 'object' ? ev.location : {}
     const locLines = []
     if (loc.locationName) locLines.push(String(loc.locationName))
-    if (loc.City) locLines.push(String(loc.City))
-    if (loc.region) {
-      const regionLabel = EVENT_ADD_REGION_BUTTONS.find((b) => b.id === loc.region)?.title ?? loc.region
-      locLines.push(String(regionLabel))
-    }
+    const cityDisplay = getCityDisplayName(loc)
+    if (cityDisplay) locLines.push(String(cityDisplay))
+    const regionDisplay = getRegionDisplayName(loc)
+    if (regionDisplay) locLines.push(String(regionDisplay))
     if (loc.addressLine1) locLines.push(String(loc.addressLine1))
     if (loc.addressLine2) locLines.push(String(loc.addressLine2))
     if (loc.locationDetails) locLines.push(String(loc.locationDetails))
@@ -548,7 +547,7 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, o
       return `תאריך: ${dateStr} | שעה: ${timeStr}`
     })
     const datesBlock = occLines.length ? occLines.join('\n') : empty
-    return `*תאריכים ושעה:*\n${datesBlock}`
+    return `*תאריכים ושעות:*\n${datesBlock}`
   }
   if (fieldKey === 'price') {
     const priceNum = typeof ev.price === 'number' ? ev.price : NaN
@@ -571,7 +570,26 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, o
   return empty
 }
 
-const LOCATION_SUB_KEYS = new Set(['locationName', 'City', 'region', 'cityId', 'cityType', 'addressLine1', 'addressLine2', 'locationDetails', 'wazeNavLink', 'gmapsNavLink'])
+const LOCATION_SUB_KEYS = new Set(['locationName', 'city', 'region', 'cityType', 'addressLine1', 'addressLine2', 'locationDetails', 'wazeNavLink', 'gmapsNavLink'])
+
+function getCityDisplayName(loc) {
+  if (!loc || typeof loc !== 'object') return ''
+  if (loc.cityType === 'listed' && loc.city) {
+    const entry = CITIES_LIST.find((c) => c.id === loc.city)
+    return entry?.title ?? loc.city
+  }
+  return loc.city ?? ''
+}
+
+function getRegionDisplayName(loc) {
+  if (!loc || typeof loc !== 'object') return ''
+  if (loc.cityType === 'listed' && loc.city) {
+    const entry = CITIES_LIST.find((c) => c.id === loc.city)
+    return entry?.region ? (EVENT_ADD_REGION_BUTTONS.find((b) => b.id === entry.region)?.title ?? entry.region) : ''
+  }
+  if (loc.region) return EVENT_ADD_REGION_BUTTONS.find((b) => b.id === loc.region)?.title ?? loc.region
+  return ''
+}
 
 /**
  * Merge free-language edits into a copy of the current event (for display and for patch).
@@ -672,10 +690,24 @@ function buildPatchPayloadFromFreeLangEdits(edits, currentEvent) {
   const payload = {}
   if (edits.some((e) => e.fieldKey === 'title')) payload.title = merged.Title
   if (edits.some((e) => e.fieldKey === 'shortDescription')) payload.shortDescription = merged.shortDescription
-  if (edits.some((e) => e.fieldKey === 'fullDescription')) payload.fullDescription = merged.fullDescription
+  if (edits.some((e) => e.fieldKey === 'fullDescription')) {
+    let desc = merged.fullDescription
+    if (typeof desc === 'string' && desc.trim() && !/<\w/.test(desc)) {
+      desc = convertMessageToHtml(desc)
+    }
+    payload.fullDescription = desc
+  }
   if (edits.some((e) => e.fieldKey === 'mainCategory')) payload.mainCategory = merged.mainCategory
   if (edits.some((e) => e.fieldKey === 'categories')) payload.categories = merged.categories
-  if (edits.some((e) => e.fieldKey === 'location' || LOCATION_SUB_KEYS.has(e.fieldKey))) payload.location = merged.location
+  if (edits.some((e) => e.fieldKey === 'location' || LOCATION_SUB_KEYS.has(e.fieldKey))) {
+    const loc = merged.location || {}
+    const cityType = loc.cityType === 'listed' || loc.cityType === 'custom' ? loc.cityType : undefined
+    payload.location = {
+      ...loc,
+      city: loc.city ?? '',
+      region: cityType === 'listed' ? undefined : loc.region,
+    }
+  }
   if (edits.some((e) => e.fieldKey === 'datetime')) payload.occurrences = merged.occurrences
   if (edits.some((e) => e.fieldKey === 'price')) payload.price = merged.price
   if (edits.some((e) => e.fieldKey === 'links')) payload.urls = merged.urls
@@ -1160,6 +1192,9 @@ async function sendAskForFlagField(phoneNumberId, from, state, fieldKey) {
       })
     }
   }
+  if (config.inputType === 'region_buttons') {
+    return sendRegionStep(phoneNumberId, from)
+  }
   return sendText(phoneNumberId, from, config.footer ? config.ask + '\n' + config.footer : config.ask)
 }
 
@@ -1175,6 +1210,14 @@ function validateAndParseFlagFieldInput(fieldKey, msg, state) {
   if (!config) return { ok: false, errorMessage: EVENT_ADD_VALIDATE_TITLE }
   const { textBody, buttonId, listReplyId } = msg
   const limits = config.lengthLimits || {}
+
+  if (config.inputType === 'region_buttons') {
+    const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
+    if (buttonId && validRegionIds.includes(buttonId)) {
+      return { ok: true, stateUpdate: { eventAddRegion: buttonId } }
+    }
+    return { ok: false, errorMessage: config.validate }
+  }
 
   if (config.inputType === 'compound_location') {
     const subStep = state.eventAddRawLocationSubStep ?? 0
@@ -1269,7 +1312,7 @@ function validateAndParseFlagFieldInput(fieldKey, msg, state) {
   }
 
   if (config.inputType === 'text_skip' && buttonId === EVENT_ADD_SKIP_BUTTON.id) {
-    if (fieldKey === 'rawCity') {
+    if (fieldKey === 'rawCity' || fieldKey === 'rawCityOutsideNorth') {
       return {
         ok: true,
         stateUpdate: { eventAddCity: '', eventAddCityResult: null },
@@ -1374,23 +1417,23 @@ function buildRawEvent(state, publisherInfo) {
   const cityResult = state.eventAddCityResult
   const region = state.eventAddRegion ?? ''
   let rawCity = ''
-  let rawCityId
+  let rawRegion
   let rawCityType
   if (cityResult && typeof cityResult === 'object' && cityResult.type === 'listed') {
-    rawCity = cityResult.value?.cityTitle ?? (state.eventAddCity ?? '').trim()
-    rawCityId = cityResult.value?.cityId
+    rawCity = cityResult.value?.cityId ?? (state.eventAddCity ?? '').trim()
     rawCityType = 'listed'
   } else if ((state.eventAddCity ?? '').trim()) {
     rawCity = (state.eventAddCity ?? '').trim()
+    rawRegion = region || undefined
     rawCityType = 'custom'
+    if (!region) logger.warn(LOG_PREFIXES.EVENT_ADD, 'buildRawEvent: custom city without region')
   }
   const rawEvent = {
     rawTitle: (state.eventAddTitle ?? '').trim(),
     rawOccurrences: (state.eventAddDateTime ?? '').trim(),
     rawLocationName: (state.eventAddPlaceName ?? '').trim() || undefined,
     rawCity: rawCity || undefined,
-    rawCityId: rawCityId ?? undefined,
-    rawRegion: region || undefined,
+    rawRegion: rawRegion ?? undefined,
     rawCityType: rawCityType ?? undefined,
     rawAddressLine1: (state.eventAddAddressLine1 ?? '').trim() || undefined,
     rawAddressLine2: (state.eventAddAddressLine2 ?? '').trim() || undefined,
@@ -1525,16 +1568,36 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
     eventAddFormattedPreview: formatted,
     eventAddLastActivityAt: Date.now(),
   }
-  if (raw.rawCityId && raw.rawCityType === 'listed') {
-    const cityEntry = CITIES_LIST.find((c) => c.id === raw.rawCityId)
+  if (raw.rawCityType === 'listed' && raw.rawCity) {
+    const cityEntry = CITIES_LIST.find((c) => c.id === raw.rawCity)
     if (cityEntry) {
       stateUpdate.eventAddCityResult = {
         type: 'listed',
         value: { cityId: cityEntry.id, cityTitle: cityEntry.title, region: cityEntry.region || '' },
       }
+      stateUpdate.eventAddCity = cityEntry.title
+      stateUpdate.eventAddRegion = cityEntry.region || ''
     }
-  } else if (raw.rawCity && raw.rawCityType === 'custom') {
-    stateUpdate.eventAddCityResult = { type: 'custom', value: raw.rawCity }
+  }
+  if (!stateUpdate.eventAddCityResult && raw.rawCity && (raw.rawCity ?? '').trim()) {
+    const rawCityStr = (raw.rawCity ?? '').trim()
+    const parsed = await normalizeCityToListedOrCustom(rawCityStr, CITIES_LIST, {
+      openaiApiKey: config.openaiApiKey,
+      openaiModel: config.openaiModel,
+      correlationId: from,
+    })
+    if (parsed.type === 'listed' && parsed.value) {
+      const { cityId, cityTitle, region } = parsed.value
+      stateUpdate.eventAddCityResult = { type: 'listed', value: { cityId, cityTitle, region: region || '' } }
+      stateUpdate.eventAddRegion = region || ''
+      stateUpdate.eventAddCity = cityTitle
+    } else {
+      stateUpdate.eventAddCityResult = {
+        type: 'custom',
+        value: (parsed.type === 'custom' && parsed.value) ? parsed.value : rawCityStr,
+      }
+      flags.push({ fieldKey: 'rawRegion', reason: 'נדרש לבחור אזור ליישוב לא ברשימה' })
+    }
   }
   const group = CATEGORY_GROUPS.find((g) => g.categoryIds?.includes(mainCatId))
   if (group) {
@@ -1858,13 +1921,13 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         }
         let cityStr = ''
         for (const e of parseResult.edits) {
-          if (e.fieldKey === 'City' && typeof e.newValue === 'string') {
+          if (e.fieldKey === 'city' && typeof e.newValue === 'string') {
             cityStr = e.newValue.trim()
             break
           }
-          if (e.fieldKey === 'location' && e.newValue && typeof e.newValue === 'object' && typeof e.newValue.City === 'string') {
-            cityStr = String(e.newValue.City).trim()
-            break
+          if (e.fieldKey === 'location' && e.newValue && typeof e.newValue === 'object' && typeof e.newValue.city === 'string') {
+            cityStr = e.newValue.city.trim()
+            if (cityStr) break
           }
         }
         if (cityStr) {
@@ -1881,15 +1944,15 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
             })
             if (!inRegion && certain) {
               const filteredEdits = parseResult.edits
-                .filter((e) => e.fieldKey !== 'City')
+                .filter((e) => e.fieldKey !== 'city')
                 .map((e) => {
                   if (
                     e.fieldKey === 'location' &&
                     e.newValue &&
                     typeof e.newValue === 'object' &&
-                    e.newValue.City === cityStr
+                    e.newValue.city === cityStr
                   ) {
-                    const { City, ...rest } = e.newValue
+                    const { city: _c, ...rest } = e.newValue
                     return Object.keys(rest).length > 0 ? { ...e, newValue: rest } : null
                   }
                   return e
@@ -1927,6 +1990,31 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
               buttons: [...EVENT_ADD_REGION_BUTTONS],
             })
           }
+          if (parsed.type === 'listed' && parsed.value) {
+            const { cityId, cityTitle, region } = parsed.value
+            const enrichedEdits = parseResult.edits
+              .filter((e) => e.fieldKey !== 'region' && e.fieldKey !== 'city' && e.fieldKey !== 'cityType')
+              .map((e) => {
+                if (e.fieldKey === 'location' && e.newValue && typeof e.newValue === 'object') {
+                  const { city: _c, ...rest } = e.newValue
+                  return { ...e, newValue: { ...rest, city: cityId, cityType: 'listed' } }
+                }
+                if (e.fieldKey === 'city') {
+                  return { ...e, newValue: cityId }
+                }
+                return e
+              })
+            enrichedEdits.push(
+              { fieldKey: 'city', justification: '', newValue: cityId },
+              { fieldKey: 'cityType', justification: '', newValue: 'listed' },
+            )
+            conversationState.set(from, {
+              step: STEPS.EVENT_ADD_EDIT_FREE_LANG_CONFIRM,
+              eventAddFreeLangEdits: enrichedEdits,
+              eventAddLastActivityAt: Date.now(),
+            })
+            return sendFreeLangSuggestedEdits(phoneNumberId, from, state.eventAddFormattedPreview || {}, enrichedEdits)
+          }
         }
         conversationState.set(from, {
           step: STEPS.EVENT_ADD_EDIT_FREE_LANG_CONFIRM,
@@ -1946,7 +2034,8 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     const validRegionIds = EVENT_ADD_REGION_BUTTONS.map((b) => b.id)
     if (buttonId && validRegionIds.includes(buttonId) && typeof pendingCity === 'string') {
       const editsWithRegion = [
-        ...edits.filter((e) => e.fieldKey !== 'region' && e.fieldKey !== 'cityType'),
+        ...edits.filter((e) => e.fieldKey !== 'region' && e.fieldKey !== 'cityType' && e.fieldKey !== 'city'),
+        { fieldKey: 'city', justification: '', newValue: pendingCity.trim() },
         { fieldKey: 'region', justification: '', newValue: buttonId },
         { fieldKey: 'cityType', justification: '', newValue: 'custom' },
       ]
@@ -2058,7 +2147,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         openaiModel: config.openaiModel,
       })
       const shortDescription = shortResult.shortDescription || (preview?.shortDescription && typeof preview.shortDescription === 'string' ? preview.shortDescription : '')
-      const patchPayload = { fullDescription: textBody, shortDescription }
+      const patchPayload = { fullDescription: convertMessageToHtml(textBody), shortDescription }
       const result = await patchDraft(draftId, patchPayload)
       if (!result.success) {
         await sendText(phoneNumberId, from, EVENT_EDIT_PATCH_ERROR)
@@ -2501,7 +2590,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
     if (fieldKey === 'locationName' || fieldKey === 'addressLine1' || fieldKey === 'addressLine2' || fieldKey === 'locationDetails') {
       locationPatch[fieldKey] = textBody.trim() || null
-    } else if (fieldKey === 'City') {
+    } else if (fieldKey === 'city') {
       const parsed = await normalizeCityToListedOrCustom(textBody, CITIES_LIST, {
         openaiApiKey: config.openaiApiKey,
         openaiModel: config.openaiModel,
@@ -2509,7 +2598,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       })
       if (parsed.type === 'listed') {
         const { cityId, cityTitle, region } = parsed.value
-        locationPatch = { City: cityTitle, region, cityId, cityType: 'listed' }
+        locationPatch = { city: cityId, cityType: 'listed' }
       } else if (parsed.type === 'custom' && parsed.value) {
         const { inRegion, certain } = await verifyCityInNorthernIsrael(parsed.value, {
           openaiApiKey: config.openaiApiKey,
@@ -2545,7 +2634,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       } else {
         locationPatch.wazeNavLink = extracted.wazeNavLink || null
       }
-    } else if (fieldKey !== 'City') {
+    } else if (fieldKey !== 'city') {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_LOCATION_MENU, eventEditLocationFieldKey: undefined })
       return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
     }
@@ -2578,7 +2667,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       return sendInteractiveList(phoneNumberId, from, buildLocationEditMenuPayload())
     }
     if (buttonId && validRegionIds.includes(buttonId)) {
-      const locationPatch = { City: pendingCity.trim(), region: buttonId, cityType: 'custom' }
+      const locationPatch = { city: pendingCity.trim(), region: buttonId, cityType: 'custom' }
       const result = await patchDraft(draftId, { location: locationPatch })
       conversationState.set(from, { eventEditPendingCity: undefined })
       if (!result.success) {
@@ -2667,6 +2756,70 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         return runProcessDraftAfterFlagInput(phoneNumberId, from, s, context)
       }
       return sendAskForFlagField(phoneNumberId, from, conversationState.get(from), order[nextIdx])
+    }
+    if ((fieldKey === 'rawCity' || fieldKey === 'rawCityOutsideNorth') && (textBody ?? '').trim()) {
+      const cityStr = (textBody ?? '').trim()
+      if (cityStr.length > EVENT_ADD_CITY_MAX) {
+        return sendValidationAndReask(phoneNumberId, from, config.validate, () =>
+          sendAskForFlagField(phoneNumberId, from, state, fieldKey),
+        )
+      }
+      const cityParsed = await normalizeCityToListedOrCustom(cityStr, CITIES_LIST, {
+        openaiApiKey: config.openaiApiKey,
+        openaiModel: config.openaiModel,
+        correlationId: from,
+      })
+      if (cityParsed.type === 'listed' && cityParsed.value) {
+        const { cityId, cityTitle, region } = cityParsed.value
+        conversationState.set(from, {
+          eventAddCity: cityTitle,
+          eventAddCityResult: { type: 'listed', value: { cityId, cityTitle, region: region || '' } },
+          eventAddRegion: region || '',
+          eventAddFlagIndex: idx + 1,
+        })
+        const nextIdx = idx + 1
+        if (nextIdx >= order.length) {
+          const s = conversationState.get(from)
+          if (s.eventAddPendingMediaStep) {
+            conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA, eventAddPendingMediaStep: undefined })
+            return sendInteractiveButtons(phoneNumberId, from, {
+              body: EVENT_ADD_ASK_MEDIA_FIRST,
+              buttons: [EVENT_ADD_NO_MEDIA_BUTTON],
+            })
+          }
+          return runProcessDraftAfterFlagInput(phoneNumberId, from, s, context)
+        }
+        return sendAskForFlagField(phoneNumberId, from, conversationState.get(from), order[nextIdx])
+      }
+      if (cityParsed.type === 'custom' && cityParsed.value) {
+        const { inRegion, certain } = await verifyCityInNorthernIsrael(cityParsed.value, {
+          openaiApiKey: config.openaiApiKey,
+          openaiModel: config.openaiModel,
+          correlationId: from,
+        })
+        if (!inRegion && certain) {
+          return sendValidationAndReask(phoneNumberId, from, EVENT_ADD_CITY_OUTSIDE_REGION, () =>
+            sendAskForFlagField(phoneNumberId, from, state, fieldKey),
+          )
+        }
+        conversationState.set(from, {
+          eventAddCity: cityParsed.value,
+          eventAddCityResult: { type: 'custom', value: cityParsed.value },
+          step: STEPS.EVENT_ADD_REGION,
+          eventAddFlagRegionPending: true,
+          eventAddFlagIndex: idx,
+        })
+        return sendRegionStep(phoneNumberId, from)
+      }
+      const customValue = (cityParsed.type === 'custom' && cityParsed.value) ? cityParsed.value : cityStr
+      conversationState.set(from, {
+        eventAddCity: customValue,
+        eventAddCityResult: { type: 'custom', value: customValue },
+        step: STEPS.EVENT_ADD_REGION,
+        eventAddFlagRegionPending: true,
+        eventAddFlagIndex: idx,
+      })
+      return sendRegionStep(phoneNumberId, from)
     }
     const parsed = validateAndParseFlagFieldInput(fieldKey, { textBody, buttonId, listReplyId }, state)
     if (!parsed.ok) {

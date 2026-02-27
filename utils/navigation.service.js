@@ -6,6 +6,7 @@ export function handleNavigationSelection(navType, location) {
   if (!location) return
 
   const queryParts = []
+  if (location.locationName) queryParts.push(location.locationName)
   if (location.addressLine1) queryParts.push(location.addressLine1)
   if (location.addressLine2) queryParts.push(location.addressLine2)
   if (location.city) queryParts.push(location.city)

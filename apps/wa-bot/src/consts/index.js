@@ -84,6 +84,12 @@ export const PUBLISH_NOT_REGISTERED = {
   ],
 }
 
+/** Publish flow: temporary connection error when checking publisher status (e.g. Nuxt app down). */
+export const PUBLISH_CONNECTION_ERROR = {
+  body: 'נתקלנו בבעיה זמנית בחיבור למערכת. אנא נסו שוב מאוחר יותר.',
+  buttons: [{ id: 'back_to_main', title: 'בחזרה לתפריט הראשי' }],
+}
+
 /** Publish flow: registration steps (text prompts) */
 export const PUBLISH_ASK_FULL_NAME = 'מה השם המלא שלך?'
 export const PUBLISH_ASK_PUBLISHING_AS =
@@ -412,7 +418,7 @@ export const EVENT_EDIT_MENU_ROWS = [
   { id: 'edit_main_category', title: 'קטגוריה ראשית' },
   { id: 'edit_extra_categories', title: 'קטגוריות נוספות' },
   { id: 'edit_location', title: 'מיקום האירוע' },
-  { id: 'edit_datetime', title: 'תאריכים ושעה' },
+  { id: 'edit_datetime', title: 'תאריכים ושעות' },
   { id: 'edit_price', title: 'מחיר' },
   { id: 'edit_media', title: 'תמונות וסרטונים' },
   { id: 'edit_links', title: 'לינקים וטלפונים' },
@@ -563,6 +569,7 @@ export const EVENT_ADD_VALIDATE_MAIN_CATEGORY_GROUP = 'נא לבחור קבוצ�
 export const EVENT_ADD_VALIDATE_MAIN_CATEGORY = 'נא לבחור קטגוריה מהרשימה.'
 export const EVENT_ADD_VALIDATE_PLACE_NAME = 'שם המקום עד 40 תווים.'
 export const EVENT_ADD_VALIDATE_CITY = 'יישוב עד 40 תווים.'
+export const EVENT_ADD_VALIDATE_REGION = 'נא לבחור אזור'
 /** Shown when custom city is certainly outside Northern Israel (manual add). */
 export const EVENT_ADD_CITY_OUTSIDE_REGION = 'היישוב שציינת לא באיזור הצפון. אנא הזינו יישוב מתאים'
 export const EVENT_ADD_VALIDATE_ADDRESS = 'כתובת: עד שתי שורות, כל שורה עד 100 תווים. נא להזין שוב.'
