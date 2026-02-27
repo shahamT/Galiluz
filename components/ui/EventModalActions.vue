@@ -51,6 +51,7 @@
 import { handleCalendarSelection } from '~/utils/calendar.service'
 import { handleNavigationSelection } from '~/utils/navigation.service'
 import { MODAL_TEXT, CALENDAR_OPTIONS, NAVIGATION_OPTIONS } from '~/consts/ui.const'
+import { ANALYTICS_EVENTS } from '~/consts/analytics.const'
 
 defineOptions({ name: 'EventModalActions' })
 
@@ -90,6 +91,7 @@ const props = defineProps({
 })
 
 const route = useRoute()
+const { capture } = usePosthog()
 
 const isCalendarPopupOpen = ref(false)
 const calendarButtonRef = ref(null)
@@ -147,10 +149,18 @@ const handleCalendarSelect = async (calendarType) => {
     endTime: props.calendarEndTime,
   }
   await handleCalendarSelection(calendarType, eventData)
+  capture(ANALYTICS_EVENTS.EVENT_ADDED_TO_CALENDAR, {
+    event_id: props.event?.id,
+    calendar_type: calendarType,
+  })
 }
 
 const handleNavigationSelect = (navType) => {
   handleNavigationSelection(navType, props.location)
+  capture(ANALYTICS_EVENTS.EVENT_NAVIGATION_USED, {
+    event_id: props.event?.id,
+    nav_type: navType,
+  })
 }
 </script>
 

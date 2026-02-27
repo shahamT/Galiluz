@@ -81,6 +81,7 @@
                 :target="link.type === 'phone' ? undefined : '_blank'"
                 :rel="link.type === 'phone' ? undefined : 'noopener noreferrer'"
                 class="EventModal-linkButton"
+                @click="trackCustomLinkClick(link, index)"
               >
                 <span class="EventModal-linkButtonText">{{ link.Title }}</span>
               </a>
@@ -92,6 +93,7 @@
                 target="_blank"
                 rel="noopener noreferrer"
                 class="EventModal-linkButton EventModal-linkButton--whatsapp"
+                @click="trackContactPublisher"
               >
                 <img src="/icons/whatsapp-icon.svg" alt="WhatsApp" class="EventModal-whatsappIcon" />
                 <span class="EventModal-linkButtonText">{{ MODAL_TEXT.contactPublisher }}</span>
@@ -143,6 +145,7 @@
 
 <script setup>
 import { MODAL_TEXT, MOBILE_BREAKPOINT } from '~/consts/ui.const'
+import { ANALYTICS_EVENTS } from '~/consts/analytics.const'
 import { useEventModalData } from '~/composables/useEventModalData'
 import { useEventModalGallery } from '~/composables/useEventModalGallery'
 import { useEventModalShare } from '~/composables/useEventModalShare'
@@ -197,6 +200,32 @@ const {
 const { canShare, handleShare } = useEventModalShare(selectedEvent)
 
 const { isImagePopupOpen, currentImageIndex, openImagePopup, closeImagePopup } = useEventModalImagePopup()
+
+const { capture } = usePosthog()
+
+watch(selectedEventId, (eventId) => {
+  if (import.meta.server) return
+  if (eventId) {
+    capture(ANALYTICS_EVENTS.EVENT_VIEWED, { event_id: eventId })
+  }
+}, { immediate: true })
+
+function trackContactPublisher() {
+  if (selectedEvent.value?.id) {
+    capture(ANALYTICS_EVENTS.EVENT_CONTACT_PUBLISHER_CLICKED, { event_id: selectedEvent.value.id })
+  }
+}
+
+function trackCustomLinkClick(link, index) {
+  if (selectedEvent.value?.id) {
+    capture(ANALYTICS_EVENTS.EVENT_CUSTOM_LINK_CLICKED, {
+      event_id: selectedEvent.value.id,
+      link_title: link?.Title ?? '',
+      link_type: link?.type ?? 'link',
+      link_index: index,
+    })
+  }
+}
 
 const closeModal = () => {
   closeImagePopup()
