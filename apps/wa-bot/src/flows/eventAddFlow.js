@@ -2295,15 +2295,14 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         openaiApiKey: config.openaiApiKey,
         openaiModel: config.openaiModel,
       })
-      if (parseResult.flagReason) {
-        await sendText(phoneNumberId, from, parseResult.flagReason)
-        return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER)
+      if (parseResult.flagReason || !parseResult.occurrences?.length) {
+        return sendText(
+          phoneNumberId,
+          from,
+          EVENT_EDIT.DATETIME_PARSE_FAILED + '\n\n' + EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER,
+        )
       }
       const occurrences = Array.isArray(parseResult.occurrences) ? parseResult.occurrences : []
-      if (occurrences.length === 0) {
-        await sendText(phoneNumberId, from, EVENT_EDIT.DATETIME_PARSE_FAILED)
-        return sendText(phoneNumberId, from, EVENT_EDIT.ASK_DATETIME + '\n' + EVENT_EDIT.ASK_DATETIME_FOOTER)
-      }
       conversationState.set(from, {
         eventEditPendingPayload: { occurrences },
         eventEditFieldKey: 'datetime',

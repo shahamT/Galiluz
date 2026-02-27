@@ -29,6 +29,16 @@ export function normalizeOccurrenceTime(s) {
   let trimmed = s.trim().replace(/\s+/, 'T')
   if (!trimmed) return s
   if (SERVER_ISO_DATETIME.test(trimmed)) return trimmed
+  // Israel local format (no Z or timezone): YYYY-MM-DDTHH:mm — convert to UTC
+  const israelLocalMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?\.?(\d*)$/)
+  const hasTimezone = trimmed.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(trimmed)
+  if (israelLocalMatch && !hasTimezone) {
+    const datePart = israelLocalMatch[1]
+    const hh = String(parseInt(israelLocalMatch[2], 10)).padStart(2, '0')
+    const mm = israelLocalMatch[3]
+    const iso = localTimeIsraelToUtcIso(datePart, `${hh}:${mm}`)
+    if (iso) return iso
+  }
   const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(\.[0-9]+)?(Z|[+-]\d{2}:?\d{2})?$/i)
   if (match) {
     const datePart = match[1]

@@ -233,7 +233,7 @@ export const EVENT_ADD = {
   ASK_DATETIME_FOOTER: 'כתבו בשפה חופשית את תאריך/תאריכי ושעות האירוע',
   CATEGORY_INTRO: 'בואו נשייך את האירוע שלכם לקטגוריה ראשית',
   ASK_CATEGORY_GROUP: 'בחרו אחת מארבע הקבוצות הבאות',
-  ASK_MAIN_CATEGORY: 'בחרו את הקטגוריה המתאימה ביותר לאירוע שלכם',
+  ASK_MAIN_CATEGORY: 'בחרו קטגוריה',
   CATEGORY_FOOTER: 'אנחנו כבר נשייך את האירוע לקטגוריות נוספות',
   CATEGORY_AI_NOTE: '_אנחנו כבר נשייך את האירוע לקטגוריות נוספות_',
   CHANGE_GROUP_PROMPT: 'לא מתאים? אפשר לבחור קבוצה אחרת.',
@@ -315,11 +315,9 @@ export const VALIDATION = {
     'Missing location.city': 'מיקום חייב לכלול יישוב או שם מקום. נסו שוב.',
     'Location must have at least locationName or city':
       'מיקום חייב לכלול שם מקום או יישוב. נסו שוב.',
-    'Missing or empty occurrences': 'חייבים לפחות מועד אחד לאירוע. נסו שוב.',
-    'occurrences[0].startTime must be ISO 8601 date-time':
-      'תאריך או שעה לא תקינים. נסו לנסח שוב (למשל: "ה5 במרץ בשעה 19:00").',
-    'occurrences[0].endTime must be after startTime':
-      'שעת הסיום חייבת להיות לאחר שעת ההתחלה. נסו שוב.',
+    'Missing or empty occurrences': 'לא הצלחנו לזהות מתי מתקיים האירוע.',
+    'occurrences[0].startTime must be ISO 8601 date-time': 'לא הצלחנו לזהות מתי מתקיים האירוע.',
+    'occurrences[0].endTime must be after startTime': 'לא הצלחנו לזהות מתי מתקיים האירוע.',
   },
   PATCH_VALIDATION_DEFAULT: 'העדכון לא תקף. נסו שוב עם פרטים מלאים.',
   TITLE_MIN: 6,
@@ -467,7 +465,7 @@ export const EVENT_EDIT = {
   },
   EXTRA_CANNOT_REMOVE_LAST: 'לא ניתן להסיר את הקטגוריה היחידה.',
   LOCATION_CITY_UNRECOGNIZED: 'לא הצלחנו לזהות יישוב. נסו שוב.',
-  DATETIME_PARSE_FAILED: 'לא הצלחנו לזהות תאריכים ושעות. נסו שוב.',
+  DATETIME_PARSE_FAILED: 'לא הצלחנו לזהות מתי מתקיים האירוע.',
   EXTRA_CATEGORIES_BODY: 'אלו הקטגוריות הנוספות אליהן משויך כרגע האירוע',
   EXTRA_CATEGORIES_NO_EXTRAS: 'אין קטגוריות נוספות.',
   EXTRA_ADD_BUTTON: { id: 'edit_extra_add', title: 'להוסיף קטגוריה' },
