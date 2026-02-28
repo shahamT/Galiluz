@@ -24,5 +24,12 @@ export const FREE_INDICATING_PHRASES = [
 /** Fallback category when AI returns no valid category. */
 export const FALLBACK_CATEGORY_ID = 'community_meetup'
 
+/** Map common AI mistakes (wrong IDs) to correct category IDs. Applied before validation. */
+export const CATEGORY_ID_CORRECTIONS: Record<string, string> = {
+  performance: 'show',
+  concert: 'show',
+  dance: 'party',
+}
+
 /** Max categories per event (main + additional). Enforced in PATCH and extra-categories flow. */
 export const PUBLISHER_EVENT_MAX_CATEGORIES = 4

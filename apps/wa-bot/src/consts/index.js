@@ -25,6 +25,7 @@ export const BATCH_FLUSH_MS = 250
 export const WELCOME = {
   INTERACTIVE: {
     body: 'היי! 👋\nאני הבוט של אפליקציית *גלילו"ז* - Galiluz\n\nכנסו לאפליקציה כדי לגלות כל מה שקורה בצפון\n*גלילו"ז*🏔️ - https://galiluz.co.il\n\n*איך אפשר לעזור לכם?* 😊',
+    footer: 'אפשר לכתוב לי בשפה חופשית או לבחור באחת האפשרויות:',
     buttons: [
       { id: 'discover', title: '?מה קורה בצפון 🏔️' },
       { id: 'publish', title: 'פרסום/עדכון אירוע 📅' },
@@ -45,6 +46,8 @@ export const CONTACT = {
 }
 
 export const MAIN_MENU = {
+  FIRST_MESSAGE_FLOW_ACK:
+    'היי! כאן הבוט של גלילו"ז 👋\nאני מעביר אתכם מייד לאן שביקשתם...',
   INTENT_IRRELEVANT: {
     body: 'אין לנו איך לעזור לכם עם הבקשה הזו בשלב זה.\nאם תרצו, אפשר:',
     get buttons() {
@@ -217,6 +220,22 @@ export const EVENT_ADD = {
   METHOD_CHOICE_BODY: 'אפשר להוסיף אירוע בשתי דרכים:',
   METHOD_AI_BUTTON: { id: 'event_add_ai', title: 'הוספה מהירה עם AI' },
   METHOD_MANUAL_BUTTON: { id: 'event_add_manual', title: 'מילוי טופס פרטים' },
+  FREELANG_FIRST_BODY: `שלחו בהודעה אחת (טקסט) את כל פרטי האירוע
+
+חשוב להזין:
+- תיאור מלא
+- תאריכים ושעות
+- מיקום האירוע
+- מחיר (או לציין שהכניסה בחינם)
+
+ניתן להוסיף - לינקים וטלפונים, קישורים למיקום ולניווט, הוראות הגעה, קטגוריות.`,
+  FREELANG_FIRST_FOOTER: 'חכו עם העלאת תמונות לשלב הבא...',
+  FREELANG_FIRST_BUTTON: 'אפשרויות נוספות',
+  FREELANG_FIRST_SECTION_TITLE: 'אפשרויות נוספות',
+  FREELANG_FIRST_ROWS: [
+    { id: 'back_to_main', title: 'חזרה לתפריט הראשי' },
+    { id: 'event_add_manual', title: 'הוספת אירוע ידנית' },
+  ],
   AI_PROMPT_BODY: 'שלחו בהודעה אחת את כל פרטי האירוע',
   AI_PROMPT_FOOTER:
     'תיאור מלא, תאריכים, מיקום ומחיר. מאוחר יותר: תמונות וסרטונים',
@@ -230,8 +249,8 @@ export const EVENT_ADD = {
   AI_EXTRACTION_FAILED_BODY: 'לא הצלחנו לעבד את ההודעה.',
   DRAFT_CREATE_FAILED_BODY: 'לא הצלחנו ליצור את האירוע.',
   INITIAL: {
-    body: 'בואו נפרסם אירוע חדש.',
-    footer: 'בכל שלב: ביטול לחזרה לתפריט. תמיד אפשר לערוך בסיום',
+    body: 'בואו נפרסם אירוע חדש',
+    footer: 'בכל שלב ניתן לשלוח "ביטול" לחזרה לתפריט',
     buttons: [{ id: 'back_to_main', title: 'ביטול' }],
   },
   ASK_TITLE: 'שם האירוע (חובה)',

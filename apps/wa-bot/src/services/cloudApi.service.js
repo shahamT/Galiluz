@@ -64,10 +64,10 @@ export async function sendInteractiveList(phoneNumberId, to, interactive) {
 
 /**
  * Send interactive reply buttons (quick replies) via WhatsApp Cloud API. Max 3 buttons, title max 20 chars.
- * Optional footer.
+ * Optional footer. Optional header (e.g. image) for image + buttons in a single message.
  * @param {string} phoneNumberId - Business phone number ID
  * @param {string} to - Recipient wa_id
- * @param {{ body: string, footer?: string, buttons: Array<{ id: string, title: string }> }} interactive - Body text, optional footer, and buttons
+ * @param {{ body: string, footer?: string, header?: { type: 'image', imageUrl: string }, buttons: Array<{ id: string, title: string }> }} interactive - Body text, optional footer, optional header, and buttons
  * @returns {Promise<{ success: boolean, messageId?: string, error?: string }>}
  */
 export async function sendInteractiveButtons(phoneNumberId, to, interactive) {
@@ -81,6 +81,9 @@ export async function sendInteractiveButtons(phoneNumberId, to, interactive) {
         reply: { id: btn.id, title: btn.title },
       })),
     },
+  }
+  if (interactive.header?.type === 'image' && interactive.header?.imageUrl) {
+    interactivePayload.header = { type: 'image', image: { link: interactive.header.imageUrl } }
   }
   if (interactive.footer) {
     interactivePayload.footer = { text: interactive.footer }

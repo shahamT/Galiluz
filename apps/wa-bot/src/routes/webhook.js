@@ -543,27 +543,28 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     const isWelcome = state.step === conversationState.STEPS.WELCOME
     const isPublisherChoice = state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION
     if ((isWelcome || isPublisherChoice) && config.allowMainMenuFreeLanguage && textBody) {
-      if (isWelcome && !state.welcomeShown) {
-        conversationState.set(from, { welcomeShown: true })
-        return sendInteractiveButtons(phoneNumberId, from, WELCOME.INTERACTIVE)
-      }
       try {
         const { intent } = await classifyMainMenuIntent(textBody, {
           openaiApiKey: config.openaiApiKey,
           openaiModel: config.openaiModel,
         })
+        const isFirstMessageFlow = isWelcome && !state.welcomeShown
         if (intent === 'discover') {
           if (isPublisherChoice) conversationState.clear(from)
+          if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           return handleDiscoverButton(phoneNumberId, from)
         }
         if (intent === 'contact') {
           if (isPublisherChoice) conversationState.clear(from)
+          if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           return sendText(phoneNumberId, from, CONTACT.MESSAGE)
         }
         if (intent === 'publish') {
+          if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'event_add_new') {
+          if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           if (isPublisherChoice) return sendEventAddMethodChoice(phoneNumberId, from)
           const { status } = await checkPublisher(from)
           if (status === 'approved') {
@@ -573,25 +574,39 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'event_update') {
+          if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           if (isPublisherChoice) return handleEventUpdateChoice(phoneNumberId, from)
           const { status } = await checkPublisher(from)
           if (status === 'approved') return handleEventUpdateChoice(phoneNumberId, from)
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'event_delete') {
+          if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           if (isPublisherChoice) return handleEventDeleteChoice(phoneNumberId, from)
           const { status } = await checkPublisher(from)
           if (status === 'approved') return handleEventDeleteChoice(phoneNumberId, from)
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'irrelevant') {
+          if (isWelcome && !state.welcomeShown) {
+            conversationState.set(from, { welcomeShown: true })
+            return sendInteractiveButtons(phoneNumberId, from, WELCOME.INTERACTIVE)
+          }
           return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU.INTENT_IRRELEVANT)
         }
         if (intent === 'unclear') {
+          if (isWelcome && !state.welcomeShown) {
+            conversationState.set(from, { welcomeShown: true })
+            return sendInteractiveButtons(phoneNumberId, from, WELCOME.INTERACTIVE)
+          }
           return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU.INTENT_UNCLEAR)
         }
       } catch (err) {
         logger.error(LOG_PREFIXES.WEBHOOK, 'Main menu intent handling failed', err)
+        if (isWelcome && !state.welcomeShown) {
+          conversationState.set(from, { welcomeShown: true })
+          return sendInteractiveButtons(phoneNumberId, from, WELCOME.INTERACTIVE)
+        }
         return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU.INTENT_UNCLEAR)
       }
     }

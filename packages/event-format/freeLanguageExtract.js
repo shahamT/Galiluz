@@ -155,104 +155,116 @@ export async function detectEventFromFreeText(text, options = {}) {
 
 const FREE_LANG_FLAG_KEYS = ['rawOccurrences', 'rawPrice', 'rawLocation', 'rawMainCategory', 'rawCity', 'rawCityOutsideNorth', 'rawRegion']
 
-const EXTRACTION_SCHEMA = {
-  name: 'free_lang_extraction',
-  strict: true,
-  schema: {
-    type: 'object',
-    required: [
-      'rawTitle',
-      'rawOccurrences',
-      'rawFullDescription',
-      'rawMainCategory',
-      'rawPrice',
-      'rawCity',
-      'rawLocationName',
-      'rawAddressLine1',
-      'rawAddressLine2',
-      'rawNavLinks',
-      'rawUrls',
-      'occurrences',
-      'price',
-      'shortDescription',
-      'mainCategory',
-      'categories',
-      'city',
-      'locationName',
-      'addressLine1',
-      'addressLine2',
-      'locationDetails',
-      'wazeNavLink',
-      'gmapsNavLink',
-      'urls',
-      'flags',
-    ],
-    additionalProperties: false,
-    properties: {
-      rawTitle: { type: 'string' },
-      rawOccurrences: { type: 'string' },
-      rawFullDescription: { type: 'string' },
-      rawMainCategory: { type: 'string' },
-      rawPrice: { type: 'string' },
-      rawCity: { type: 'string' },
-      rawLocationName: { type: 'string' },
-      rawAddressLine1: { type: 'string' },
-      rawAddressLine2: { type: 'string' },
-      rawNavLinks: { type: 'string' },
-      rawUrls: { type: 'string' },
-      occurrences: {
-        type: 'array',
-        minItems: 0,
-        items: {
-          type: 'object',
-          required: ['date', 'hasTime', 'startTime', 'endTime'],
-          additionalProperties: false,
-          properties: {
-            date: { type: 'string' },
-            hasTime: { type: 'boolean' },
-            startTime: { type: 'string' },
-            endTime: { type: ['string', 'null'] },
+/**
+ * Build extraction schema with mainCategory and categories enum from valid category IDs.
+ * @param {Array<{id: string, label: string}>} categoriesList
+ * @returns {object} JSON schema for OpenAI response_format
+ */
+function buildExtractionSchema(categoriesList) {
+  const validCategoryIds = Array.isArray(categoriesList)
+    ? categoriesList.map((c) => c.id).filter((id) => typeof id === 'string' && id.trim())
+    : []
+  const mainCategorySchema = validCategoryIds.length > 0 ? { type: 'string', enum: validCategoryIds } : { type: 'string' }
+  const categoriesItemsSchema = validCategoryIds.length > 0 ? { type: 'string', enum: validCategoryIds } : { type: 'string' }
+  return {
+    name: 'free_lang_extraction',
+    strict: true,
+    schema: {
+      type: 'object',
+      required: [
+        'rawTitle',
+        'rawOccurrences',
+        'rawFullDescription',
+        'rawMainCategory',
+        'rawPrice',
+        'rawCity',
+        'rawLocationName',
+        'rawAddressLine1',
+        'rawAddressLine2',
+        'rawNavLinks',
+        'rawUrls',
+        'occurrences',
+        'price',
+        'shortDescription',
+        'mainCategory',
+        'categories',
+        'city',
+        'locationName',
+        'addressLine1',
+        'addressLine2',
+        'locationDetails',
+        'wazeNavLink',
+        'gmapsNavLink',
+        'urls',
+        'flags',
+      ],
+      additionalProperties: false,
+      properties: {
+        rawTitle: { type: 'string' },
+        rawOccurrences: { type: 'string' },
+        rawFullDescription: { type: 'string' },
+        rawMainCategory: { type: 'string' },
+        rawPrice: { type: 'string' },
+        rawCity: { type: 'string' },
+        rawLocationName: { type: 'string' },
+        rawAddressLine1: { type: 'string' },
+        rawAddressLine2: { type: 'string' },
+        rawNavLinks: { type: 'string' },
+        rawUrls: { type: 'string' },
+        occurrences: {
+          type: 'array',
+          minItems: 0,
+          items: {
+            type: 'object',
+            required: ['date', 'hasTime', 'startTime', 'endTime'],
+            additionalProperties: false,
+            properties: {
+              date: { type: 'string' },
+              hasTime: { type: 'boolean' },
+              startTime: { type: 'string' },
+              endTime: { type: ['string', 'null'] },
+            },
           },
         },
-      },
-      price: { type: ['number', 'null'] },
-      shortDescription: { type: 'string' },
-      mainCategory: { type: 'string' },
-      categories: { type: 'array', items: { type: 'string' }, minItems: 0 },
-      city: { type: 'string' },
-      locationName: { type: ['string', 'null'] },
-      addressLine1: { type: ['string', 'null'] },
-      addressLine2: { type: ['string', 'null'] },
-      locationDetails: { type: ['string', 'null'] },
-      wazeNavLink: { type: ['string', 'null'] },
-      gmapsNavLink: { type: ['string', 'null'] },
-      urls: {
-        type: 'array',
-        items: {
-          type: 'object',
-          required: ['Title', 'Url', 'type'],
-          additionalProperties: false,
-          properties: {
-            Title: { type: 'string' },
-            Url: { type: 'string' },
-            type: { type: 'string', enum: ['link', 'phone'] },
+        price: { type: ['number', 'null'] },
+        shortDescription: { type: 'string' },
+        mainCategory: mainCategorySchema,
+        categories: { type: 'array', items: categoriesItemsSchema, minItems: 0 },
+        city: { type: 'string' },
+        locationName: { type: ['string', 'null'] },
+        addressLine1: { type: ['string', 'null'] },
+        addressLine2: { type: ['string', 'null'] },
+        locationDetails: { type: ['string', 'null'] },
+        wazeNavLink: { type: ['string', 'null'] },
+        gmapsNavLink: { type: ['string', 'null'] },
+        urls: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['Title', 'Url', 'type'],
+            additionalProperties: false,
+            properties: {
+              Title: { type: 'string' },
+              Url: { type: 'string' },
+              type: { type: 'string', enum: ['link', 'phone'] },
+            },
           },
         },
-      },
-      flags: {
-        type: 'array',
-        items: {
-          type: 'object',
-          required: ['fieldKey', 'reason'],
-          additionalProperties: false,
-          properties: {
-            fieldKey: { type: 'string', enum: FREE_LANG_FLAG_KEYS },
-            reason: { type: 'string' },
+        flags: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['fieldKey', 'reason'],
+            additionalProperties: false,
+            properties: {
+              fieldKey: { type: 'string', enum: FREE_LANG_FLAG_KEYS },
+              reason: { type: 'string' },
+            },
           },
         },
       },
     },
-  },
+  }
 }
 
 const MAX_EXTRA_CATEGORIES = 3
@@ -330,7 +342,7 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `Extract event from this message (HTML below):\n\n${messageHtml || userContent}` },
         ],
-        response_format: { type: 'json_schema', json_schema: EXTRACTION_SCHEMA },
+        response_format: { type: 'json_schema', json_schema: buildExtractionSchema(categoriesList) },
         max_tokens: 2500,
         temperature: 0.1,
       })

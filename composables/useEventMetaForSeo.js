@@ -2,7 +2,7 @@
  * Fetches event meta (title, shortDescription, imageUrl) for SEO when route has ?event=id.
  * Runs on server during SSR so crawlers receive correct og:image, og:title, og:description.
  *
- * @returns {{ data: Ref<{ title: string, shortDescription: string, imageUrl: string | null } | null>, pending: Ref<boolean> }}
+ * @returns {{ data: Ref<{ title: string, shortDescription: string, imageUrl: string | null }>, pending: Ref<boolean> }}
  */
 export function useEventMetaForSeo() {
   const route = useRoute()
@@ -16,12 +16,14 @@ export function useEventMetaForSeo() {
     return parts[0] || trimmed
   })
 
+  const emptyMeta = { title: '', shortDescription: '', imageUrl: null }
+
   const { data, pending } = useAsyncData(
     () => `event-meta-${docId.value ?? 'none'}`,
     () => {
       const id = docId.value
-      if (!id) return null
-      return $fetch(`/api/events/${id}/meta`).catch(() => null)
+      if (!id) return emptyMeta
+      return $fetch(`/api/events/${id}/meta`).catch(() => emptyMeta)
     },
     {
       watch: [docId],

@@ -4,7 +4,7 @@
  * Nuxt validates the result when wa-bot POSTs it.
  */
 import OpenAI from 'openai'
-import { PUBLISHER_EVENT_FORMAT_SCHEMA, ALLOWED_FLAG_FIELD_KEYS } from './schema.js'
+import { buildPublisherEventSchema, ALLOWED_FLAG_FIELD_KEYS } from './schema.js'
 import { normalizeOccurrenceTime, normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 import { sanitizeRawEventForPrompt } from './promptSanitize.js'
 import { extractNavLinksFromRaw } from './navLinks.js'
@@ -166,7 +166,7 @@ async function callOpenAIForPublisherFormat(rawEventWithAll, categoriesList, dat
         ],
         response_format: {
           type: 'json_schema',
-          json_schema: PUBLISHER_EVENT_FORMAT_SCHEMA,
+          json_schema: buildPublisherEventSchema(categoriesList),
         },
         max_tokens: 2000,
         temperature: 0.1,

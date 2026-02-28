@@ -32,7 +32,6 @@ import {
   sendText,
   sendInteractiveButtons,
   sendInteractiveList,
-  sendImage,
   downloadMedia,
 } from '../services/cloudApi.service.js'
 import { uploadMediaToApp, deleteMediaOnApp } from '../services/eventAddMedia.service.js'
@@ -1443,11 +1442,8 @@ function getRegionMapImageUrl() {
 
 async function sendRegionStep(phoneNumberId, from) {
   const imageUrl = getRegionMapImageUrl()
-  const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD.ASK_REGION)
-  if (imgRes && !imgRes.success) {
-    logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
-  }
   return sendInteractiveButtons(phoneNumberId, from, {
+    header: { type: 'image', imageUrl },
     body: EVENT_ADD.ASK_REGION,
     buttons: [...EVENT_ADD.REGION_BUTTONS],
   })
@@ -1560,27 +1556,20 @@ async function killEventAddFlow(phoneNumberId, from, state) {
 }
 
 /**
- * Show method choice (AI vs manual) when publisher selects "פרסום אירוע".
- * Sets EVENT_ADD_CHOOSE_METHOD and sends the two-option message.
+ * Send first event-add message: free-language prompt + "Additional options" list.
+ * Accepts text input immediately; list offers back to main menu or manual form.
+ * Sets EVENT_ADD_CHOOSE_METHOD.
  */
 export function sendEventAddMethodChoice(phoneNumberId, from) {
   conversationState.set(from, { step: STEPS.EVENT_ADD_CHOOSE_METHOD, eventAddLastActivityAt: Date.now() })
-  return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_ADD.METHOD_CHOICE_BODY,
-    buttons: [EVENT_ADD.METHOD_AI_BUTTON, EVENT_ADD.METHOD_MANUAL_BUTTON],
-  })
-}
-
-/**
- * Send AI flow prompt and wait for free-language event description.
- * Sets EVENT_ADD_AI_INPUT.
- */
-function sendAiPromptMessage(phoneNumberId, from) {
-  conversationState.set(from, { step: STEPS.EVENT_ADD_AI_INPUT, eventAddLastActivityAt: Date.now() })
-  return sendInteractiveButtons(phoneNumberId, from, {
-    body: EVENT_ADD.AI_PROMPT_BODY,
-    footer: EVENT_ADD.AI_PROMPT_FOOTER,
-    buttons: [EVENT_ADD.AI_BACK_BUTTON],
+  return sendInteractiveList(phoneNumberId, from, {
+    body: EVENT_ADD.FREELANG_FIRST_BODY,
+    footer: EVENT_ADD.FREELANG_FIRST_FOOTER,
+    button: EVENT_ADD.FREELANG_FIRST_BUTTON,
+    sections: [{
+      title: EVENT_ADD.FREELANG_FIRST_SECTION_TITLE,
+      rows: EVENT_ADD.FREELANG_FIRST_ROWS,
+    }],
   })
 }
 
@@ -1879,27 +1868,33 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   conversationState.set(from, { eventAddLastActivityAt: Date.now() })
 
   if (step === STEPS.EVENT_ADD_CHOOSE_METHOD) {
-    if (buttonId === EVENT_ADD.METHOD_AI_BUTTON.id) {
-      return sendAiPromptMessage(phoneNumberId, from)
+    if (textBody) {
+      return handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, context)
     }
-    if (buttonId === EVENT_ADD.METHOD_MANUAL_BUTTON.id) {
+    if (msg.type === 'image' || msg.type === 'video') {
+      return sendText(phoneNumberId, from, EVENT_ADD.AI_EXPECT_TEXT)
+    }
+    if (listReplyId === 'back_to_main') {
+      return killEventAddFlow(phoneNumberId, from, state)
+    }
+    if (listReplyId === 'event_add_manual') {
       return sendInitialMessage(phoneNumberId, from)
+    }
+    if (buttonId === EVENT_ADD.AI_RETRY_BUTTON.id) {
+      return sendEventAddMethodChoice(phoneNumberId, from)
     }
     return Promise.resolve()
   }
 
   if (step === STEPS.EVENT_ADD_AI_INPUT) {
     if (buttonId === EVENT_ADD.AI_RETRY_BUTTON.id) {
-      return sendAiPromptMessage(phoneNumberId, from)
+      return sendEventAddMethodChoice(phoneNumberId, from)
     }
     if (textBody) {
       return handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, context)
     }
     if (msg.type === 'image' || msg.type === 'video') {
-      return sendInteractiveButtons(phoneNumberId, from, {
-        body: EVENT_ADD.AI_EXPECT_TEXT,
-        buttons: [EVENT_ADD.AI_BACK_BUTTON],
-      })
+      return sendText(phoneNumberId, from, EVENT_ADD.AI_EXPECT_TEXT)
     }
     return Promise.resolve()
   }
@@ -1919,6 +1914,29 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     if (buttonId === EVENT_ADD.CONFIRM_EDIT_BUTTON.id) {
       conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddLastActivityAt: Date.now() })
       return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
+    }
+    if (msg.type === 'text' && textBody) {
+      const menuOptions = [EVENT_EDIT.DONE_ROW, ...EVENT_EDIT.MENU_ROWS]
+      const categoriesList = await getCategories()
+      logger.info(LOG_PREFIXES.EVENT_ADD, 'Confirm free-lang edit: calling LLM', from)
+      const parseResult = await parseFreeLanguageEditRequest(textBody, menuOptions, state.eventAddFormattedPreview || {}, categoriesList || [], {
+        openaiApiKey: config.openaiApiKey,
+        openaiModel: config.openaiModel,
+        correlationId: from,
+      })
+      logger.info(LOG_PREFIXES.EVENT_ADD, 'Confirm free-lang edit: LLM result', from, {
+        type: parseResult.type,
+        editCount: parseResult.edits?.length ?? 0,
+        ...(parseResult.type === 'unclear' && parseResult.message ? { message: parseResult.message.slice(0, 80) } : {}),
+      })
+      if (parseResult.type === 'unclear') {
+        return sendInteractiveButtons(phoneNumberId, from, {
+          body: parseResult.message || EVENT_EDIT.FREE_LANG_UNCLEAR,
+          buttons: [EVENT_ADD.CONFIRM_SAVE_BUTTON, EVENT_ADD.CONFIRM_EDIT_BUTTON],
+        })
+      }
+      conversationState.set(from, { step: STEPS.EVENT_ADD_EDIT_MENU, eventAddLastActivityAt: Date.now() })
+      return handleEventAddFlow(phoneNumberId, from, msg, conversationState.get(from), context)
     }
     return Promise.resolve()
   }
@@ -2023,8 +2041,9 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
         return sendInteractiveList(phoneNumberId, from, buildEditMenuFirstMessagePayload())
       }
       const menuOptions = [EVENT_EDIT.DONE_ROW, ...EVENT_EDIT.MENU_ROWS]
+      const categoriesList = await getCategories()
       logger.info(LOG_PREFIXES.EVENT_ADD, 'Free-lang edit: calling LLM', from)
-      const parseResult = await parseFreeLanguageEditRequest(textBody, menuOptions, state.eventAddFormattedPreview || {}, {
+      const parseResult = await parseFreeLanguageEditRequest(textBody, menuOptions, state.eventAddFormattedPreview || {}, categoriesList || [], {
         openaiApiKey: config.openaiApiKey,
         openaiModel: config.openaiModel,
         correlationId: from,
@@ -2115,15 +2134,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
               eventAddFreeLangPendingCity: parsed.value,
               eventAddLastActivityAt: Date.now(),
             })
-            const imageUrl = getRegionMapImageUrl()
-            const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD.ASK_REGION)
-            if (imgRes && !imgRes.success) {
-              logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
-            }
-            return sendInteractiveButtons(phoneNumberId, from, {
-              body: EVENT_ADD.ASK_REGION,
-              buttons: [...EVENT_ADD.REGION_BUTTONS],
-            })
+            return sendRegionStep(phoneNumberId, from)
           }
           if (parsed.type === 'listed' && parsed.value) {
             const { cityId, cityTitle, region } = parsed.value
@@ -2181,15 +2192,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       })
       return sendFreeLangSuggestedEdits(phoneNumberId, from, state.eventAddFormattedPreview || {}, editsWithRegion)
     }
-    const imageUrl = getRegionMapImageUrl()
-    const imgRes = await sendImage(phoneNumberId, from, imageUrl, EVENT_ADD.ASK_REGION)
-    if (imgRes && !imgRes.success) {
-      logger.warn(LOG_PREFIXES.EVENT_ADD, 'Region map image send failed, continuing with buttons', imgRes.error)
-    }
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD.ASK_REGION,
-      buttons: [...EVENT_ADD.REGION_BUTTONS],
-    })
+    return sendRegionStep(phoneNumberId, from)
   }
 
   if (step === STEPS.EVENT_ADD_EDIT_FREE_LANG_CONFIRM) {

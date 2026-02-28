@@ -25,8 +25,9 @@
  *       eventDeleteList, eventDeleteListOffset (events list and pagination for delete flow).
  *       eventDeleteSelectedId (event id selected for deletion, set before EVENT_DELETE_CONFIRM).
  *
- *       welcomeShown (boolean): set after the welcome message is sent at the WELCOME step, so only
- *         subsequent text messages trigger free-language intent processing; first text shows welcome.
+ *       welcomeShown (boolean): set when we show the full welcome (WELCOME.INTERACTIVE) after unclear/irrelevant
+ *         intent. Used to decide whether to show the full welcome vs INTENT_UNCLEAR/INTENT_IRRELEVANT when the user
+ *         sends text that does not match a flow.
  * State is in-memory only and is lost on process restart or deploy. Users in the middle of a flow
  * will see the welcome menu on their next message after a restart.
  */

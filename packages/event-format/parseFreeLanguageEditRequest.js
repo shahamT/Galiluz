@@ -57,8 +57,10 @@ const PARSE_FREE_EDIT_SCHEMA = {
   },
 }
 
-function buildSystemPrompt(menuOptions, currentEventSummary) {
+function buildSystemPrompt(menuOptions, currentEventSummary, categoriesList) {
   const menuLines = (menuOptions || []).map((o) => `- ${o.id}: ${o.title}`).join('\n')
+  const validCategoryIds = Array.isArray(categoriesList) ? categoriesList.map((c) => c.id).filter((id) => typeof id === 'string' && id.trim()) : []
+  const categoryIdsText = validCategoryIds.length > 0 ? `\nmainCategory and categories MUST use ONLY these IDs (never labels like "performance" or "מוזיקה"): ${validCategoryIds.join(', ')}.\n` : ''
   const offset = getCurrentIsraelUtcOffset()
   const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' })
   const parts = formatter.formatToParts(new Date())
@@ -77,7 +79,7 @@ ${menuLines}
 CURRENT EVENT (summary for context):
 ${currentEventSummary}
 
-Allowed field keys for edits (use exactly these when proposing edits):
+Allowed field keys for edits (use exactly these when proposing edits):${categoryIdsText}
 - title (string) — event title
 - shortDescription (string) — short summary
 - fullDescription (string) — full description. Output as HTML only. Use only these tags: <p>, <br>, <strong>, <em>, <s>, <ul>, <ol>, <li>, <blockquote>, <code>. Use <strong> for bold, <em> for italic, <ul><li> for bullet lists. Do not use * or _ in the output; use only these HTML tags. newValueStr is the raw HTML string (JSON-escaped when in JSON).
@@ -151,15 +153,49 @@ function buildCurrentEventSummary(currentEvent) {
   return parts.join('\n')
 }
 
+const FALLBACK_CATEGORY = 'community_meetup'
+
+/**
+ * Post-process mainCategory or categories edit: invalid values → community_meetup.
+ * @param {unknown} newValue - Parsed value (string for mainCategory, array for categories)
+ * @param {string} fieldKey - 'mainCategory' or 'categories'
+ * @param {Set<string>} validCategoryIds
+ * @returns {unknown} Corrected value
+ */
+function postProcessCategoryEdit(newValue, fieldKey, validCategoryIds) {
+  if (fieldKey === 'mainCategory') {
+    const s = typeof newValue === 'string' ? newValue.trim() : ''
+    return validCategoryIds.has(s) ? s : FALLBACK_CATEGORY
+  }
+  if (fieldKey === 'categories') {
+    const arr = Array.isArray(newValue) ? newValue : []
+    const filtered = arr.filter((c) => typeof c === 'string' && validCategoryIds.has(c.trim()))
+    return filtered.length > 0 ? filtered : [FALLBACK_CATEGORY]
+  }
+  return newValue
+}
+
 /**
  * Parse user free-text into structured edit intent.
  * @param {string} userMessage - User's free text
  * @param {Array<{ id: string, title: string }>} menuOptions - Edit menu rows (done + fields)
  * @param {Record<string, unknown>} currentEvent - eventAddFormattedPreview
+ * @param {Array<{ id: string, label: string }>} [categoriesList] - Valid category IDs for mainCategory/categories validation
  * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string }} [options]
  * @returns {Promise<{ type: 'unclear' | 'complete_update' | 'edits', message?: string, edits?: Array<{ fieldKey: string, justification: string, newValue: unknown }> }>}
  */
-export async function parseFreeLanguageEditRequest(userMessage, menuOptions, currentEvent, options = {}) {
+export async function parseFreeLanguageEditRequest(userMessage, menuOptions, currentEvent, categoriesListOrOptions, optionsParam = {}) {
+  // Backward compat: 4th param may be options (old signature) or categoriesList (new)
+  let categoriesList
+  let options
+  const isOptions = categoriesListOrOptions && typeof categoriesListOrOptions === 'object' && !Array.isArray(categoriesListOrOptions) && ('openaiApiKey' in categoriesListOrOptions || 'correlationId' in categoriesListOrOptions)
+  if (isOptions) {
+    categoriesList = []
+    options = categoriesListOrOptions
+  } else {
+    categoriesList = categoriesListOrOptions
+    options = optionsParam
+  }
   const apiKey = (options.openaiApiKey ?? process.env.OPENAI_API_KEY ?? '').trim()
   const model = (options.openaiModel ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL).trim() || DEFAULT_MODEL
   const correlationId = options.correlationId
@@ -181,7 +217,7 @@ export async function parseFreeLanguageEditRequest(userMessage, menuOptions, cur
     const response = await openai.chat.completions.create({
       model,
       messages: [
-        { role: 'system', content: buildSystemPrompt(menuOptions, currentEventSummary) },
+        { role: 'system', content: buildSystemPrompt(menuOptions, currentEventSummary, categoriesList) },
         { role: 'user', content: messageTrimmed },
       ],
       response_format: {
@@ -210,6 +246,9 @@ export async function parseFreeLanguageEditRequest(userMessage, menuOptions, cur
     }
     // type === 'edits'
     const rawEdits = Array.isArray(parsed.edits) ? parsed.edits : []
+    const validCategoryIds = new Set(
+      Array.isArray(categoriesList) ? categoriesList.map((c) => c.id).filter((id) => typeof id === 'string' && id.trim()) : [],
+    )
     const edits = []
     for (const e of rawEdits) {
       if (!e || typeof e.fieldKey !== 'string' || !ALLOWED_FIELD_KEYS.has(e.fieldKey)) continue
@@ -220,6 +259,9 @@ export async function parseFreeLanguageEditRequest(userMessage, menuOptions, cur
         newValue = e.newValueStr
       }
       const fieldKey = e.fieldKey === 'occurrences' ? 'datetime' : e.fieldKey
+      if (fieldKey === 'mainCategory' || fieldKey === 'categories') {
+        newValue = postProcessCategoryEdit(newValue, fieldKey, validCategoryIds)
+      }
       edits.push({
         fieldKey,
         justification: typeof e.justification === 'string' ? e.justification.trim() : '',
