@@ -620,10 +620,10 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         eventTypesDescription: textBody,
         step: conversationState.STEPS.PUBLISH_ASK_COMMITMENT,
       })
-      return sendInteractiveButtons(phoneNumberId, from, PUBLISH_ASK_COMMITMENT)
+      return sendInteractiveButtons(phoneNumberId, from, PUBLISH.ASK_COMMITMENT)
     }
     if (state.step === conversationState.STEPS.PUBLISH_ASK_COMMITMENT) {
-      return sendInteractiveButtons(phoneNumberId, from, PUBLISH_ASK_COMMITMENT)
+      return sendInteractiveButtons(phoneNumberId, from, PUBLISH.ASK_COMMITMENT)
     }
   }
 
