@@ -71,6 +71,7 @@ export function transformEventForFrontend(doc: any): Record<string, unknown> | n
     occurrences,
     isActive: doc.isActive !== false,
     dateCreated,
+    publisherId: backendEvent.publisherId || undefined,
     publisherPhone: backendEvent.publisherPhone || undefined,
     publisherName: backendEvent.publisherName || undefined,
   }

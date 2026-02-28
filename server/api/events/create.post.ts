@@ -96,9 +96,11 @@ export default defineEventHandler(async (event) => {
   const validCategoryIds = getCategoriesList().map((c) => c.id)
   const formattedEvent = { ...formattedEventSupplied }
   normalizePublisherFormattedEvent(formattedEvent, validCategoryIds)
-  if (publisherId) {
-    formattedEvent.publisherId = publisherId
-  }
+  if (publisherId) formattedEvent.publisherId = publisherId
+  const phone = typeof publisher?.phone === 'string' ? publisher.phone.replace(/\D/g, '').trim() : ''
+  if (phone) formattedEvent.publisherPhone = phone
+  const name = typeof publisher?.name === 'string' ? publisher.name.trim() : ''
+  if (name) formattedEvent.publisherName = name
   const validation = validatePublisherFormattedEvent(formattedEvent)
   if (!validation.valid) {
     console.warn(LOG_PREFIX, correlationId, 'validation failed', JSON.stringify({ reason: validation.reason }))

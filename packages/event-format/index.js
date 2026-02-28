@@ -338,8 +338,11 @@ export async function formatPublisherEvent(rawEventWithAll, categoriesList, opti
           .filter((u) => typeof u?.Title === 'string' && typeof u?.Url === 'string')
           .map((u) => ({ Title: u.Title, Url: u.Url, type: u.type === 'phone' ? 'phone' : 'link' }))
       : [],
-    publisherPhone: typeof publisher?.phone === 'string' ? publisher.phone : undefined,
-    publisherName: typeof publisher?.name === 'string' ? publisher.name : undefined,
+    publisherPhone:
+      typeof publisher?.phone === 'string'
+        ? publisher.phone.replace(/\D/g, '').trim() || undefined
+        : undefined,
+    publisherName: typeof publisher?.name === 'string' ? publisher.name.trim() || undefined : undefined,
   }
 
   if (!event.occurrences?.length) {
