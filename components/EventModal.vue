@@ -67,46 +67,29 @@
               </template>
             </div>
 
+            <!-- Links Section (links only, no contact publisher) -->
+            <UiEventModalLinksSection
+              v-if="selectedEvent.urls?.length"
+              :links="selectedEvent.urls"
+              :show-contact-publisher="false"
+              :has-top-padding="true"
+              @link-click="trackCustomLinkClick"
+            />
+
             <!-- Description Section -->
             <div v-if="eventDescription" class="EventModal-descriptionSection">
               <div class="EventModal-description" v-html="eventDescription"></div>
             </div>
 
-            <!-- Links & Contact Section -->
-            <div v-if="selectedEvent.urls?.length || selectedEvent.publisherPhone" class="EventModal-linksSection">
-              <a
-                v-for="(link, index) in selectedEvent.urls"
-                :key="index"
-                :href="link.type === 'phone' ? `tel:${link.Url}` : link.Url"
-                :target="link.type === 'phone' ? undefined : '_blank'"
-                :rel="link.type === 'phone' ? undefined : 'noopener noreferrer'"
-                class="EventModal-linkButton"
-                @click="trackCustomLinkClick(link, index)"
-              >
-                <span class="EventModal-linkButtonText">{{ link.Title }}</span>
-              </a>
-
-              <!-- Contact Publisher Button -->
-              <a
-                v-if="selectedEvent.publisherPhone"
-                :href="whatsappLink"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="EventModal-linkButton EventModal-linkButton--whatsapp"
-                @click="trackContactPublisher"
-              >
-                <img src="/icons/whatsapp-icon.svg" alt="WhatsApp" class="EventModal-whatsappIcon" />
-                <span class="EventModal-linkButtonText">{{ MODAL_TEXT.contactPublisher }}</span>
-              </a>
-              <button
-                v-else
-                disabled
-                class="EventModal-linkButton EventModal-linkButton--whatsapp EventModal-linkButton--disabled"
-              >
-                <img src="/icons/whatsapp-icon.svg" alt="WhatsApp" class="EventModal-whatsappIcon" />
-                <span class="EventModal-linkButtonText">{{ MODAL_TEXT.contactPublisher }}</span>
-              </button>
-            </div>
+            <!-- Links & Contact Section (bottom) -->
+            <UiEventModalLinksSection
+              v-if="selectedEvent.urls?.length || selectedEvent.publisherPhone"
+              :links="selectedEvent.urls"
+              :show-contact-publisher="true"
+              :whatsapp-link="whatsappLink"
+              @link-click="trackCustomLinkClick"
+              @contact-publisher="trackContactPublisher"
+            />
 
             <!-- Dev only: event id -->
             <DevOnly>
@@ -365,6 +348,7 @@ watch(isEventModalShowing, (isShowing) => {
     @include mobile {
       padding: var(--spacing-md);
       padding-bottom: 0;
+      justify-content: center;
     }
   }
 
@@ -538,82 +522,6 @@ watch(isEventModalShowing, (isShowing) => {
       text-decoration: line-through;
       color: var(--color-text-light);
     }
-  }
-
-  &-linksSection {
-    background-color: var(--color-background);
-    padding: 0 var(--spacing-lg) var(--spacing-lg) var(--spacing-lg);
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: var(--spacing-sm);
-
-    @include mobile {
-      padding: 0 var(--spacing-md) var(--spacing-md) var(--spacing-md);
-    }
-  }
-
-  &-linkButton {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
-    background-color: transparent;
-    color: var(--brand-dark-green);
-    border: 2px solid var(--brand-dark-green);
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.2s ease;
-    width: auto;
-    min-width: 0;
-    cursor: pointer;
-
-    &:hover:not(:disabled) {
-      background-color: var(--brand-dark-green);
-      color: var(--chip-text-white);
-      border-color: var(--brand-dark-green);
-
-      .EventModal-whatsappIcon {
-        filter: brightness(0) invert(1);
-      }
-    }
-
-    &--whatsapp {
-      color: var(--whatsapp-green);
-      border-color: var(--whatsapp-green);
-
-      &:hover:not(:disabled) {
-        background-color: var(--whatsapp-green);
-        color: var(--chip-text-white);
-        border-color: var(--whatsapp-green);
-      }
-    }
-
-    &--disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    @include mobile {
-      width: 100%;
-    }
-  }
-
-  &-linkButtonText {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &-whatsappIcon {
-    width: var(--icon-size-sm);
-    height: var(--icon-size-sm);
-    flex-shrink: 0;
-    filter: invert(59%) sepia(89%) saturate(464%) hue-rotate(94deg) brightness(95%) contrast(87%);
   }
 }
 </style>
