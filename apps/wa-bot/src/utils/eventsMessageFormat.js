@@ -1,7 +1,8 @@
 import { getTimeInIsraelFromIso } from './date.helpers.js'
+import { EVENT_LIST } from '../consts/index.js'
 
-const ALL_DAY_TEXT = 'כל היום'
-const UNKNOWN_LOCATION = 'לא ידוע'
+const ALL_DAY_TEXT = EVENT_LIST.ALL_DAY_TEXT
+const UNKNOWN_LOCATION = EVENT_LIST.UNKNOWN_LOCATION
 const MAX_EVENTS_IN_MESSAGE = 15
 const MORE_EVENTS_LINE = '\nלעוד אירועים כנסו ל־ https://galiluz.co.il'
 

@@ -317,7 +317,7 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
   const occLines = occurrences.map((occ) => {
     const startIso = occ.startTime ?? occ.date
     const dateStr = occ.date ? formatDateDisplayNoYear(occ.date) : (startIso ? formatDateDisplayNoYear(getDateInIsraelFromIso(startIso)) : '-')
-    const timeStr = !occ.hasTime || !startIso ? 'כל היום' : (() => {
+    const timeStr = !occ.hasTime || !startIso ? EVENT_ADD.ALL_DAY_TEXT : (() => {
       const startTime = getTimeInIsraelFromIso(startIso)
       const endTime = occ.endTime ? getTimeInIsraelFromIso(occ.endTime) : ''
       return endTime ? `${startTime} – ${endTime}` : startTime
@@ -327,7 +327,7 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
   const datesBlock = occLines.length ? occLines.join('\n') : '-'
 
   const priceNum = typeof formattedEvent.price === 'number' ? formattedEvent.price : NaN
-  const priceStr = Number.isNaN(priceNum) ? '-' : priceNum === 0 ? 'חינם' : `${priceNum} ₪`
+  const priceStr = Number.isNaN(priceNum) ? '-' : priceNum === 0 ? EVENT_ADD.PRICE_FREE : `${priceNum} ₪`
 
   const urls = Array.isArray(formattedEvent.urls) ? formattedEvent.urls : []
   const linkLines = urls
@@ -354,7 +354,7 @@ function buildEventPreviewMessage(formattedEvent, eventCategories) {
     mainCatLabel,
     '',
     `*קטגוריות נוספות:*`,
-    otherCategories.length ? otherCategories.join(', ') : 'ללא',
+    otherCategories.length ? otherCategories.join(', ') : EVENT_ADD.EMPTY_LABEL,
     '',
     `*מיקום האירוע:*`,
     locationBlock,
@@ -448,7 +448,7 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, o
     const occLines = occurrences.map((occ) => {
       const startIso = occ.startTime ?? occ.date
       const dateStr = occ.date ? formatDateDisplayNoYear(occ.date) : (startIso ? formatDateDisplayNoYear(getDateInIsraelFromIso(startIso)) : '-')
-      const timeStr = !occ.hasTime || !startIso ? 'כל היום' : (() => {
+      const timeStr = !occ.hasTime || !startIso ? EVENT_ADD.ALL_DAY_TEXT : (() => {
         const startTime = getTimeInIsraelFromIso(startIso)
         const endTime = occ.endTime ? getTimeInIsraelFromIso(occ.endTime) : ''
         return endTime ? `${startTime} – ${endTime}` : startTime
@@ -460,7 +460,7 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, o
   }
   if (fieldKey === 'price') {
     const priceNum = typeof ev.price === 'number' ? ev.price : NaN
-    const priceStr = Number.isNaN(priceNum) ? empty : priceNum === 0 ? 'חינם' : `${priceNum} ₪`
+    const priceStr = Number.isNaN(priceNum) ? empty : priceNum === 0 ? EVENT_ADD.PRICE_FREE : `${priceNum} ₪`
     return `*מחיר:*\n${priceStr}`
   }
   if (fieldKey === 'links') {
@@ -473,7 +473,7 @@ function buildEditSuccessValueBlock(fieldKey, formattedEvent, eventCategories, o
   }
   if (fieldKey === 'media') {
     const media = Array.isArray(ev.media) ? ev.media : []
-    const mediaSummary = media.length === 0 ? empty : media.length === 1 ? 'קובץ אחד' : `${media.length} קבצים`
+    const mediaSummary = media.length === 0 ? empty : EVENT_ADD.MEDIA_FILES_COUNT(media.length)
     return `*תמונות וסרטונים:*\n${mediaSummary}`
   }
   return empty
@@ -1872,7 +1872,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     return killEventAddFlow(phoneNumberId, from, state)
   }
 
-  if (textBody === 'ביטול') {
+  if (textBody === EVENT_ADD.CANCEL_KEYWORD) {
     return killEventAddFlow(phoneNumberId, from, state)
   }
 
@@ -2008,8 +2008,9 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       })
     }
     if (msg.type === 'text' && textBody) {
-      const donePhrases = ['סיימתי לעדכן', 'סיימתי לעדכן פרטים']
-      const isDone = donePhrases.some((p) => textBody === p || textBody.startsWith(p + ' ') || textBody.replace(/\s+/g, ' ').trim() === p)
+      const isDone = EVENT_ADD.DONE_PHRASES.some(
+        (p) => textBody === p || textBody.startsWith(p + ' ') || textBody.replace(/\s+/g, ' ').trim() === p
+      )
       if (isDone) {
         if (state.eventUpdateMode && state.eventAddDraftId) {
           return sendActiveEventUpdateSuccess(phoneNumberId, from, state.eventAddDraftId)

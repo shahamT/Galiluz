@@ -9,7 +9,7 @@ export const DAY_CELL_BREAKPOINT = 920 // Breakpoint for day cell chip display l
 // Welcome modal: localStorage key and expiry (days) for "first visit / every N days"
 export const WELCOME_MODAL_STORAGE_KEY = 'galiluz-welcome-seen'
 export const WELCOME_MODAL_EXPIRY_DAYS = 1
-// Dev-only: expiry in hours for welcome modal (testing)
+// Dev-only: expiry in hours for welcome modal (testing). Production uses WELCOME_MODAL_EXPIRY_DAYS.
 export const WELCOME_MODAL_EXPIRY_HOURS_DEV = 12
 
 // Welcome modal copy and region placeholders (step 0 = intro, step 1 = regions, step 2 = categories)

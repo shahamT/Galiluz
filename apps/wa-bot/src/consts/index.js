@@ -80,6 +80,9 @@ export const DISCOVER = {
    * @param {'today' | 'tomorrow'} timeChoice - what the user just searched
    * @param {Array<'today'|'tomorrow'>} searchedTimesForCategory - which time options user already searched for this category
    */
+  CATEGORY_LIST_BUTTON: 'בחר',
+  CATEGORY_LIST_SECTION_TITLE: 'אפשרויות',
+  CATEGORY_LIST_ALL_TITLE: 'הכל',
   getAfterListPayload(timeChoice, searchedTimesForCategory = []) {
     const searched = new Set(Array.isArray(searchedTimesForCategory) ? searchedTimesForCategory : [])
     const otherDay = timeChoice === 'today' ? { id: 'tomorrow', title: 'אותה קטגוריה מחר' } : { id: 'today', title: 'אותה קטגוריה היום' }
@@ -100,9 +103,10 @@ export const DISCOVER = {
 // --- PUBLISH ---
 
 export const PUBLISH = {
+  DEFAULT_PUBLISHER_LABEL: 'מפרסם',
   NOT_REGISTERED: {
-    body:
-      "*פעם ראשונה?* 🤩\nבואו נעבור אימות קצרצר (זה לוקח דקה)\n\n _חשוב לנו לוודא שרק מפרסמים מאומתים מעלים אירועים אמיתיים ולגיטימיים למערכת_ ",
+    body: "*פעם ראשונה?* 🤩\nבואו נעבור אימות קצרצר (זה לוקח דקה)",
+    footer: 'רק מפרסמים מאומתים מעלים אירועים אמיתיים ולגיטימיים למערכת',
     buttons: [
       { id: 'publish_sign_me_up', title: 'בואו נתחיל' },
       { id: 'back_to_main', title: 'בחזרה לתפריט הראשי' },
@@ -183,6 +187,8 @@ export const PUBLISHER = {
 // --- EVENT LIST (update/delete flow) ---
 
 export const EVENT_LIST = {
+  ALL_DAY_TEXT: 'כל היום',
+  UNKNOWN_LOCATION: 'לא ידוע',
   NO_FUTURE_EVENTS: 'לא נמצאו אירועים עתידיים שמשוייכים לך.',
   FETCH_ERROR: 'שגיאה בטעינת האירועים. נסו שוב מאוחר יותר.',
   UPDATE_SELECT_BODY: 'איזה אירוע תרצו לעדכן?',
@@ -297,6 +303,13 @@ export const EVENT_ADD = {
   CONFIRM_SAVE_ERROR: 'משהו השתבש. נסו להתחיל מחדש.',
   FLAGS_INTRO: 'יש כמה פרטים שחסרים לנו.',
   FLAGS_FILL_PROMPT: 'מלאו את הפרטים הבאים:',
+  ALL_DAY_TEXT: 'כל היום',
+  PRICE_FREE: 'חינם',
+  EMPTY_LABEL: 'ללא',
+  MEDIA_ONE_FILE: 'קובץ אחד',
+  MEDIA_FILES_COUNT: (n) => (n === 1 ? 'קובץ אחד' : `${n} קבצים`),
+  CANCEL_KEYWORD: 'ביטול',
+  DONE_PHRASES: ['סיימתי לעדכן', 'סיימתי לעדכן פרטים'],
   CITY_OUTSIDE_REGION:
     'היישוב שציינת לא באיזור הצפון. אנא הזינו יישוב מתאים',
 }
@@ -354,6 +367,7 @@ export const VALIDATION = {
 // --- EVENT EDIT ---
 
 export const EVENT_EDIT = {
+  EVENTS_SECTION_TITLE: 'אירועים',
   MENU_BODY: 'אילו פרטים תרצו לשנות?',
   MENU_FOOTER: "לסיום העריכה יש לבחור בתפריט ב'סיימתי לעדכן פרטים'",
   MENU_FIRST_BODY:

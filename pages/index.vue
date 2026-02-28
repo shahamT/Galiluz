@@ -12,9 +12,14 @@ import { getTodayDateString } from '~/utils/date.helpers'
 
 defineOptions({ name: 'IndexRedirect' })
 
+const route = useRoute()
+
 // lifecycle
 onMounted(() => {
-  navigateTo({ path: ROUTE_DAILY_VIEW, query: { date: getTodayDateString() } }, { replace: true })
+  const query = route.query.event
+    ? { event: route.query.event }
+    : { date: getTodayDateString() }
+  navigateTo({ path: ROUTE_DAILY_VIEW, query }, { replace: true })
 })
 </script>
 

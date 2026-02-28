@@ -74,7 +74,21 @@ const slideToDateRequest = ref(null)
 // lifecycle
 onMounted(async () => {
   const dateFromQuery = route.query.date
-  if (!dateFromQuery || !isValidRouteDate(String(dateFromQuery).trim())) {
+  const eventFromQuery = route.query.event
+  const hasValidDate = dateFromQuery && isValidRouteDate(String(dateFromQuery).trim())
+
+  if (!hasValidDate && eventFromQuery && typeof eventFromQuery === 'string') {
+    const eventParam = String(eventFromQuery).trim()
+    try {
+      const { date, eventId } = await $fetch(`/api/events/${encodeURIComponent(eventParam)}/first-occurrence`)
+      await router.replace({ path: ROUTE_DAILY_VIEW, query: { date, event: eventId } })
+      await nextTick()
+      runPageInit()
+      return
+    } catch {
+      await router.replace({ path: ROUTE_DAILY_VIEW, query: { ...route.query, date: getTodayDateString() } })
+    }
+  } else if (!hasValidDate) {
     await router.replace({ path: ROUTE_DAILY_VIEW, query: { ...route.query, date: getTodayDateString() } })
   }
   await nextTick()

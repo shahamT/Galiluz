@@ -128,8 +128,8 @@ const ariaRemoveAllGroup = 'הסר את כל הקטגוריות בקבוצה'
 const categoriesTabLabel = computed(() => UI_TEXT.categoriesFilter)
 const regionsTabLabel = computed(() => UI_TEXT.regionsFilter)
 
-const selectedCategoriesList = computed(() => selectedCategories?.value ?? [])
-const selectedRegionsList = computed(() => selectedRegions?.value ?? [])
+const selectedCategoriesList = computed(() => selectedCategories.value ?? [])
+const selectedRegionsList = computed(() => selectedRegions.value ?? [])
 const categoriesList = computed(() => props.categories ?? {})
 
 const categoriesByGroup = computed(() => {
@@ -161,7 +161,7 @@ function isGroupFullySelected(group) {
 }
 
 function handleGroupToggleAll(group) {
-  const selected = [...(selectedCategoriesList.value ?? [])]
+  const selected = [...selectedCategoriesList.value]
   const allSelected = group.categories.every((item) => selected.includes(item.id))
   group.categories.forEach((item) => {
     const isSelected = selected.includes(item.id)

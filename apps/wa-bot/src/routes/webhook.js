@@ -69,7 +69,7 @@ function getAndRemovePublisherName(approverFrom, publisherWaId) {
     byWaId.delete(publisherWaId)
     if (byWaId.size === 0) pendingPublisherNamesByApprover.delete(normalized)
   }
-  return fullName || 'מפרסם'
+  return fullName || PUBLISH.DEFAULT_PUBLISHER_LABEL
 }
 
 function storePublisherNameForApprover(approverWaId, publisherWaId, fullName) {
@@ -78,7 +78,7 @@ function storePublisherNameForApprover(approverWaId, publisherWaId, fullName) {
     byWaId = new Map()
     pendingPublisherNamesByApprover.set(approverWaId, byWaId)
   }
-  byWaId.set(publisherWaId, fullName || 'מפרסם')
+  byWaId.set(publisherWaId, fullName || PUBLISH.DEFAULT_PUBLISHER_LABEL)
 }
 
 /**
@@ -119,12 +119,12 @@ function normalizeLoadedEventForEdit(loaded) {
 /** Category list for discover flow: הכל first, then 4 groups */
 const DISCOVER_CATEGORY_LIST = {
   body: DISCOVER.ASK_CATEGORY,
-  button: 'בחר',
+  button: DISCOVER.CATEGORY_LIST_BUTTON,
   sections: [
     {
-      title: 'אפשרויות',
+      title: DISCOVER.CATEGORY_LIST_SECTION_TITLE,
       rows: [
-        { id: CATEGORY_ALL_ID, title: 'הכל' },
+        { id: CATEGORY_ALL_ID, title: DISCOVER.CATEGORY_LIST_ALL_TITLE },
         ...CATEGORY_GROUPS.map((g) => ({ id: g.id, title: g.label })),
       ],
     },

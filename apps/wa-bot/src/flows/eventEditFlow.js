@@ -123,6 +123,6 @@ export function buildPublisherEventListPayload(events, offset, bodyText, rowIdPr
   return {
     body: typeof bodyText === 'string' ? bodyText : 'איזה אירוע?',
     button: EVENT_LIST.SELECT_EVENT_LIST_BUTTON,
-    sections: [{ title: 'אירועים', rows }],
+    sections: [{ title: EVENT_EDIT.EVENTS_SECTION_TITLE, rows }],
   }
 }
