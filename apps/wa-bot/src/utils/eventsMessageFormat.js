@@ -73,7 +73,7 @@ export function formatEventsListMessage(
     const flatEvent = onDateFlatEvents[i]
     const title = flatEvent.title || 'אירוע'
     const timeText = formatEventTime(flatEvent)
-    const link = `${baseUrl}/daily-view?date=${dateString}&event=${flatEvent.id}`
+    const link = `${baseUrl}/direct?event=${flatEvent.id}`
     const location = formatLocation(flatEvent)
     lines.push(`✅ *${title}*`)
     lines.push(`איפה: ${location}`)

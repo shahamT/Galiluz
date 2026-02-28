@@ -74,6 +74,7 @@ export default defineNuxtConfig({
 
   nitro: {
     routeRules: {
+      '/direct': { cache: false },
       '/**': {
         headers: {
           'X-Frame-Options': 'DENY',

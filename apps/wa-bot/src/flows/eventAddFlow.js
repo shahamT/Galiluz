@@ -642,7 +642,7 @@ async function sendConfirmSummary(phoneNumberId, from, formattedPreview) {
  */
 function sendActiveEventUpdateSuccess(phoneNumberId, from, eventId) {
   const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
-  const eventLink = eventId ? `${baseUrl}?event=${encodeURIComponent(eventId)}` : baseUrl
+  const eventLink = eventId ? `${baseUrl}/direct?event=${encodeURIComponent(eventId)}` : baseUrl
   const body = [
     EVENT_EDIT.ACTIVE_EVENT_SUCCESS_BODY,
     '',
@@ -1798,7 +1798,7 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
   if (result.success) {
     logger.info(LOG_PREFIXES.EVENT_ADD, 'Event created', from, result.id)
     const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
-    const eventLink = result.id ? `${baseUrl}?event=${encodeURIComponent(result.id)}` : baseUrl
+    const eventLink = result.id ? `${baseUrl}/direct?event=${encodeURIComponent(result.id)}` : baseUrl
     const successBody = [
       EVENT_ADD.SUCCESS_HEADING,
       '',
