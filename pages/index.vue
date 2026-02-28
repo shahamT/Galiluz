@@ -7,13 +7,14 @@
 </template>
 
 <script setup>
-import { ROUTE_MONTHLY_VIEW } from '~/consts/calendar.const'
+import { ROUTE_DAILY_VIEW } from '~/consts/calendar.const'
+import { getTodayDateString } from '~/utils/date.helpers'
 
 defineOptions({ name: 'IndexRedirect' })
 
 // lifecycle
 onMounted(() => {
-  navigateTo(ROUTE_MONTHLY_VIEW, { replace: true })
+  navigateTo({ path: ROUTE_DAILY_VIEW, query: { date: getTodayDateString() } }, { replace: true })
 })
 </script>
 
