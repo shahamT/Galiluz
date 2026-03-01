@@ -1781,9 +1781,6 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
     }
     result = await createEvent(body)
   }
-  if (!opts.keepStateForMaxMedia) {
-    conversationState.clear(from)
-  }
   if (result.success) {
     logger.info(LOG_PREFIXES.EVENT_ADD, 'Event created', from, result.id)
     const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
@@ -1796,11 +1793,22 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
       EVENT_ADD.SUCCESS_VIEW_PROMPT,
       eventLink,
     ].join('\n')
+    if (!opts.keepStateForMaxMedia) {
+      conversationState.clear(from)
+      conversationState.set(from, {
+        step: STEPS.EVENT_ADD_SUCCESS,
+        eventAddSuccessLink: eventLink,
+      })
+    }
     return sendInteractiveButtons(phoneNumberId, from, {
       body: successBody,
+      footer: EVENT_ADD.SUCCESS_FOOTER,
       buttons: [EVENT_ADD.SUCCESS_ADD_AGAIN_BUTTON, EVENT_ADD.SUCCESS_MAIN_MENU_BUTTON],
     })
   } else {
+    if (!opts.keepStateForMaxMedia) {
+      conversationState.clear(from)
+    }
     logger.error(LOG_PREFIXES.EVENT_ADD, 'Event create/activate failed', from, result.reason || '')
     const failMsg = result.reason && result.reason.length <= 200
       ? EVENT_ADD.SUBMIT_FAILED_WITH_REASON(result.reason)

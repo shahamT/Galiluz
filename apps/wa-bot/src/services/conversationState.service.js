@@ -90,6 +90,7 @@ const STEPS = {
   EVENT_ADD_EDIT_NAV_LINKS: 'event_add_edit_nav_links',
   EVENT_ADD_EDIT_FREE_LANG_REGION: 'event_add_edit_freelang_region',
   EVENT_ADD_EDIT_MEDIA_INTRO: 'event_add_edit_media_intro',
+  EVENT_ADD_SUCCESS: 'event_add_success',
   EVENT_ADD_EDIT_FREE_LANG_CONFIRM: 'event_add_edit_freelang_confirm',
 }
 

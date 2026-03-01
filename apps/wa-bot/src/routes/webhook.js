@@ -18,6 +18,7 @@ import {
   APPROVER,
   PUBLISHER,
   EVENT_LIST,
+  EVENT_ADD,
   MAIN_MENU,
   BATCH_FLUSH_MS,
 } from '../consts/index.js'
@@ -447,6 +448,9 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       return handleBackToMenu(phoneNumberId, from)
     }
     if (id === 'event_add_new') {
+      if (state.step === conversationState.STEPS.EVENT_ADD_SUCCESS) {
+        conversationState.clear(from)
+      }
       const { status } = await checkPublisher(from)
       if (status === 'approved') {
         return sendEventAddMethodChoice(phoneNumberId, from)
@@ -542,7 +546,8 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     const textBody = String(msg.text.body).trim()
     const isWelcome = state.step === conversationState.STEPS.WELCOME
     const isPublisherChoice = state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION
-    if ((isWelcome || isPublisherChoice) && config.allowMainMenuFreeLanguage && textBody) {
+    const isSuccessScreen = state.step === conversationState.STEPS.EVENT_ADD_SUCCESS
+    if ((isWelcome || isPublisherChoice || isSuccessScreen) && config.allowMainMenuFreeLanguage && textBody) {
       try {
         const { intent } = await classifyMainMenuIntent(textBody, {
           openaiApiKey: config.openaiApiKey,
@@ -550,20 +555,22 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         })
         const isFirstMessageFlow = isWelcome && !state.welcomeShown
         if (intent === 'discover') {
-          if (isPublisherChoice) conversationState.clear(from)
+          if (isPublisherChoice || isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           return handleDiscoverButton(phoneNumberId, from)
         }
         if (intent === 'contact') {
-          if (isPublisherChoice) conversationState.clear(from)
+          if (isPublisherChoice || isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           return sendText(phoneNumberId, from, CONTACT.MESSAGE)
         }
         if (intent === 'publish') {
+          if (isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'event_add_new') {
+          if (isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           if (isPublisherChoice) return sendEventAddMethodChoice(phoneNumberId, from)
           const { status } = await checkPublisher(from)
@@ -574,6 +581,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'event_update') {
+          if (isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           if (isPublisherChoice) return handleEventUpdateChoice(phoneNumberId, from)
           const { status } = await checkPublisher(from)
@@ -581,6 +589,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'event_delete') {
+          if (isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           if (isPublisherChoice) return handleEventDeleteChoice(phoneNumberId, from)
           const { status } = await checkPublisher(from)
@@ -588,6 +597,12 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'irrelevant') {
+          if (isSuccessScreen) {
+            return sendInteractiveButtons(phoneNumberId, from, {
+              body: MAIN_MENU.INTENT_IRRELEVANT.body,
+              buttons: [EVENT_ADD.SUCCESS_ADD_AGAIN_BUTTON, EVENT_ADD.SUCCESS_MAIN_MENU_BUTTON],
+            })
+          }
           if (isWelcome && !state.welcomeShown) {
             conversationState.set(from, { welcomeShown: true })
             return sendInteractiveButtons(phoneNumberId, from, WELCOME.INTERACTIVE)
@@ -595,6 +610,12 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU.INTENT_IRRELEVANT)
         }
         if (intent === 'unclear') {
+          if (isSuccessScreen) {
+            return sendInteractiveButtons(phoneNumberId, from, {
+              body: MAIN_MENU.INTENT_UNCLEAR.body,
+              buttons: [EVENT_ADD.SUCCESS_ADD_AGAIN_BUTTON, EVENT_ADD.SUCCESS_MAIN_MENU_BUTTON],
+            })
+          }
           if (isWelcome && !state.welcomeShown) {
             conversationState.set(from, { welcomeShown: true })
             return sendInteractiveButtons(phoneNumberId, from, WELCOME.INTERACTIVE)
@@ -603,6 +624,12 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         }
       } catch (err) {
         logger.error(LOG_PREFIXES.WEBHOOK, 'Main menu intent handling failed', err)
+        if (isSuccessScreen) {
+          return sendInteractiveButtons(phoneNumberId, from, {
+            body: MAIN_MENU.INTENT_UNCLEAR.body,
+            buttons: [EVENT_ADD.SUCCESS_ADD_AGAIN_BUTTON, EVENT_ADD.SUCCESS_MAIN_MENU_BUTTON],
+          })
+        }
         if (isWelcome && !state.welcomeShown) {
           conversationState.set(from, { welcomeShown: true })
           return sendInteractiveButtons(phoneNumberId, from, WELCOME.INTERACTIVE)

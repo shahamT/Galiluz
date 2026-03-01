@@ -307,6 +307,7 @@ export const EVENT_ADD = {
   SUCCESS_VIEW_PROMPT: 'מוזמנים לצפות באירוע שלכם כאן:',
   SUCCESS_ADD_AGAIN_BUTTON: { id: 'event_add_new', title: 'להוספת אירוע חדש' },
   SUCCESS_MAIN_MENU_BUTTON: { id: 'back_to_main', title: 'לתפריט הראשי' },
+  SUCCESS_FOOTER: 'אפשר לכתוב לי בשפה חופשית או לבחור באחת האפשרויות:',
   SUCCESS: 'תודה, האירוע נשמר',
   CONFIRM_INTRO: 'עיבדנו את פרטי האירוע שהזנת\nהאם כל הפרטים נכונים?',
   CONFIRM_SAVE_BUTTON: { id: 'event_confirm_save', title: 'אישור ושמירה' },
