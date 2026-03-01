@@ -235,6 +235,7 @@ export const EVENT_ADD = {
   FREELANG_FIRST_ROWS: [
     { id: 'back_to_main', title: 'חזרה לתפריט הראשי' },
     { id: 'event_add_manual', title: 'הוספת אירוע ידנית' },
+    { id: 'event_add_via_link', title: 'הוספה באמצעות קישור' },
   ],
   AI_PROMPT_BODY: 'שלחו בהודעה אחת את כל פרטי האירוע',
   AI_PROMPT_FOOTER:
@@ -248,6 +249,19 @@ export const EVENT_ADD = {
   AI_NO_CATEGORIES_BODY: 'משהו השתבש.',
   AI_EXTRACTION_FAILED_BODY: 'לא הצלחנו לעבד את ההודעה.',
   DRAFT_CREATE_FAILED_BODY: 'לא הצלחנו ליצור את האירוע.',
+  ASK_LINK_PROMPT:
+    'שלחו קישור לעמוד האירוע (באתר שלכם, אתר הכרטיסים, עמוד אירוע בfacebook וכו\'...)',
+  LINK_PROCESSING: 'אנחנו עוברים על התוכן של העמוד...',
+  LINK_INVALID: 'לא הצלחנו לפתוח את הקישור. נא לשלוח קישור תקין (http או https).',
+  LINK_FETCH_FAILED:
+    'לא הצלחנו לטעון את העמוד. ייתכן שהאתר חוסם גישה או שהקישור לא תקין.',
+  LINK_EMPTY_CONTENT: 'העמוד שנטען ריק או לא מכיל טקסט. נסו קישור אחר.',
+  LINK_AI_EXTRACT_FAILED:
+    'לא הצלחנו לחלץ את פרטי האירוע מהעמוד. ייתכן שהעמוד לא מכיל אירוע או שהפורמט שונה. נסו קישור אחר.',
+  LINK_IMAGES_FOUND: 'הצלחנו לזהות בלינק ששלחתם את התמונות הבאות:',
+  LINK_IMAGES_CONFIRM: 'מאשרים את התמונות?',
+  LINK_IMAGES_APPROVE_BUTTON: { id: 'link_images_approve', title: 'אישור' },
+  LINK_IMAGES_REPLACE_BUTTON: { id: 'link_images_replace', title: 'החלפת תמונות' },
   INITIAL: {
     body: 'בואו נפרסם אירוע חדש',
     footer: 'בכל שלב ניתן לשלוח "ביטול" לחזרה לתפריט',
@@ -256,11 +270,11 @@ export const EVENT_ADD = {
   ASK_TITLE: 'שם האירוע (חובה)',
   ASK_DATETIME: 'מתי האירוע קורה? (חובה)',
   ASK_DATETIME_FOOTER: 'כתבו בשפה חופשית את תאריך/תאריכי ושעות האירוע',
-  CATEGORY_INTRO: 'בואו נשייך את האירוע שלכם לקטגוריה ראשית',
-  ASK_CATEGORY_GROUP: 'בחרו אחת מארבע הקבוצות הבאות',
-  ASK_MAIN_CATEGORY: 'בחרו קטגוריה',
-  CATEGORY_FOOTER: 'אנחנו כבר נשייך את האירוע לקטגוריות נוספות',
-  CATEGORY_AI_NOTE: '_אנחנו כבר נשייך את האירוע לקטגוריות נוספות_',
+  CATEGORY_INTRO: 'בואו נבחר קטגוריה מתאימה לאירוע שלכם\nנתחיל מלבחור קבוצה:',
+  ASK_CATEGORY_GROUP: 'בחרו קבוצת קטגוריות',
+  ASK_MAIN_CATEGORY: 'בחרו קטגוריה ראשית',
+  CATEGORY_FOOTER: 'המנוע שלנו כבר ייבחר עבורכם קטגוריות מתאימות נוספות',
+  CATEGORY_AI_NOTE: '_המנוע שלנו כבר ייבחר עבורכם קטגוריות מתאימות נוספות_',
   CHANGE_GROUP_PROMPT: 'לא מתאים? אפשר לבחור קבוצה אחרת.',
   CHANGE_GROUP_BUTTON: { id: 'event_add_change_group', title: 'בחירת קבוצה אחרת' },
   CHANGE_GROUP_ROW_TITLE: 'קבוצת קטגוריות אחרת',

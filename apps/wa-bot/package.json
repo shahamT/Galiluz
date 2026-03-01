@@ -12,6 +12,7 @@
     "@flasd/whatsapp-formatting": "^0.2.0",
     "dotenv": "^16.3.1",
     "event-format": "file:../../packages/event-format",
+    "html-to-text": "^9.0.5",
     "openai": "^4.77.0"
   }
 }

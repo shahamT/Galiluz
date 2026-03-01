@@ -66,6 +66,7 @@ const STEPS = {
   EVENT_ADD_PRICE: 'event_add_price',
   EVENT_ADD_DESCRIPTION: 'event_add_description',
   EVENT_ADD_LINKS: 'event_add_links',
+  EVENT_ADD_CONFIRM_LINK_IMAGES: 'event_add_confirm_link_images',
   EVENT_ADD_MEDIA: 'event_add_media',
   EVENT_ADD_MEDIA_MORE: 'event_add_media_more',
   EVENT_ADD_FLAGS_REVIEW: 'event_add_flags_review',
@@ -90,6 +91,7 @@ const STEPS = {
   EVENT_ADD_EDIT_NAV_LINKS: 'event_add_edit_nav_links',
   EVENT_ADD_EDIT_FREE_LANG_REGION: 'event_add_edit_freelang_region',
   EVENT_ADD_EDIT_MEDIA_INTRO: 'event_add_edit_media_intro',
+  EVENT_ADD_ASK_LINK: 'event_add_ask_link',
   EVENT_ADD_SUCCESS: 'event_add_success',
   EVENT_ADD_EDIT_FREE_LANG_CONFIRM: 'event_add_edit_freelang_confirm',
 }

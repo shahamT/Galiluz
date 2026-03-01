@@ -15,6 +15,8 @@ import {
   convertMessageToHtml,
   detectEventFromFreeText,
   extractEventFromFreeText,
+  extractEventTextFromPage,
+  selectEventRelevantImageUrls,
 } from 'event-format'
 import { config, normalizePhone } from '../config.js'
 import {
@@ -30,11 +32,12 @@ import { CITIES_LIST } from '../consts/cities.const.js'
 import { CATEGORY_GROUPS, EVENT_CATEGORIES } from '../consts/categories.const.js'
 import {
   sendText,
+  sendImage,
   sendInteractiveButtons,
   sendInteractiveList,
   downloadMedia,
 } from '../services/cloudApi.service.js'
-import { uploadMediaToApp, deleteMediaOnApp } from '../services/eventAddMedia.service.js'
+import { uploadMediaToApp, uploadMediaFromUrl, deleteMediaOnApp } from '../services/eventAddMedia.service.js'
 import {
   createDraft,
   processDraft,
@@ -46,6 +49,11 @@ import { patchDraft } from '../services/eventDraftPatch.service.js'
 import { conversationState } from '../services/conversationState.service.js'
 import { buildEditMenuFirstMessagePayload, buildEditMenuUnclearPayload, EDIT_DONE_ID } from './eventEditFlow.js'
 import { getDateInIsraelFromIso, getTimeInIsraelFromIso } from '../utils/date.helpers.js'
+import {
+  extractUrlFromText,
+  fetchAndGetPageContent,
+  extractImageUrlsFromHtml,
+} from '../utils/urlToText.service.js'
 import { logger } from '../utils/logger.js'
 
 const VALID_CATEGORY_IDS = new Set(Object.keys(EVENT_CATEGORIES))
@@ -70,6 +78,7 @@ const EVENT_ADD_TIMEOUT_MS = 30 * 60 * 1000
 const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_CHOOSE_METHOD,
   STEPS.EVENT_ADD_AI_INPUT,
+  STEPS.EVENT_ADD_ASK_LINK,
   STEPS.EVENT_ADD_INITIAL,
   STEPS.EVENT_ADD_TITLE,
   STEPS.EVENT_ADD_DATETIME,
@@ -84,6 +93,7 @@ const EVENT_ADD_STEPS = [
   STEPS.EVENT_ADD_PRICE,
   STEPS.EVENT_ADD_DESCRIPTION,
   STEPS.EVENT_ADD_LINKS,
+  STEPS.EVENT_ADD_CONFIRM_LINK_IMAGES,
   STEPS.EVENT_ADD_MEDIA,
   STEPS.EVENT_ADD_MEDIA_MORE,
   STEPS.EVENT_ADD_FLAGS_REVIEW,
@@ -123,6 +133,38 @@ function buildMediaCountMessage(mediaCount) {
 function buildMediaMoreBody(remaining) {
   if (remaining <= 1) return EVENT_ADD.MEDIA_MORE_ONE
   return EVENT_ADD.MEDIA_MORE_MANY_TEMPLATE.replace('{remaining}', String(remaining))
+}
+
+/**
+ * When transitioning from AI flow to media: if we have link-extracted images, show confirm step.
+ * Otherwise go to EVENT_ADD_MEDIA.
+ * @param {string} phoneNumberId
+ * @param {string} from
+ * @param {object} stateUpdate - State to set before step (e.g. eventAddFormattedPreview, eventAddDraftProcessed)
+ * @param {boolean} [withSkipButton] - Include NO_MEDIA_BUTTON when going to media step
+ */
+async function sendMediaStepOrConfirmLinkImages(phoneNumberId, from, stateUpdate, withSkipButton = true) {
+  const s = conversationState.get(from)
+  const linkImages = Array.isArray(s?.eventAddLinkImages) ? s.eventAddLinkImages : []
+  if (linkImages.length > 0) {
+    conversationState.set(from, { ...stateUpdate, step: STEPS.EVENT_ADD_CONFIRM_LINK_IMAGES })
+    await sendText(phoneNumberId, from, EVENT_ADD.LINK_IMAGES_FOUND)
+    for (const m of linkImages) {
+      await sendImage(phoneNumberId, from, m.cloudinaryURL)
+    }
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_ADD.LINK_IMAGES_CONFIRM,
+      buttons: [EVENT_ADD.LINK_IMAGES_APPROVE_BUTTON, EVENT_ADD.LINK_IMAGES_REPLACE_BUTTON],
+    })
+  }
+  conversationState.set(from, { ...stateUpdate, step: STEPS.EVENT_ADD_MEDIA })
+  if (withSkipButton) {
+    return sendInteractiveButtons(phoneNumberId, from, {
+      body: EVENT_ADD.ASK_MEDIA_FIRST,
+      buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
+    })
+  }
+  return sendText(phoneNumberId, from, EVENT_ADD.ASK_MEDIA_FIRST)
 }
 
 /**
@@ -835,21 +877,25 @@ async function runProcessDraftAfterFlagInput(phoneNumberId, from, state, context
     return sendAskForFlagField(phoneNumberId, from, s, flagFieldOrder[0])
   }
   const goToMedia = state.eventAddPendingMediaStep === true
+  if (goToMedia) {
+    return sendMediaStepOrConfirmLinkImages(phoneNumberId, from, {
+      eventAddFormattedPreview: processResult.formattedEvent,
+      eventAddDraftProcessed: true,
+      eventAddFlags: undefined,
+      eventAddFlagFieldOrder: undefined,
+      eventAddFlagIndex: undefined,
+      eventAddPendingMediaStep: undefined,
+    })
+  }
   conversationState.set(from, {
     eventAddFormattedPreview: processResult.formattedEvent,
     eventAddDraftProcessed: true,
-    step: goToMedia ? STEPS.EVENT_ADD_MEDIA : STEPS.EVENT_ADD_CONFIRM,
+    step: STEPS.EVENT_ADD_CONFIRM,
     eventAddFlags: undefined,
     eventAddFlagFieldOrder: undefined,
     eventAddFlagIndex: undefined,
     eventAddPendingMediaStep: undefined,
   })
-  if (goToMedia) {
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD.ASK_MEDIA_FIRST,
-      buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
-    })
-  }
   const previewParts = buildEventPreviewMessage(processResult.formattedEvent, EVENT_CATEGORIES)
   const combinedBody = EVENT_ADD.CONFIRM_INTRO + '\n\n' + previewParts.join('\n\n')
   return sendBodyWithButtons(phoneNumberId, from, combinedBody, [
@@ -1030,7 +1076,7 @@ async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts
 function buildCategoryGroupList() {
   return {
     body: EVENT_ADD.ASK_CATEGORY_GROUP,
-    button: 'בחר קבוצה',
+    button: 'בחרו קבוצת קטגוריות',
     sections: [
       {
         title: 'קבוצות',
@@ -1158,7 +1204,7 @@ function buildCategoryListForGroup(groupId, opts = {}) {
   const group = CATEGORY_GROUPS.find((g) => g.id === groupId)
   const defaultBody = EVENT_ADD.ASK_MAIN_CATEGORY
   const defaultFooter = EVENT_ADD.CATEGORY_FOOTER
-  if (!group) return { body: opts.bodyOverride || defaultBody, footer: defaultFooter, button: 'בחר קטגוריה', sections: [{ title: '', rows: [] }] }
+  if (!group) return { body: opts.bodyOverride || defaultBody, footer: defaultFooter, button: 'בחרו קטגוריה', sections: [{ title: '', rows: [] }] }
   const excludeIds = opts.excludeIds || []
   const rows = group.categoryIds
     .filter((id) => !excludeIds.includes(id))
@@ -1173,7 +1219,7 @@ function buildCategoryListForGroup(groupId, opts = {}) {
   return {
     body: opts.bodyOverride || defaultBody,
     footer: defaultFooter,
-    button: 'בחר קטגוריה',
+    button: 'בחרו קטגוריה',
     sections,
   }
 }
@@ -1712,21 +1758,15 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
         buttons: [EVENT_ADD.AI_RETRY_BUTTON, EVENT_ADD.AI_BACK_BUTTON],
       })
     }
-    conversationState.set(from, {
+    return sendMediaStepOrConfirmLinkImages(phoneNumberId, from, {
       eventAddFormattedPreview: processResult.formattedEvent,
       eventAddDraftProcessed: true,
-      step: STEPS.EVENT_ADD_MEDIA,
-    })
-    return sendInteractiveButtons(phoneNumberId, from, {
-      body: EVENT_ADD.ASK_MEDIA_FIRST,
-      buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
     })
   }
 
   const flagFieldOrder = getFlagFieldOrder(flags)
   if (flagFieldOrder.length === 0) {
-    conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA })
-    return sendText(phoneNumberId, from, EVENT_ADD.ASK_MEDIA_FIRST)
+    return sendMediaStepOrConfirmLinkImages(phoneNumberId, from, {}, false)
   }
 
   conversationState.set(from, {
@@ -1888,8 +1928,61 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     if (listReplyId === 'event_add_manual') {
       return sendInitialMessage(phoneNumberId, from)
     }
+    if (listReplyId === 'event_add_via_link') {
+      conversationState.set(from, { step: STEPS.EVENT_ADD_ASK_LINK, eventAddLastActivityAt: Date.now() })
+      return sendText(phoneNumberId, from, EVENT_ADD.ASK_LINK_PROMPT)
+    }
     if (buttonId === EVENT_ADD.AI_RETRY_BUTTON.id) {
       return sendEventAddMethodChoice(phoneNumberId, from)
+    }
+    return Promise.resolve()
+  }
+
+  if (step === STEPS.EVENT_ADD_ASK_LINK) {
+    if (msg.type === 'image' || msg.type === 'video') {
+      return sendText(phoneNumberId, from, EVENT_ADD.AI_EXPECT_TEXT)
+    }
+    if (textBody) {
+      const url = extractUrlFromText(textBody)
+      if (!url) {
+        return sendText(phoneNumberId, from, EVENT_ADD.LINK_INVALID)
+      }
+      await sendText(phoneNumberId, from, EVENT_ADD.LINK_PROCESSING)
+      const fetchResult = await fetchAndGetPageContent(url)
+      if (!fetchResult.success) {
+        const msgKey =
+          fetchResult.error === 'empty_content' ? EVENT_ADD.LINK_EMPTY_CONTENT : EVENT_ADD.LINK_FETCH_FAILED
+        return sendText(phoneNumberId, from, msgKey)
+      }
+      const imageUrls = fetchResult.html ? extractImageUrlsFromHtml(fetchResult.html) : []
+      let urlsToUpload = imageUrls
+      if (imageUrls.length > 0) {
+        const filterResult = await selectEventRelevantImageUrls(fetchResult.text, imageUrls, {
+          openaiApiKey: config.openaiApiKey,
+          openaiModel: config.openaiModel,
+          correlationId: from,
+        })
+        urlsToUpload = filterResult.success && Array.isArray(filterResult.urls) ? filterResult.urls : []
+      }
+      const uploadedMedia = []
+      for (let i = 0; i < urlsToUpload.length; i++) {
+        const item = await uploadMediaFromUrl(urlsToUpload[i], i === 0)
+        if (item) uploadedMedia.push(item)
+      }
+      if (uploadedMedia.length > 0) {
+        conversationState.set(from, { eventAddLinkImages: uploadedMedia })
+      }
+      const extractResult = await extractEventTextFromPage(fetchResult.text, {
+        openaiApiKey: config.openaiApiKey,
+        openaiModel: config.openaiModel,
+        correlationId: from,
+        sourceUrl: url,
+      })
+      if (!extractResult.success) {
+        return sendText(phoneNumberId, from, EVENT_ADD.LINK_AI_EXTRACT_FAILED)
+      }
+      const stateWithImages = conversationState.get(from)
+      return handleAiFreeLanguageInput(phoneNumberId, from, extractResult.text, stateWithImages, context)
     }
     return Promise.resolve()
   }
@@ -1903,6 +1996,31 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
     }
     if (msg.type === 'image' || msg.type === 'video') {
       return sendText(phoneNumberId, from, EVENT_ADD.AI_EXPECT_TEXT)
+    }
+    return Promise.resolve()
+  }
+
+  if (step === STEPS.EVENT_ADD_CONFIRM_LINK_IMAGES) {
+    if (msg.type === 'interactive' && buttonId === EVENT_ADD.LINK_IMAGES_APPROVE_BUTTON.id) {
+      const linkImages = Array.isArray(state.eventAddLinkImages) ? state.eventAddLinkImages : []
+      conversationState.set(from, {
+        eventAddMedia: linkImages,
+        eventAddLinkImages: undefined,
+        eventAddConfirmPending: true,
+      })
+      const s = conversationState.get(from)
+      return goToConfirmOrRetryMedia(phoneNumberId, from, s, context)
+    }
+    if (msg.type === 'interactive' && buttonId === EVENT_ADD.LINK_IMAGES_REPLACE_BUTTON.id) {
+      conversationState.set(from, {
+        eventAddLinkImages: undefined,
+        eventAddMedia: [],
+        step: STEPS.EVENT_ADD_MEDIA,
+      })
+      return sendInteractiveButtons(phoneNumberId, from, {
+        body: EVENT_ADD.ASK_MEDIA_FIRST,
+        buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
+      })
     }
     return Promise.resolve()
   }
@@ -3464,11 +3582,7 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
       if (nextIdx >= order.length) {
         const s = conversationState.get(from)
         if (s.eventAddPendingMediaStep) {
-          conversationState.set(from, { step: STEPS.EVENT_ADD_MEDIA, eventAddPendingMediaStep: undefined })
-          return sendInteractiveButtons(phoneNumberId, from, {
-            body: EVENT_ADD.ASK_MEDIA_FIRST,
-            buttons: [EVENT_ADD.NO_MEDIA_BUTTON],
-          })
+          return sendMediaStepOrConfirmLinkImages(phoneNumberId, from, { eventAddPendingMediaStep: undefined })
         }
         return runProcessDraftAfterFlagInput(phoneNumberId, from, s, context)
       }
