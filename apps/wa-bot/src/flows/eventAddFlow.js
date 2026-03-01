@@ -1270,8 +1270,7 @@ async function sendAskForFlagField(phoneNumberId, from, state, fieldKey) {
   if (config.inputType === 'compound_category') {
     const subStep = state.eventAddCategoryFlagSubStep ?? 0
     if (subStep === 0) {
-      const groupListPayload = { ...buildCategoryGroupList(), body: config.ask }
-      return sendInteractiveList(phoneNumberId, from, groupListPayload)
+      return sendInteractiveList(phoneNumberId, from, buildCategoryGroupListPayload())
     }
     const groupId = state.eventAddMainCategoryGroupId
     if (!groupId || !VALID_GROUP_IDS.has(groupId)) return sendText(phoneNumberId, from, config.ask)
