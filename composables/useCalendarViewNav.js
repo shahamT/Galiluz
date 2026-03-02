@@ -7,10 +7,22 @@ import { UI_TEXT } from '~/consts/calendar.const'
  * @returns {Object} State refs, labels, and handlers for the nav template
  */
 export function useCalendarViewNav(props, emit) {
+  const uiStore = useUiStore()
   const isMonthYearPickerOpen = ref(false)
   const monthTriggerButtonRef = ref(null)
   const isFilterPopupOpen = ref(false)
   const filterTriggerRef = ref(null)
+
+  watch(
+    () => uiStore.requestFilterPopupOpen,
+    (requested) => {
+      if (requested) {
+        if (isMonthYearPickerOpen.value) closeMonthYearPicker()
+        isFilterPopupOpen.value = true
+        uiStore.requestFilterPopupOpen = false
+      }
+    }
+  )
 
   const viewMonthlyLabel = UI_TEXT.viewMonthly
   const viewDailyLabel = UI_TEXT.viewDaily

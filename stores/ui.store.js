@@ -7,7 +7,22 @@ export const useUiStore = defineStore('ui', () => {
   const router = useRouter()
 
   const isEventModalShowing = ref(false)
+  const isWelcomeModalShowing = ref(false)
+  /** True if welcome modal was shown at any point this session (onboarding flow). Used to avoid showing filter notify after first-time preference selection. */
+  const welcomeModalShownThisSession = ref(false)
   const selectedEventId = ref(null)
+  const requestFilterPopupOpen = ref(false)
+
+  function setWelcomeModalShowing(shown) {
+    isWelcomeModalShowing.value = shown
+    if (shown) {
+      welcomeModalShownThisSession.value = true
+    }
+  }
+
+  function requestOpenFilterPopup() {
+    requestFilterPopupOpen.value = true
+  }
 
   function openEventModal(eventId) {
     selectedEventId.value = eventId
@@ -52,9 +67,14 @@ export const useUiStore = defineStore('ui', () => {
 
   return {
     isEventModalShowing,
+    isWelcomeModalShowing,
+    welcomeModalShownThisSession,
     selectedEventId,
+    requestFilterPopupOpen,
     openEventModal,
     closeEventModal,
+    setWelcomeModalShowing,
     initializeModalFromUrl,
+    requestOpenFilterPopup,
   }
 })

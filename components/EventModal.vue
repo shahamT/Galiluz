@@ -17,8 +17,8 @@
           <p class="EventModal-notFound">{{ MODAL_TEXT.noEventSelected }}</p>
         </div>
         <template v-else>
-          <!-- Disclaimer Note (Above Header for all screens) -->
-          <div class="EventModal-disclaimer">
+          <!-- Disclaimer Note (Above Header for all screens). Hidden temporarily – may be re-enabled later. -->
+          <div v-if="SHOW_AI_DISCLAIMER" class="EventModal-disclaimer">
             <span class="EventModal-disclaimerText">{{ MODAL_TEXT.disclaimer }}</span>
           </div>
 
@@ -135,6 +135,9 @@ import { useEventModalShare } from '~/composables/useEventModalShare'
 import { useEventModalImagePopup } from '~/composables/useEventModalImagePopup'
 
 defineOptions({ name: 'EventModal' })
+
+/** Hidden temporarily – may be re-enabled when AI disclaimer is needed again. */
+const SHOW_AI_DISCLAIMER = false
 
 const uiStore = useUiStore()
 const { isEventModalShowing, selectedEventId } = storeToRefs(uiStore)

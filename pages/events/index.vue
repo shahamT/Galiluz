@@ -1,20 +1,17 @@
 <template>
-  <LayoutAppShell>
-    <div class="IndexRedirect">
-      <UiLoader size="md" />
-    </div>
-  </LayoutAppShell>
+  <div class="EventsIndexRedirect">
+    <UiLoader size="md" />
+  </div>
 </template>
 
 <script setup>
 import { ROUTE_EVENTS_DAILY_VIEW } from '~/consts/calendar.const'
 import { getTodayDateString } from '~/utils/date.helpers'
 
-defineOptions({ name: 'IndexRedirect' })
+defineOptions({ name: 'EventsIndexRedirect' })
 
 const route = useRoute()
 
-// lifecycle
 onMounted(() => {
   const query = route.query.event
     ? { event: route.query.event }
@@ -24,7 +21,7 @@ onMounted(() => {
 </script>
 
 <style lang="scss">
-.IndexRedirect {
+.EventsIndexRedirect {
   flex: 1;
   min-height: 0;
   width: 100%;
