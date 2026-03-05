@@ -1,53 +1,51 @@
 <template>
-  <LayoutAppShell>
-    <div v-if="isLoading && !events?.length" class="ContentViewLoader">
-      <UiLoader size="md" />
+  <div v-if="isLoading && !events?.length" class="ContentViewLoader">
+    <UiLoader size="md" />
+  </div>
+  <div v-else class="MonthlyView">
+    <div class="MonthlyView-header">
+      <ControlsCalendarViewHeader
+        view-mode="month"
+        :month-year="monthYearDisplay"
+        :current-date="currentDate"
+        :categories="categories"
+        :prev-disabled="isCurrentMonth"
+        prev-aria-label="Previous month"
+        next-aria-label="Next month"
+        @select-month-year="handleMonthYearSelect"
+        @year-change="handleYearChange"
+        @view-change="handleViewChange"
+        @prev="handlePrevMonth"
+        @next="handleNextMonth"
+      />
     </div>
-    <div v-else class="MonthlyView">
-      <div class="MonthlyView-header">
-        <ControlsCalendarViewHeader
-          view-mode="month"
-          :month-year="monthYearDisplay"
-          :current-date="currentDate"
-          :categories="categories"
-          :prev-disabled="isCurrentMonth"
-          prev-aria-label="Previous month"
-          next-aria-label="Next month"
-          @select-month-year="handleMonthYearSelect"
-          @year-change="handleYearChange"
-          @view-change="handleViewChange"
-          @prev="handlePrevMonth"
-          @next="handleNextMonth"
-        />
-      </div>
-      <div class="MonthlyView-calendar">
-        <CalendarViewContent
-          view-mode="month"
-          :prev-disabled="isCurrentMonth"
-          prev-aria-label="Previous month"
-          next-aria-label="Next month"
-          @prev="handlePrevMonth"
-          @next="handleNextMonth"
-        >
-          <template #month>
-            <div v-if="isError" class="MonthlyView-error">
-              <p>{{ UI_TEXT.error }}</p>
-            </div>
-            <MonthlyMonthCarousel
-              v-else
-              :visible-months="visibleMonths"
-              :current-date="currentDate"
-              :filtered-events="filteredEvents"
-              :today-month="todayMonth"
-              :slide-to-month-request="slideToMonthRequest"
-              :categories="categories"
-              @month-change="handleMonthChange"
-            />
-          </template>
-        </CalendarViewContent>
-      </div>
+    <div class="MonthlyView-calendar">
+      <CalendarViewContent
+        view-mode="month"
+        :prev-disabled="isCurrentMonth"
+        prev-aria-label="Previous month"
+        next-aria-label="Next month"
+        @prev="handlePrevMonth"
+        @next="handleNextMonth"
+      >
+        <template #month>
+          <div v-if="isError" class="MonthlyView-error">
+            <p>{{ UI_TEXT.error }}</p>
+          </div>
+          <MonthlyMonthCarousel
+            v-else
+            :visible-months="visibleMonths"
+            :current-date="currentDate"
+            :filtered-events="filteredEvents"
+            :today-month="todayMonth"
+            :slide-to-month-request="slideToMonthRequest"
+            :categories="categories"
+            @month-change="handleMonthChange"
+          />
+        </template>
+      </CalendarViewContent>
     </div>
-  </LayoutAppShell>
+  </div>
 </template>
 
 <script setup>
@@ -61,15 +59,43 @@ defineOptions({ name: 'MonthlyView' })
 // data
 const { events, isLoading, isError, categories } = useCalendarViewData()
 const calendarStore = useCalendarStore()
+const uiStore = useUiStore()
+const filterNotifyStore = useFilterNotifyStore()
+const { isEventModalShowing, isWelcomeModalShowing, welcomeModalShownThisSession } = storeToRefs(uiStore)
 const currentDate = computed(() => calendarStore.currentDate)
 const { getFilteredEventsForMonth } = useEventFilters(events)
 const { switchToDailyView } = useCalendarNavigation()
 const { runPageInit } = useCalendarPageInit({ syncMonth: true })
+const { hasAnyFilter, activeFilterCount } = useActiveFilterCount()
+const { filterSummary } = useFilterSummary(categories)
 const slideToMonthRequest = ref(null)
 
-// lifecycle
+function checkAndShowFilterNotify() {
+  filterNotifyStore.requestShow(
+    hasAnyFilter.value,
+    activeFilterCount.value,
+    isEventModalShowing.value,
+    isWelcomeModalShowing.value,
+    welcomeModalShownThisSession.value,
+    filterSummary.value
+  )
+}
+
 onMounted(() => {
   runPageInit()
+  nextTick(checkAndShowFilterNotify)
+})
+
+watch(isEventModalShowing, (isOpen, wasOpen) => {
+  if (wasOpen && !isOpen) {
+    nextTick(checkAndShowFilterNotify)
+  }
+})
+
+watch(isWelcomeModalShowing, (isOpen, wasOpen) => {
+  if (wasOpen && !isOpen) {
+    nextTick(checkAndShowFilterNotify)
+  }
 })
 
 // computed

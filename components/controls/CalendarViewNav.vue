@@ -407,10 +407,9 @@ const {
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: background-color 0.2s ease, color 0.2s ease;
-    white-space: nowrap;
 
     @include desktop {
-      min-width: 10.5rem;
+      max-width: 200px;
     }
 
     &:hover:not(.CalendarViewNav-filterButton--active) {

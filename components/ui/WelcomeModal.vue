@@ -129,6 +129,7 @@ const currentStep = ref(0)
 const localSelectedRegions = ref([])
 const localSelectedCategories = ref([])
 
+const uiStore = useUiStore()
 const { data: categoriesData } = useCategories()
 const calendarStore = useCalendarStore()
 const { timeFilterStart, timeFilterEnd, timeFilterPreset } = storeToRefs(calendarStore)
@@ -183,6 +184,7 @@ function onCategoriesUpdate(ids) {
 
 watch(isVisible, (visible) => {
   if (import.meta.server) return
+  uiStore.setWelcomeModalShowing(visible)
   document.body.style.overflow = visible ? 'hidden' : ''
 })
 

@@ -1,6 +1,11 @@
-// Route paths (single source of truth for calendar views)
-export const ROUTE_MONTHLY_VIEW = '/monthly-view'
-export const ROUTE_DAILY_VIEW = '/daily-view'
+// Route paths – events section (extensible for classes, portal, etc.)
+export const ROUTE_EVENTS = '/events'
+export const ROUTE_EVENTS_DAILY_VIEW = '/events/daily-view'
+export const ROUTE_EVENTS_MONTHLY_VIEW = '/events/monthly-view'
+
+// Aliases (used throughout codebase)
+export const ROUTE_DAILY_VIEW = ROUTE_EVENTS_DAILY_VIEW
+export const ROUTE_MONTHLY_VIEW = ROUTE_EVENTS_MONTHLY_VIEW
 
 // Calendar grid constants
 export const DAYS_PER_WEEK = 7
@@ -17,7 +22,7 @@ export const MORE_EVENTS_TEXT = (count) => `עוד ${count} אירועים...`
 export const MINUTES_PER_DAY = 24 * 60
 
 // Region filter keys (re-export from regions.const — single source of truth)
-export { REGION_KEYS } from '~/consts/regions.const'
+export { REGION_KEYS } from './regions.const'
 
 // localStorage key for persisting user filter preference (categories + time range)
 export const FILTER_PREFERENCE_STORAGE_KEY = 'galiluz-calendar-filters'
@@ -34,7 +39,7 @@ export const TIME_FILTER_PRESETS = [
   { id: 'all', label: 'כל שעה', startMinutes: 0, endMinutes: MINUTES_PER_DAY, icon: 'schedule' },
   { id: 'morning', label: 'בוקר', startMinutes: 6 * 60, endMinutes: 12 * 60, icon: 'partly_cloudy_day' },
   { id: 'noon', label: 'צהריים', startMinutes: 11 * 60, endMinutes: 14 * 60, icon: 'wb_sunny' },
-  { id: 'afternoon', label: 'אחר הצהריים', startMinutes: 12 * 60, endMinutes: 18 * 60, icon: 'wb_twilight' },
+  { id: 'afternoon', label: 'אחר הצהריים', startMinutes: 14 * 60, endMinutes: 18 * 60, icon: 'wb_twilight' },
   { id: 'evening', label: 'ערב', startMinutes: 17 * 60, endMinutes: 21 * 60, icon: 'nights_stay' },
   { id: 'night', label: 'לילה', startMinutes: 20 * 60, endMinutes: 24 * 60, icon: 'dark_mode' },
 ]
@@ -59,4 +64,7 @@ export const UI_TEXT = {
   resetFilter: 'ניקוי',
   filterDone: 'סיום',
   categoriesCountLabel: (count) => `${count} קטגוריות`,
+  activeFiltersNotifyMessage: 'שים/י לב, יש לך מסננים פעילים:',
+  activeFiltersReset: 'איפוס',
+  activeFiltersChange: 'שינוי מסננים',
 }
