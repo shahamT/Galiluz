@@ -17,6 +17,14 @@
       <div class="FilterNotifyBar-buttons">
         <button
           type="button"
+          class="FilterNotifyBar-closeButton"
+          :aria-label="closeAriaLabel"
+          @click="handleClose"
+        >
+          <UiIcon name="close" size="sm" />
+        </button>
+        <button
+          type="button"
           class="FilterNotifyBar-button FilterNotifyBar-button--reset"
           @click="handleReset"
         >
@@ -28,14 +36,6 @@
           @click="handleChangeFilters"
         >
           {{ changeLabel }}
-        </button>
-        <button
-          type="button"
-          class="FilterNotifyBar-closeButton"
-          :aria-label="closeAriaLabel"
-          @click="handleClose"
-        >
-          <UiIcon name="close" size="sm" />
         </button>
       </div>
     </aside>

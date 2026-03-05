@@ -38,11 +38,29 @@ export const WELCOME_REGION_OPTIONS = [
   { id: 'region6', label: 'כפתור 6' },
 ]
 
+// Main menu (slide-out) labels
+export const MAIN_MENU = {
+  events: 'לו"ז אירועים',
+  about: 'אודות',
+  publishEvents: 'מארגנים אירועים בצפון?',
+  contactUs: 'צרו קשר',
+}
+
+// Support contact (not bot) – for menu "צרו קשר" link
+export const SUPPORT_WHATSAPP_NUMBER = '972559896278'
+const MAIN_MENU_CONTACT_PREFILL = 'היי, אשמח לשאול שאלה בקשר לגלילו"ז'
+export const MAIN_MENU_CONTACT_LINK = `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(MAIN_MENU_CONTACT_PREFILL)}`
+
 // Contact: Galiluz bot WhatsApp – number, CTA text, prefill message, and deep link
 export const CONTACT_WHATSAPP_NUMBER = '972552835970'
-export const CONTACT_WHATSAPP_CTA = 'לבוט של גלילו"ז'
+export const CONTACT_WHATSAPP_CTA = 'גלילו"ז בוט'
+export const CONTACT_WHATSAPP_BOT_DISPLAY = '0552835970'
 const CONTACT_WHATSAPP_PREFILL = 'היי גלילו"ז בוט, מה קורה בצפון?'
 export const CONTACT_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(CONTACT_WHATSAPP_PREFILL)}`
+const PUBLISH_EVENT_PREFILL = 'היי, אני מעוניין/ת להוסיף אירוע לגלילו"ז'
+export const PUBLISH_EVENT_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(PUBLISH_EVENT_PREFILL)}`
+const BOT_START_PREFILL = 'היי'
+export const BOT_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(BOT_START_PREFILL)}`
 
 // Legacy (kept for any other references; header uses CONTACT_WHATSAPP_* above)
 export const CONTACT_WHATSAPP_DISPLAY = '055-989-6278'

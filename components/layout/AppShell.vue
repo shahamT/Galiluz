@@ -1,6 +1,7 @@
 <template>
   <div class="AppShell">
-    <LayoutAppHeader />
+    <LayoutAppHeader @menu-click="isMainMenuOpen = true" />
+    <UiMainMenu v-model="isMainMenuOpen" />
     <div class="AppShell-content">
       <slot />
     </div>
@@ -9,6 +10,8 @@
 
 <script setup>
 defineOptions({ name: 'AppShell' })
+
+const isMainMenuOpen = ref(false)
 </script>
 
 <style lang="scss">
@@ -40,7 +43,7 @@ defineOptions({ name: 'AppShell' })
     @include mobile {
       padding-inline: 0;
       padding-block: var(--spacing-md);
-      padding-bottom: calc(var(--spacing-md) - var(--spacing-sm));
+      padding-bottom: max(var(--spacing-2xl), env(safe-area-inset-bottom));
     }
   }
 }
