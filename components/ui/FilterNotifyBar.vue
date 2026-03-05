@@ -17,14 +17,6 @@
       <div class="FilterNotifyBar-buttons">
         <button
           type="button"
-          class="FilterNotifyBar-closeButton"
-          :aria-label="closeAriaLabel"
-          @click="handleClose"
-        >
-          <UiIcon name="close" size="sm" />
-        </button>
-        <button
-          type="button"
           class="FilterNotifyBar-button FilterNotifyBar-button--reset"
           @click="handleReset"
         >
@@ -36,6 +28,14 @@
           @click="handleChangeFilters"
         >
           {{ changeLabel }}
+        </button>
+        <button
+          type="button"
+          class="FilterNotifyBar-closeButton"
+          :aria-label="closeAriaLabel"
+          @click="handleClose"
+        >
+          <UiIcon name="close" size="sm" />
         </button>
       </div>
     </aside>
@@ -145,6 +145,9 @@ function handleClose() {
   font-weight: 600;
   color: var(--color-text);
 
+  @include mobile {
+    font-size: var(--font-size-lg);
+  }
 }
 
 .FilterNotifyBar-summary {
@@ -152,6 +155,10 @@ function handleClose() {
   font-size: var(--font-size-sm);
   font-weight: 400;
   color: var(--color-text-light);
+
+  @include mobile {
+    font-size: var(--font-size-base);
+  }
 }
 
 .FilterNotifyBar-buttons {
@@ -177,6 +184,11 @@ function handleClose() {
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
   border: 2px solid transparent;
+
+  @include mobile {
+    height: var(--section-header-height);
+    font-size: var(--font-size-md);
+  }
 
   &--reset {
     color: var(--brand-dark-green);
@@ -222,8 +234,8 @@ function handleClose() {
     position: absolute;
     top: var(--spacing-sm);
     inset-inline-end: var(--spacing-sm);
-    width: var(--icon-size-lg);
-    height: var(--icon-size-lg);
+    width: 2.25rem;
+    height: 2.25rem;
   }
 }
 
