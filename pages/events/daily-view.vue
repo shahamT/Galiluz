@@ -155,7 +155,26 @@ const seoTitle = computed(() => eventMeta.value?.title ? `גלילו"ז - ${even
 const seoDescription = computed(() => eventMeta.value?.shortDescription || eventMeta.value?.title || DAILY_DEFAULT_DESC)
 const seoImage = computed(() => eventMeta.value?.imageUrl || defaultOgImage)
 
-useHead({ title: seoTitle })
+useHead({
+  title: seoTitle,
+  link: [{ rel: 'canonical', href: `${requestUrl.origin}/events/daily-view` }],
+  script: computed(() => {
+    if (!eventMeta.value?.title) return []
+    return [{
+      type: 'application/ld+json',
+      children: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Event',
+        name: seoTitle.value,
+        startDate: dateParam.value,
+        description: seoDescription.value,
+        image: seoImage.value,
+        url: requestUrl.href,
+        organizer: { '@type': 'Organization', name: 'גלילו"ז', url: requestUrl.origin },
+      }),
+    }]
+  }),
+})
 useSeoMeta({
   title: seoTitle,
   description: seoDescription,

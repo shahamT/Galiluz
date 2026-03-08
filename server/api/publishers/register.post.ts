@@ -1,4 +1,4 @@
-import { getMongoConnection } from '~/server/utils/mongodb'
+import { getMongoConnection, getDbConfig } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
 
 interface RegisterBody {
@@ -28,15 +28,9 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const config = useRuntimeConfig()
-  const mongoUri = config.mongodbUri || process.env.MONGODB_URI
-  const mongoDbName = config.mongodbDbName || process.env.MONGODB_DB_NAME
-  const collectionName =
-    config.mongodbCollectionPublishers ||
-    process.env.MONGODB_COLLECTION_PUBLISHERS ||
-    'publishers'
+  const { uri, dbName, collections } = getDbConfig()
 
-  if (!mongoUri || !mongoDbName) {
+  if (!uri || !dbName) {
     console.error('[PublishersAPI] MongoDB not configured')
     throw createError({
       statusCode: 503,
@@ -46,7 +40,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const { db } = await getMongoConnection()
-    const collection = db.collection(collectionName)
+    const collection = db.collection(collections.publishers)
 
     await collection.createIndex({ waId: 1 }, { unique: true }).catch(() => {
       // Index may already exist

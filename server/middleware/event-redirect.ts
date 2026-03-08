@@ -18,7 +18,11 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event)
   const eventParam = query.event
-  if (!eventParam || typeof eventParam !== 'string') return
+  if (!eventParam || typeof eventParam !== 'string') {
+    // Bare / with no ?event= — redirect immediately to today's daily view
+    const todayStr = getTodayIsrael()
+    return sendRedirect(event, `${ROUTE_EVENTS_DAILY_VIEW}?date=${todayStr}`, 302)
+  }
 
   const docId = extractDocumentId(eventParam)
   if (!docId) return

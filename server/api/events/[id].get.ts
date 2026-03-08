@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb'
-import { getMongoConnection } from '~/server/utils/mongodb'
+import { getMongoConnection, getDbConfig } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
 import { transformEventForFrontend } from '~/server/utils/eventsTransform'
 
@@ -23,21 +23,14 @@ export default defineEventHandler(async (event) => {
   }
 
   const waId = getQuery(event).waId
-  const config = useRuntimeConfig()
-  const mongoUri = config.mongodbUri || process.env.MONGODB_URI
-  const mongoDbName = config.mongodbDbName || process.env.MONGODB_DB_NAME
-  const collectionName =
-    config.mongodbCollectionEventsWaBot ||
-    config.mongodbCollectionEvents ||
-    process.env.MONGODB_COLLECTION_EVENTS ||
-    'events'
+  const { uri, dbName, collections } = getDbConfig()
 
-  if (!mongoUri || !mongoDbName) {
+  if (!uri || !dbName) {
     throw createError({ statusCode: 503, statusMessage: 'Service Unavailable' })
   }
 
   const { db } = await getMongoConnection()
-  const collection = db.collection(collectionName)
+  const collection = db.collection(collections.eventsWaBot || collections.events)
   const doc = await collection.findOne({ _id: objectId })
   if (!doc) {
     throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'event not found' })

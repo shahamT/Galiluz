@@ -183,6 +183,10 @@ watch(
 )
 </script>
 
+<style>
+@import 'swiper/css';
+</style>
+
 <style lang="scss">
 @use '~/assets/css/breakpoints' as *;
 

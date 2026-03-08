@@ -41,9 +41,11 @@ export default defineNuxtConfig({
           type: 'image/svg+xml',
           href: '/logos/galiluz-icon.svg',
         },
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         {
           rel: 'stylesheet',
-          href: 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200',
+          href: 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap',
         },
       ],
     },
@@ -64,9 +66,6 @@ export default defineNuxtConfig({
     cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
     cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
     cloudinaryFolder: process.env.CLOUDINARY_FOLDER || 'wa-bot-events',
-    // Restored for build/SSR parity with pre-refactor (galiluz-web does not use OpenAI; wa-bot has its own).
-    openaiApiKey: process.env.OPENAI_API_KEY || '',
-    openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     // Public keys (exposed to client-side)
     public: {
       posthogPublicKey: process.env.NUXT_PUBLIC_POSTHOG_PUBLIC_KEY || '',
@@ -77,14 +76,33 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+    // Reject bodies larger than 25 MB at the HTTP layer (upload endpoint allows ~15 MB files as base64)
+    maxRequestBodySize: 25 * 1024 * 1024,
     routeRules: {
       '/direct': { cache: false },
+      // Static lookup data — no DB call, safe to cache long
+      '/api/categories': { cache: { maxAge: 3600 } },
+      // Event meta used by social crawlers / OG preview — short cache is fine
+      '/api/events/*/meta': { cache: { maxAge: 300 } },
       '/**': {
         headers: {
           'X-Frame-Options': 'DENY',
           'X-Content-Type-Options': 'nosniff',
           'Referrer-Policy': 'strict-origin-when-cross-origin',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+          'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+          'Content-Security-Policy': [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+            "font-src 'self' https://fonts.gstatic.com",
+            "img-src 'self' data: blob: https://res.cloudinary.com",
+            "media-src 'self' https://res.cloudinary.com",
+            "connect-src 'self' https://eu.i.posthog.com https://eu.posthog.com",
+            "frame-ancestors 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+          ].join('; '),
         },
       },
     },

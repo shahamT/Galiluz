@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb'
-import { getMongoConnection } from '~/server/utils/mongodb'
+import { getMongoConnection, getDbConfig } from '~/server/utils/mongodb'
 import { getDateInIsraelFromIso } from '~/utils/israelDate'
 
 const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/
@@ -62,18 +62,14 @@ export async function getFirstFutureOccurrence(
     return null
   }
 
-  const config = useRuntimeConfig()
-  const mongoUri = config.mongodbUri || process.env.MONGODB_URI
-  const mongoDbName = config.mongodbDbName || process.env.MONGODB_DB_NAME
-  const collectionName =
-    config.mongodbCollectionEvents || process.env.MONGODB_COLLECTION_EVENTS || 'events'
+  const { uri, dbName, collections } = getDbConfig()
 
-  if (!mongoUri || !mongoDbName) {
+  if (!uri || !dbName) {
     return null
   }
 
   const { db } = await getMongoConnection()
-  const collection = db.collection(collectionName)
+  const collection = db.collection(collections.events)
   const doc = await collection.findOne({ _id: objectId })
   if (!doc || doc.isActive === false) {
     return null

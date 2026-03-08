@@ -71,8 +71,10 @@
 <script setup>
 defineOptions({ name: 'AboutPage' })
 
+const { origin } = useRequestURL()
 useHead({
   title: 'אודות | גלילו"ז',
+  link: [{ rel: 'canonical', href: `${origin}/about` }],
 })
 </script>
 

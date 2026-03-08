@@ -1,5 +1,4 @@
-import { getMongoConnection } from '~/server/utils/mongodb'
-import { checkRateLimit } from '~/server/utils/rateLimit'
+import { getMongoConnection, getDbConfig } from '~/server/utils/mongodb'
 import { transformEventForFrontend } from '~/server/utils/eventsTransform'
 import {
   parseDatesParam,
@@ -18,14 +17,9 @@ function getCutoffDate(): Date {
 }
 
 export default defineEventHandler(async (event) => {
-  await checkRateLimit(event)
-  const config = useRuntimeConfig()
-  const mongoUri = config.mongodbUri || process.env.MONGODB_URI
-  const mongoDbName = config.mongodbDbName || process.env.MONGODB_DB_NAME
-  const collectionName =
-    config.mongodbCollectionEvents || process.env.MONGODB_COLLECTION_EVENTS || 'events'
+  const { uri, dbName, collections } = getDbConfig()
 
-  if (!mongoUri || !mongoDbName) {
+  if (!uri || !dbName) {
     console.error('[EventsAPI] MongoDB not configured')
     return []
   }
@@ -36,11 +30,14 @@ export default defineEventHandler(async (event) => {
 
   try {
     const { db } = await getMongoConnection()
-    const collection = db.collection(collectionName)
+    const collection = db.collection(collections.events)
     const cutoff = getCutoffDate()
     const query = buildEventsQuery(cutoff, dateStrings, categoriesArray)
 
-    const documents = await collection.find(query).limit(EVENTS_QUERY_LIMIT).toArray()
+    const documents = await collection
+      .find(query, { projection: { rawEvent: 0 } })
+      .limit(EVENTS_QUERY_LIMIT)
+      .toArray()
 
     const transformedEvents = documents
       .map((doc) => {

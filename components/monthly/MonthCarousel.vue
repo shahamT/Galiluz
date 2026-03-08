@@ -162,6 +162,10 @@ watch(
 )
 </script>
 
+<style>
+@import 'swiper/css';
+</style>
+
 <style lang="scss">
 .MonthCarousel {
   width: 100%;

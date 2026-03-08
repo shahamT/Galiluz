@@ -7,6 +7,9 @@ interface UploadBody {
   filename: string
 }
 
+/** Max base64 string length (~15 MB file after decoding). */
+const MAX_BASE64_LENGTH = 20 * 1024 * 1024
+
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
   const body = await readBody<UploadBody>(event)
@@ -20,6 +23,14 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       statusMessage: 'Bad Request',
       message: 'file (base64) is required',
+    })
+  }
+
+  if (base64.length > MAX_BASE64_LENGTH) {
+    throw createError({
+      statusCode: 413,
+      statusMessage: 'Payload Too Large',
+      message: 'File exceeds maximum allowed size of ~15 MB',
     })
   }
 

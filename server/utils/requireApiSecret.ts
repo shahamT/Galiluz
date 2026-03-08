@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import { timingSafeEqual } from 'node:crypto'
 
 /**
- * Requires the request to provide the API secret via X-API-Key header (preferred) or apiKey query param.
+ * Requires the request to provide the API secret via X-API-Key header.
  * In production (NODE_ENV=production), if API_SECRET is not set, returns 503 so the route cannot be used without configuration.
  * Uses timing-safe comparison to avoid leaking the secret length.
  */
@@ -23,8 +23,7 @@ export function requireApiSecret(event: H3Event): void {
   }
 
   const headerKey = getHeader(event, 'x-api-key')
-  const queryKey = getQuery(event).apiKey
-  const provided = (typeof headerKey === 'string' ? headerKey : null) ?? (typeof queryKey === 'string' ? queryKey : null)
+  const provided = typeof headerKey === 'string' ? headerKey : null
 
   if (!provided) {
     throw createError({

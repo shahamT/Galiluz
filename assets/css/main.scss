@@ -1,17 +1,13 @@
 @use './variables.scss' as *;
 @use './setup.scss' as *;
 @use './typography.scss' as *;
-
-// Swiper carousel styles
-@use 'swiper/css';
-@use 'swiper/css/navigation';
-@use 'swiper/css/pagination';
+@use './breakpoints' as bp;
 
 // Bundle floating-vue styles (avoids 404 when loaded via floating-vue/nuxt in some setups)
 @use 'floating-vue/dist/style.css';
 
 // Hide floating-vue tooltips on mobile (desktop only)
-@media (max-width: var(--breakpoint-mobile)) {
+@include bp.mobile {
   .v-popper__popper {
     display: none !important;
   }

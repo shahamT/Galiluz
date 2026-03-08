@@ -1,4 +1,3 @@
-import { checkRateLimit } from '~/server/utils/rateLimit'
 import {
   extractDocumentId,
   getFirstFutureOccurrence,
@@ -6,11 +5,10 @@ import {
 
 /**
  * GET /api/events/[id]/first-occurrence
- * Public, rate-limited. Returns the first occurrence date (today or future) for redirect logic.
+ * Returns the first occurrence date (today or future) for redirect logic.
  * Supports both document id (abc123) and flat occurrence id (abc123-0).
  */
 export default defineEventHandler(async (event) => {
-  await checkRateLimit(event)
   const idParam = getRouterParam(event, 'id')
   if (!idParam) {
     throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'id required' })

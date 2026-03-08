@@ -1,4 +1,5 @@
 import { getIsraelDayUtcRange } from '~/server/utils/israelDateRange'
+import { getCategoriesList } from '~/server/consts/events.const'
 
 const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/
 
@@ -13,10 +14,11 @@ export function parseDatesParam(value: string | undefined): string[] {
 
 export function parseCategoriesParam(value: string | undefined): string[] {
   if (!value || typeof value !== 'string') return []
+  const validIds = new Set(getCategoriesList().map((c) => c.id))
   const list = value
     .split(',')
     .map((s) => s.trim())
-    .filter(Boolean)
+    .filter((s) => s && validIds.has(s))
   return [...new Set(list)]
 }
 

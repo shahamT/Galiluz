@@ -1,6 +1,5 @@
 import { ObjectId } from 'mongodb'
-import { getMongoConnection } from '~/server/utils/mongodb'
-import { checkRateLimit } from '~/server/utils/rateLimit'
+import { getMongoConnection, getDbConfig } from '~/server/utils/mongodb'
 
 /**
  * Extracts the document ID from event param (supports both "docId" and "docId-0" flat format).
@@ -13,20 +12,36 @@ function extractDocumentId(param: string): string | null {
   return parts[0] || trimmed
 }
 
+const OG_TRANSFORM = 'c_fill,g_auto,w_1200,h_630'
+
 /**
- * For Cloudinary video URLs, returns a thumbnail image URL. Otherwise returns the original URL.
+ * Returns a Cloudinary URL optimized for OG/social share (1200×630).
+ * - Image URLs: injects crop transformation.
+ * - Video URLs: extracts first-frame thumbnail + crop.
+ * - Non-Cloudinary URLs: returned as-is.
  */
 function getImageUrlForMeta(url: string | null | undefined): string | null {
   if (!url || typeof url !== 'string') return null
-  if (!/\/video\/upload\//i.test(url)) return url
   try {
-    const uploadMatch = url.match(/^(.+\/video\/upload\/)(.+)$/i)
-    if (!uploadMatch) return url
-    const [, prefix, rest] = uploadMatch
-    const [pathPart, ...queryParts] = rest.split('?')
+    const [pathPart, ...queryParts] = url.split('?')
     const query = queryParts.length ? '?' + queryParts.join('?') : ''
-    const pathWithJpg = pathPart.replace(/\.[^.\/]+$/i, '.jpg')
-    return `${prefix}so_0/${pathWithJpg}${query}`
+
+    // Cloudinary image: inject OG crop transformation
+    const imgMatch = pathPart.match(/^(.+\/image\/upload\/)(.+)$/i)
+    if (imgMatch) {
+      const [, prefix, rest] = imgMatch
+      return `${prefix}${OG_TRANSFORM}/${rest}${query}`
+    }
+
+    // Cloudinary video: first-frame thumbnail + OG crop
+    const vidMatch = pathPart.match(/^(.+\/video\/upload\/)(.+)$/i)
+    if (vidMatch) {
+      const [, prefix, rest] = vidMatch
+      const restWithJpg = rest.replace(/\.[^.\/]+$/i, '.jpg')
+      return `${prefix}so_0,${OG_TRANSFORM}/${restWithJpg}${query}`
+    }
+
+    return url
   } catch {
     return url
   }
@@ -58,7 +73,6 @@ function getFirstMediaUrl(media: unknown[]): string | null {
  * Supports both document id (abc123) and flat occurrence id (abc123-0).
  */
 export default defineEventHandler(async (event) => {
-  await checkRateLimit(event)
   const idParam = getRouterParam(event, 'id')
   if (!idParam) {
     throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'id required' })
@@ -76,19 +90,15 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'event not found' })
   }
 
-  const config = useRuntimeConfig()
-  const mongoUri = config.mongodbUri || process.env.MONGODB_URI
-  const mongoDbName = config.mongodbDbName || process.env.MONGODB_DB_NAME
-  const collectionName =
-    config.mongodbCollectionEvents || process.env.MONGODB_COLLECTION_EVENTS || 'events'
+  const { uri, dbName, collections } = getDbConfig()
 
-  if (!mongoUri || !mongoDbName) {
+  if (!uri || !dbName) {
     throw createError({ statusCode: 503, statusMessage: 'Service Unavailable' })
   }
 
   const { db } = await getMongoConnection()
-  const collection = db.collection(collectionName)
-  const doc = await collection.findOne({ _id: objectId })
+  const collection = db.collection(collections.events)
+  const doc = await collection.findOne({ _id: objectId }, { projection: { rawEvent: 0 } })
   if (!doc) {
     throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'event not found' })
   }

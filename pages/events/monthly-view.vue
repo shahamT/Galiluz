@@ -119,7 +119,27 @@ const seoImage = computed(() =>
   eventMeta.value?.imageUrl || defaultOgImage
 )
 
-useHead({ title: seoTitle })
+useHead({
+  title: seoTitle,
+  link: [{ rel: 'canonical', href: `${requestUrl.origin}/events/monthly-view` }],
+  script: computed(() => {
+    if (!eventMeta.value?.title) return []
+    const month = String(currentMonth.value).padStart(2, '0')
+    return [{
+      type: 'application/ld+json',
+      children: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Event',
+        name: seoTitle.value,
+        startDate: `${currentYear.value}-${month}-01`,
+        description: seoDescription.value,
+        image: seoImage.value,
+        url: requestUrl.href,
+        organizer: { '@type': 'Organization', name: 'גלילו"ז', url: requestUrl.origin },
+      }),
+    }]
+  }),
+})
 useSeoMeta({
   title: seoTitle,
   description: seoDescription,

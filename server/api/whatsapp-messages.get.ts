@@ -1,19 +1,17 @@
-import { getMongoConnection } from '~/server/utils/mongodb'
+import { getMongoConnection, getDbConfig } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
-import { checkRateLimit } from '~/server/utils/rateLimit'
 import { MESSAGES_DEFAULT, MESSAGES_MAX } from '~/server/consts/index'
 
 export default defineEventHandler(async (event) => {
-  await checkRateLimit(event)
   requireApiSecret(event)
   const query = getQuery(event)
   const parsed = parseInt(query.limit as string, 10)
   const limit = Number.isNaN(parsed) ? MESSAGES_DEFAULT : Math.min(parsed, MESSAGES_MAX)
 
   try {
-    const config = useRuntimeConfig()
+    const { collections } = getDbConfig()
     const { db } = await getMongoConnection()
-    const collection = db.collection(config.mongodbCollectionRawMessages || process.env.MONGODB_COLLECTION_RAW_MESSAGES || 'raw_messages')
+    const collection = db.collection(collections.rawMessages)
 
     // Query messages, sorted by createdAt descending (newest first)
     const cursor = collection.find({}).sort({ createdAt: -1 }).limit(limit)

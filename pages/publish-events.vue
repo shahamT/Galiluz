@@ -77,8 +77,10 @@ defineOptions({ name: 'PublishEventsPage' })
 
 const supportNumber = '972559896278'
 
+const { origin } = useRequestURL()
 useHead({
   title: 'איך לפרסם אירועים בגלילו"ז?',
+  link: [{ rel: 'canonical', href: `${origin}/publish-events` }],
 })
 </script>
 

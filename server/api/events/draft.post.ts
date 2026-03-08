@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { getMongoConnection } from '~/server/utils/mongodb'
+import { getMongoConnection, getDbConfig } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
 import { logEventCreation } from '~/server/utils/eventLogs.service'
 
@@ -38,20 +38,9 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const config = useRuntimeConfig()
-  const mongoUri = config.mongodbUri || process.env.MONGODB_URI
-  const mongoDbName = config.mongodbDbName || process.env.MONGODB_DB_NAME
-  const eventsCollectionName =
-    config.mongodbCollectionEventsWaBot ||
-    config.mongodbCollectionEvents ||
-    process.env.MONGODB_COLLECTION_EVENTS ||
-    'events'
-  const publishersCollectionName =
-    config.mongodbCollectionPublishers ||
-    process.env.MONGODB_COLLECTION_PUBLISHERS ||
-    'publishers'
+  const { uri, dbName, collections } = getDbConfig()
 
-  if (!mongoUri || !mongoDbName) {
+  if (!uri || !dbName) {
     throw createError({
       statusCode: 503,
       statusMessage: 'Service Unavailable',
@@ -65,7 +54,7 @@ export default defineEventHandler(async (event) => {
   if (waId) {
     try {
       const { db } = await getMongoConnection()
-      const publishersCol = db.collection(publishersCollectionName)
+      const publishersCol = db.collection(collections.publishers)
       const pubDoc = await publishersCol.findOne({ waId })
       if (pubDoc && pubDoc._id) {
         publisherId = pubDoc._id.toString()
@@ -97,7 +86,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const { db } = await getMongoConnection()
-    const collection = db.collection(eventsCollectionName)
+    const collection = db.collection(collections.eventsWaBot || collections.events)
     const doc = {
       createdAt: new Date(),
       isActive: false,

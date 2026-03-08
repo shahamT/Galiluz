@@ -1,14 +1,12 @@
-import { getMongoConnection } from '~/server/utils/mongodb'
+import { getMongoConnection, getDbConfig } from '~/server/utils/mongodb'
 import { escapeRegex } from '~/server/utils/regexEscape'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
-import { checkRateLimit } from '~/server/utils/rateLimit'
 
 /**
  * Media endpoint - redirects to Cloudinary URL
  * Looks up message by filename pattern in MongoDB and redirects to Cloudinary URL
  */
 export default defineEventHandler(async (event) => {
-  await checkRateLimit(event)
   requireApiSecret(event)
   const filename = getRouterParam(event, 'filename')
 
@@ -28,9 +26,9 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const config = useRuntimeConfig()
+    const { collections } = getDbConfig()
     const { db } = await getMongoConnection()
-    const collection = db.collection(config.mongodbCollectionRawMessages || process.env.MONGODB_COLLECTION_RAW_MESSAGES || 'raw_messages')
+    const collection = db.collection(collections.rawMessages)
 
     // Find document where cloudinaryUrl contains the filename (escape to prevent $regex injection)
     // Filename format: messageId_timestamp.extension

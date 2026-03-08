@@ -15,7 +15,7 @@ services:
     branch: main
     plan: starter
     region: frankfurt
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: node .output/server/index.mjs
     healthCheckPath: /api/health
     envVars:
@@ -33,7 +33,7 @@ services:
     plan: starter
     region: frankfurt
     rootDir: apps/wa-listener
-    buildCommand: npm install
+    buildCommand: npm ci
     startCommand: npm start
     disk:
       name: wa-data
@@ -55,7 +55,7 @@ services:
     plan: starter
     region: frankfurt
     rootDir: apps/wa-bot
-    buildCommand: npm install && (cd ../../packages/event-format && npm install)
+    buildCommand: npm ci && (cd ../../packages/event-format && npm ci)
     startCommand: npm start
     healthCheckPath: /health
     envVars:

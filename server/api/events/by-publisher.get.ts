@@ -1,4 +1,4 @@
-import { getMongoConnection } from '~/server/utils/mongodb'
+import { getMongoConnection, getDbConfig } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
 import { getIsraelDayUtcRange } from '~/server/utils/israelDateRange'
 import { getDateInIsraelFromIso } from '~/utils/israelDate'
@@ -40,16 +40,9 @@ export default defineEventHandler(async (event) => {
   const todayStart = todayRange.startUTC
   const todayStartISO = todayStart.toISOString()
 
-  const config = useRuntimeConfig()
-  const mongoUri = config.mongodbUri || process.env.MONGODB_URI
-  const mongoDbName = config.mongodbDbName || process.env.MONGODB_DB_NAME
-  const collectionName =
-    config.mongodbCollectionEventsWaBot ||
-    config.mongodbCollectionEvents ||
-    process.env.MONGODB_COLLECTION_EVENTS ||
-    'events'
+  const { uri, dbName, collections } = getDbConfig()
 
-  if (!mongoUri || !mongoDbName) {
+  if (!uri || !dbName) {
     throw createError({
       statusCode: 503,
       statusMessage: 'Service Unavailable',
@@ -68,7 +61,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const { db } = await getMongoConnection()
-    const collection = db.collection(collectionName)
+    const collection = db.collection(collections.eventsWaBot || collections.events)
     const documents = await collection.find(query).limit(BY_PUBLISHER_LIMIT).toArray()
 
     const events = documents.map((doc) => {
