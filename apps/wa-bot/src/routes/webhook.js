@@ -37,6 +37,7 @@ import {
   registerPublisher,
   approvePublisher,
   rejectPublisher,
+  createGhostPublisher,
 } from '../services/publishers.service.js'
 import { CATEGORY_GROUPS, CATEGORY_ALL_ID } from '../consts/categories.const.js'
 import { CITIES_LIST } from '../consts/cities.const.js'
@@ -526,7 +527,10 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     }
     if (id === 'event_add_new') {
       if (state.step === conversationState.STEPS.EVENT_ADD_SUCCESS) conversationState.clear(from)
-      if (state.managerTargetPhone) return sendEventAddMethodChoice(phoneNumberId, from)
+      if (state.managerTargetPhone) {
+        await createGhostPublisher(state.managerTargetPhone)
+        return sendEventAddMethodChoice(phoneNumberId, from)
+      }
       const { status } = await checkPublisher(from)
       if (status === 'approved') return sendEventAddMethodChoice(phoneNumberId, from)
       return handlePublishButton(phoneNumberId, from, profileName)
@@ -576,7 +580,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       }
       if (listReplyId.startsWith('ev_up_')) {
         const eventId = listReplyId.slice(6)
-        const loaded = await getEventById(eventId, from)
+        const loaded = await getEventById(eventId, state.managerTargetPhone || from)
         if (!loaded) {
           conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
           return sendInteractiveButtons(phoneNumberId, from, PUBLISHER.HOW_TO_CONTINUE)

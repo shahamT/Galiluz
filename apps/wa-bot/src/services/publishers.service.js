@@ -58,6 +58,23 @@ export async function registerPublisher(payload) {
 }
 
 /**
+ * Create a ghost publisher record for a phone that has never self-registered.
+ * Idempotent — safe to call even if a record already exists (existing records are not modified).
+ * @param {string} waId - WhatsApp user id (target phone)
+ */
+export async function createGhostPublisher(waId) {
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
+  const url = `${baseUrl}/api/publishers/ghost`
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
+  if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
+  try {
+    await fetch(url, { method: 'POST', headers, body: JSON.stringify({ waId }) })
+  } catch (err) {
+    logger.error(LOG_PREFIXES.CLOUD_API, 'createGhostPublisher error', err)
+  }
+}
+
+/**
  * Approve a publisher (set status to approved).
  * @param {string} waId - WhatsApp user id
  * @returns {Promise<{ success: boolean }>}

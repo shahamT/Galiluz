@@ -3,7 +3,7 @@ import { requireApiSecret } from '~/server/utils/requireApiSecret'
 
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
-  const body = await readBody<{ waId: string; reason?: string }>(event)
+  const body = await readBody<{ waId: string }>(event)
   const waId = typeof body?.waId === 'string' ? body.waId.trim() : ''
 
   if (!waId) {
@@ -32,23 +32,15 @@ export default defineEventHandler(async (event) => {
   try {
     const { db } = await getMongoConnection()
     const collection = db.collection(collectionName)
-    const doc = await collection.findOne({ waId })
-    if (!doc) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Not Found',
-        message: 'Publisher not found',
-      })
-    }
-    if (doc.createdOnBehalf) {
-      await collection.updateOne({ waId }, { $set: { status: 'ghost', updatedAt: new Date() } })
-    } else {
-      await collection.deleteOne({ waId })
-    }
+    // Idempotent: $setOnInsert only runs on INSERT, so existing records (any status) are never touched.
+    await collection.updateOne(
+      { waId },
+      { $setOnInsert: { waId, phone: waId, status: 'ghost', createdOnBehalf: true, createdAt: new Date() } },
+      { upsert: true },
+    )
     return { success: true }
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'statusCode' in err) throw err
-    console.error('[PublishersAPI] Reject error:', err instanceof Error ? err.message : String(err))
+    console.error('[PublishersAPI] Ghost error:', err instanceof Error ? err.message : String(err))
     throw createError({
       statusCode: 500,
       statusMessage: 'Internal Server Error',
