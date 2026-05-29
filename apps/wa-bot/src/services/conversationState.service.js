@@ -95,6 +95,7 @@ const STEPS = {
   EVENT_ADD_SUCCESS: 'event_add_success',
   EVENT_ADD_EDIT_FREE_LANG_CONFIRM: 'event_add_edit_freelang_confirm',
   MANAGER_ASK_TARGET_PHONE: 'manager_ask_target_phone',
+  APPROVER_WAITING_DELETE_REASON: 'approver_waiting_delete_reason',
 }
 
 function get(waId) {

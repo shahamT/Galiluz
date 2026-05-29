@@ -46,6 +46,7 @@ import {
   forwardToDev,
 } from '../utils/whatsappWebhookRouter.js'
 import { verifyWebhookSignature } from '../utils/webhookSignature.js'
+import { approverEventNotifications } from '../utils/approverEventNotifications.js'
 import { classifyMainMenuIntent } from '../services/mainMenuIntent.service.js'
 
 /** In-memory: approver waId -> (publisher waId -> fullName) for confirmation messages */
@@ -410,6 +411,30 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       )
       return
     }
+    if (id.startsWith('approver_delete_event_')) {
+      const eventId = id.slice('approver_delete_event_'.length)
+      const info = approverEventNotifications.get(eventId)
+      conversationState.set(from, {
+        step: conversationState.STEPS.APPROVER_WAITING_DELETE_REASON,
+        approverDeleteEventId: eventId,
+        approverDeletePublisherPhone: info?.publisherPhone || null,
+        approverDeleteEventTitle: info?.eventTitle || '',
+      })
+      return sendInteractiveButtons(phoneNumberId, from, APPROVER.DELETE_EVENT_ASK)
+    }
+    if (id === 'approver_delete_no_reason') {
+      const eventId = state.approverDeleteEventId
+      if (eventId) {
+        await deleteEvent(eventId)
+        approverEventNotifications.remove(eventId)
+      }
+      conversationState.clear(from)
+      return sendText(phoneNumberId, from, APPROVER.DELETE_EVENT_SUCCESS)
+    }
+    if (id === 'approver_delete_cancel') {
+      conversationState.clear(from)
+      return sendText(phoneNumberId, from, APPROVER.DELETE_EVENT_CANCELLED)
+    }
   }
 
   if (msg.type === 'text' && msg.text?.body && state.step === conversationState.STEPS.APPROVER_WAITING_REASON) {
@@ -433,6 +458,28 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       )
       return
     }
+  }
+
+  if (msg.type === 'text' && msg.text?.body && state.step === conversationState.STEPS.APPROVER_WAITING_DELETE_REASON) {
+    const eventId = state.approverDeleteEventId
+    const publisherPhone = state.approverDeletePublisherPhone
+    const eventTitle = state.approverDeleteEventTitle || 'אירוע'
+    const reason = String(msg.text.body).trim()
+    if (eventId) {
+      await deleteEvent(eventId)
+      approverEventNotifications.remove(eventId)
+      if (publisherPhone) {
+        const body =
+          APPROVER.PUBLISHER_EVENT_DELETED_BODY.replace('{title}', eventTitle) +
+          APPROVER.PUBLISHER_EVENT_DELETED_REASON.replace('{reason}', reason)
+        await sendInteractiveButtons(phoneNumberId, publisherPhone, {
+          body,
+          buttons: [{ id: 'contact', title: 'יצירת קשר' }],
+        })
+      }
+    }
+    conversationState.clear(from)
+    return sendText(phoneNumberId, from, APPROVER.DELETE_EVENT_SUCCESS)
   }
 
   conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })

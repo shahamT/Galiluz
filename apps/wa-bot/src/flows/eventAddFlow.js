@@ -26,6 +26,7 @@ import {
   WELCOME,
   MAIN_MENU,
   LOG_PREFIXES,
+  APPROVER,
 } from '../consts/index.js'
 import { getFlagFieldOrder, FLAG_FIELD_CONFIGS } from '../consts/eventAddFields.config.js'
 import { CITIES_LIST } from '../consts/cities.const.js'
@@ -55,6 +56,8 @@ import {
   extractImageUrlsFromHtml,
 } from '../utils/urlToText.service.js'
 import { logger } from '../utils/logger.js'
+import { formatDateDotted, formatEventTime, formatLocation } from '../utils/eventsMessageFormat.js'
+import { approverEventNotifications } from '../utils/approverEventNotifications.js'
 
 const VALID_CATEGORY_IDS = new Set(Object.keys(EVENT_CATEGORIES))
 const VALID_GROUP_IDS = new Set(CATEGORY_GROUPS.map((g) => g.id))
@@ -1802,6 +1805,34 @@ export function sendInitialMessage(phoneNumberId, from) {
   })
 }
 
+function buildApproverEventNotificationBody(formattedPreview, eventId, eventLink) {
+  const preview = formattedPreview && typeof formattedPreview === 'object' ? formattedPreview : {}
+  const title = typeof preview.Title === 'string' ? preview.Title : '-'
+  const shortDesc = typeof preview.shortDescription === 'string'
+    ? (preview.shortDescription.length > 200 ? preview.shortDescription.slice(0, 197) + '...' : preview.shortDescription)
+    : '-'
+  const occurrences = Array.isArray(preview.occurrences) ? preview.occurrences : []
+  const firstOcc = occurrences[0]
+  const dateStr = firstOcc?.date ? formatDateDotted(firstOcc.date) : '-'
+  const timeStr = firstOcc ? formatEventTime(firstOcc) : '-'
+  const dateTimeStr = firstOcc ? `${dateStr} ${timeStr}`.trim() : '-'
+  const location = formatLocation(preview)
+  const priceNum = typeof preview.price === 'number' ? preview.price : NaN
+  const priceStr = Number.isNaN(priceNum) ? 'לא ידוע' : priceNum === 0 ? 'חינם' : `${priceNum} ₪`
+
+  return [
+    APPROVER.EVENT_NOTIFICATION_HEADING,
+    `*שם:* ${title}`,
+    `*תיאור קצר:* ${shortDesc}`,
+    `*תאריך:* ${dateTimeStr}`,
+    `*מיקום:* ${location}`,
+    `*מחיר:* ${priceStr}`,
+    '',
+    eventLink,
+    `מזהה: ${eventId}`,
+  ].join('\n')
+}
+
 /**
  * Submit event: activate existing draft (when we have eventAddDraftId) or fallback to create API. Clear state, send success and welcome.
  * @param {{ keepStateForMaxMedia?: boolean, formattedEvent?: object }} [opts] - keepStateForMaxMedia: do not clear; formattedEvent: used only when no draftId (fallback create path)
@@ -1842,6 +1873,19 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
         step: STEPS.EVENT_ADD_SUCCESS,
         eventAddSuccessLink: eventLink,
       })
+    }
+    const approverWaId = config.publishersApproverWaNumber
+      ? normalizePhone(config.publishersApproverWaNumber)
+      : ''
+    if (approverWaId && result.id) {
+      const publisherPhone = context?.managerTargetPhone || from
+      const eventTitle = state.eventAddFormattedPreview?.Title || ''
+      approverEventNotifications.store(result.id, { publisherPhone, eventTitle })
+      const notifBody = buildApproverEventNotificationBody(state.eventAddFormattedPreview, result.id, eventLink)
+      sendInteractiveButtons(phoneNumberId, approverWaId, {
+        body: notifBody,
+        buttons: [{ id: `approver_delete_event_${result.id}`, title: APPROVER.DELETE_EVENT_BUTTON.title }],
+      }).catch((err) => logger.error(LOG_PREFIXES.EVENT_ADD, 'Approver event notification failed', err))
     }
     return sendInteractiveButtons(phoneNumberId, from, {
       body: successBody,

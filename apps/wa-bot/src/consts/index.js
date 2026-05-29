@@ -160,6 +160,19 @@ export const APPROVER = {
   },
   CONFIRM_APPROVED: '*{fullName}* אושר כמפרסם בהצלחה ✅',
   CONFIRM_REJECTED: '*{fullName}* לא אושר/ה כמפרסם/ת ❌.',
+  EVENT_NOTIFICATION_HEADING: '*אירוע חדש נוסף למערכת*',
+  DELETE_EVENT_BUTTON: { id: 'approver_delete_event', title: 'מחיקת אירוע 🗑️' },
+  DELETE_EVENT_ASK: {
+    body: 'שלח הסבר למפרסם? אם כן שלח את ההסבר בהודעה',
+    buttons: [
+      { id: 'approver_delete_no_reason', title: 'מחיקה ללא הסבר' },
+      { id: 'approver_delete_cancel', title: 'ביטול' },
+    ],
+  },
+  DELETE_EVENT_SUCCESS: 'האירוע נמחק בהצלחה ✅',
+  DELETE_EVENT_CANCELLED: 'הפעולה בוטלה.',
+  PUBLISHER_EVENT_DELETED_BODY: 'האירוע הבא נמחק על ידי מנהל\n*{title}*',
+  PUBLISHER_EVENT_DELETED_REASON: '\nהודעה מהמנהל:\n{reason}',
 }
 
 // --- PUBLISHER ---
