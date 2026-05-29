@@ -82,7 +82,7 @@ ${currentEventSummary}
 Allowed field keys for edits (use exactly these when proposing edits):${categoryIdsText}
 - title (string) — event title
 - shortDescription (string) — short summary
-- fullDescription (string) — full description. Output as HTML only. Use only these tags: <p>, <br>, <strong>, <em>, <s>, <ul>, <ol>, <li>, <blockquote>, <code>. Use <strong> for bold, <em> for italic, <ul><li> for bullet lists. Do not use * or _ in the output; use only these HTML tags. newValueStr is the raw HTML string (JSON-escaped when in JSON).
+- fullDescription (string) — full description. Output as HTML only. Use only these tags: <p>, <br>, <strong>, <em>, <s>, <ul>, <ol>, <li>, <blockquote>, <code>. Use <strong> for bold, <em> for italic, <ul><li> for bullet lists. Do not use * or _ in the output; use only these HTML tags. newValueStr is the raw HTML string (JSON-escaped when in JSON). When editing fullDescription, start from the current "fullDescription (current HTML)" in CURRENT EVENT above and apply the user's requested change to it (add a line, insert text, remove a phrase, etc.). Output the complete updated HTML — do not return only the changed fragment. Only replace the entire description if the user explicitly says to replace or rewrite it entirely.
 - mainCategory (string) — main category id
 - categories (array of strings) — category ids
 - location (object) — full location: { city, locationName?, addressLine1?, addressLine2?, locationDetails?, wazeNavLink?, gmapsNavLink?, region?, cityType? }. city = city ID when listed, city name when custom; region only when custom (center|golan|upper); cityType = listed|custom.
@@ -113,6 +113,8 @@ Always output exactly ONE edit with fieldKey "datetime" (or "occurrences"): take
 OCCURRENCES — NO HALLUCINATION: When editing occurrences, do not invent times. No clear start → hasTime false, startTime = Israel midnight, endTime null. Start without end → endTime null. End without start → treat as all-day (hasTime false).
 Hebrew: "ה5 למרץ" = 5th March, "ה8 למרץ" = 8th March, "בצהריים" = afternoon (13:00), "שבע בערב" = 19:00, "עשר" = 22:00.
 
+fullDescription edits — always take "fullDescription (current HTML)" from CURRENT EVENT above as the starting value, apply the user's requested changes (add a line, remove a phrase, prepend/append text, rewrite a section), and output the complete updated HTML string in newValueStr. Do not return only the changed fragment — always output the full description with the change applied. Use only the allowed HTML tags.
+
 Respond with valid JSON only. You must always include "message" and "edits" in your response. For type "unclear" set message to your clarification (or ""); set edits to []. For type "complete_update" set message to "" and edits to []. For type "edits" set message to "" and edits to your array of changes. Choose exactly one type:
 
 1) type: "unclear" — ONLY when the message does not clearly indicate what to update or is ambiguous. Do not use for clear requests like "change phone to X", "change location to Y", "add day on date Z". Set message (optional clarification) and edits: [].
@@ -135,7 +137,7 @@ function buildCurrentEventSummary(currentEvent) {
   const parts = [
     `title (שם האירוע): ${String(ev.Title ?? '').slice(0, 200)}`,
     `shortDescription: ${String(ev.shortDescription ?? '').slice(0, 300)}`,
-    `fullDescription: [HTML, ${String(ev.fullDescription ?? '').length} chars]`,
+    `fullDescription (current HTML): ${String(ev.fullDescription ?? '').slice(0, 3000)}`,
     `mainCategory: ${ev.mainCategory ?? ''}`,
     `categories: ${Array.isArray(ev.categories) ? ev.categories.join(', ') : ''}`,
     `locationName: ${loc.locationName ?? ''}`,
@@ -224,7 +226,7 @@ export async function parseFreeLanguageEditRequest(userMessage, menuOptions, cur
         type: 'json_schema',
         json_schema: PARSE_FREE_EDIT_SCHEMA,
       },
-      max_tokens: 1500,
+      max_tokens: 3000,
       temperature: 0.2,
     })
     const content = response.choices[0]?.message?.content
