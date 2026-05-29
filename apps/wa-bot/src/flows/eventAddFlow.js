@@ -1805,7 +1805,7 @@ export function sendInitialMessage(phoneNumberId, from) {
   })
 }
 
-function buildApproverEventNotificationBody(formattedPreview, eventId, eventLink) {
+function buildApproverEventNotificationBody(formattedPreview, eventId, eventLink, publisherPhone, publisherName) {
   const preview = formattedPreview && typeof formattedPreview === 'object' ? formattedPreview : {}
   const title = typeof preview.Title === 'string' ? preview.Title : '-'
   const shortDesc = typeof preview.shortDescription === 'string'
@@ -1820,17 +1820,18 @@ function buildApproverEventNotificationBody(formattedPreview, eventId, eventLink
   const priceNum = typeof preview.price === 'number' ? preview.price : NaN
   const priceStr = Number.isNaN(priceNum) ? 'לא ידוע' : priceNum === 0 ? 'חינם' : `${priceNum} ₪`
 
-  return [
+  const lines = [
     APPROVER.EVENT_NOTIFICATION_HEADING,
     `*שם:* ${title}`,
     `*תיאור קצר:* ${shortDesc}`,
     `*תאריך:* ${dateTimeStr}`,
     `*מיקום:* ${location}`,
     `*מחיר:* ${priceStr}`,
-    '',
-    eventLink,
-    `מזהה: ${eventId}`,
-  ].join('\n')
+  ]
+  if (publisherName) lines.push(`*מפרסם:* ${publisherName}`)
+  if (publisherPhone) lines.push(`*טלפון:* ${publisherPhone}`)
+  lines.push('', eventLink, `מזהה: ${eventId}`)
+  return lines.join('\n')
 }
 
 /**
@@ -1880,8 +1881,9 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
     if (approverWaId && result.id) {
       const publisherPhone = context?.managerTargetPhone || from
       const eventTitle = state.eventAddFormattedPreview?.Title || ''
+      const publisherName = state.eventAddFormattedPreview?.publisherName || ''
       approverEventNotifications.store(result.id, { publisherPhone, eventTitle })
-      const notifBody = buildApproverEventNotificationBody(state.eventAddFormattedPreview, result.id, eventLink)
+      const notifBody = buildApproverEventNotificationBody(state.eventAddFormattedPreview, result.id, eventLink, publisherPhone, publisherName)
       sendInteractiveButtons(phoneNumberId, approverWaId, {
         body: notifBody,
         buttons: [{ id: `approver_delete_event_${result.id}`, title: APPROVER.DELETE_EVENT_BUTTON.title }],
