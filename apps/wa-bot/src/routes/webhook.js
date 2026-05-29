@@ -652,7 +652,10 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           if (isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           if (isPublisherChoice) return sendEventAddMethodChoice(phoneNumberId, from)
-          if (state.managerTargetPhone) return sendEventAddMethodChoice(phoneNumberId, from)
+          if (isManager(from)) {
+            if (state.managerTargetPhone) return sendEventAddMethodChoice(phoneNumberId, from)
+            return sendManagerAskTargetPhone(phoneNumberId, from)
+          }
           const { status } = await checkPublisher(from)
           if (status === 'approved') {
             conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
@@ -664,6 +667,10 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           if (isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           if (isPublisherChoice) return handleEventUpdateChoice(phoneNumberId, from)
+          if (isManager(from)) {
+            if (state.managerTargetPhone) return handleEventUpdateChoice(phoneNumberId, from)
+            return sendManagerAskTargetPhone(phoneNumberId, from)
+          }
           const { status } = await checkPublisher(from)
           if (status === 'approved') return handleEventUpdateChoice(phoneNumberId, from)
           return handlePublishButton(phoneNumberId, from, profileName)
@@ -672,6 +679,10 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           if (isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           if (isPublisherChoice) return handleEventDeleteChoice(phoneNumberId, from)
+          if (isManager(from)) {
+            if (state.managerTargetPhone) return handleEventDeleteChoice(phoneNumberId, from)
+            return sendManagerAskTargetPhone(phoneNumberId, from)
+          }
           const { status } = await checkPublisher(from)
           if (status === 'approved') return handleEventDeleteChoice(phoneNumberId, from)
           return handlePublishButton(phoneNumberId, from, profileName)
