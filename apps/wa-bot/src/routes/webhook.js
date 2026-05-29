@@ -429,14 +429,6 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
   const state = conversationState.get(from)
   const profileName = context.profileName
 
-  logger.info(LOG_PREFIXES.WEBHOOK, 'DEBUG msg', JSON.stringify({
-    type: msg.type,
-    interactiveType: msg.interactive?.type,
-    buttonId: msg.interactive?.button_reply?.id,
-    listId: msg.interactive?.list_reply?.id,
-    step: state.step,
-  }))
-
   if (isEventAddStep(state.step)) {
     return handleEventAddFlow(phoneNumberId, from, msg, state, { profileName })
   }
