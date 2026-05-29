@@ -1603,21 +1603,21 @@ async function killEventAddFlow(phoneNumberId, from, state) {
 }
 
 /**
- * Send first event-add message: free-language prompt + "Additional options" list.
- * Accepts text input immediately; list offers back to main menu or manual form.
+ * Send method choice screen: ask how the user wants to enter the event.
  * Sets EVENT_ADD_CHOOSE_METHOD.
  */
 export function sendEventAddMethodChoice(phoneNumberId, from) {
   conversationState.set(from, { step: STEPS.EVENT_ADD_CHOOSE_METHOD, eventAddLastActivityAt: Date.now() })
-  return sendInteractiveList(phoneNumberId, from, {
-    body: EVENT_ADD.FREELANG_FIRST_BODY,
-    footer: EVENT_ADD.FREELANG_FIRST_FOOTER,
-    button: EVENT_ADD.FREELANG_FIRST_BUTTON,
-    sections: [{
-      title: EVENT_ADD.FREELANG_FIRST_SECTION_TITLE,
-      rows: EVENT_ADD.FREELANG_FIRST_ROWS,
-    }],
+  return sendInteractiveButtons(phoneNumberId, from, {
+    body: EVENT_ADD.METHOD_CHOICE_BODY,
+    buttons: EVENT_ADD.METHOD_CHOICE_BUTTONS,
   })
+}
+
+/** Show the AI free-text input prompt and set EVENT_ADD_AI_INPUT. */
+function sendAiInputPrompt(phoneNumberId, from) {
+  conversationState.set(from, { step: STEPS.EVENT_ADD_AI_INPUT, eventAddLastActivityAt: Date.now() })
+  return sendText(phoneNumberId, from, EVENT_ADD.FREELANG_FIRST_BODY)
 }
 
 /**
@@ -1919,26 +1919,17 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
   conversationState.set(from, { eventAddLastActivityAt: Date.now() })
 
   if (step === STEPS.EVENT_ADD_CHOOSE_METHOD) {
-    if (textBody) {
-      return handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, context)
+    if (buttonId === 'event_add_ai') {
+      return sendAiInputPrompt(phoneNumberId, from)
     }
-    if (msg.type === 'image' || msg.type === 'video') {
-      return sendText(phoneNumberId, from, EVENT_ADD.AI_EXPECT_TEXT)
-    }
-    if (listReplyId === 'back_to_main') {
-      return killEventAddFlow(phoneNumberId, from, state)
-    }
-    if (listReplyId === 'event_add_manual') {
+    if (buttonId === 'event_add_manual') {
       return sendInitialMessage(phoneNumberId, from)
     }
-    if (listReplyId === 'event_add_via_link') {
+    if (buttonId === 'event_add_via_link') {
       conversationState.set(from, { step: STEPS.EVENT_ADD_ASK_LINK, eventAddLastActivityAt: Date.now() })
       return sendText(phoneNumberId, from, EVENT_ADD.ASK_LINK_PROMPT)
     }
-    if (buttonId === EVENT_ADD.AI_RETRY_BUTTON.id) {
-      return sendEventAddMethodChoice(phoneNumberId, from)
-    }
-    return Promise.resolve()
+    return sendEventAddMethodChoice(phoneNumberId, from)
   }
 
   if (step === STEPS.EVENT_ADD_ASK_LINK) {
@@ -1992,15 +1983,12 @@ export async function handleEventAddFlow(phoneNumberId, from, msg, state, contex
 
   if (step === STEPS.EVENT_ADD_AI_INPUT) {
     if (buttonId === EVENT_ADD.AI_RETRY_BUTTON.id) {
-      return sendEventAddMethodChoice(phoneNumberId, from)
+      return sendAiInputPrompt(phoneNumberId, from)
     }
     if (textBody) {
       return handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, context)
     }
-    if (msg.type === 'image' || msg.type === 'video') {
-      return sendText(phoneNumberId, from, EVENT_ADD.AI_EXPECT_TEXT)
-    }
-    return Promise.resolve()
+    return sendAiInputPrompt(phoneNumberId, from)
   }
 
   if (step === STEPS.EVENT_ADD_CONFIRM_LINK_IMAGES) {

@@ -217,9 +217,12 @@ export const EVENT_LIST = {
 const SKIP_MEDIA_FINISH_BUTTON_ID = 'event_add_skip'
 
 export const EVENT_ADD = {
-  METHOD_CHOICE_BODY: 'אפשר להוסיף אירוע בשתי דרכים:',
-  METHOD_AI_BUTTON: { id: 'event_add_ai', title: 'הוספה מהירה עם AI' },
-  METHOD_MANUAL_BUTTON: { id: 'event_add_manual', title: 'מילוי טופס פרטים' },
+  METHOD_CHOICE_BODY: 'איך תרצו להזין את פרטי האירוע?',
+  METHOD_CHOICE_BUTTONS: [
+    { id: 'event_add_ai', title: 'כל הפרטים בהודעה אחת' },
+    { id: 'event_add_manual', title: 'מילוי טופס פרטים' },
+    { id: 'event_add_via_link', title: 'קישור לעמוד האירוע' },
+  ],
   FREELANG_FIRST_BODY: `שלחו בהודעה אחת (טקסט) את כל פרטי האירוע
 
 חשוב להזין:
