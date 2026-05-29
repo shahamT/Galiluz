@@ -834,7 +834,7 @@ function processWebhookBody(body) {
           logger.debug(LOG_PREFIXES.WEBHOOK, 'Skip unsupported message', msg.id)
           continue
         }
-        logger.info(LOG_PREFIXES.WEBHOOK, 'Private message from', from)
+        logger.info(LOG_PREFIXES.WEBHOOK, 'Private message from', from, `type=${msg.type} interactive=${msg.interactive?.type} buttonId=${msg.interactive?.button_reply?.id}`)
         enqueueAndProcessUser(phoneNumberId, from, msg, { profileName })
       }
     }
