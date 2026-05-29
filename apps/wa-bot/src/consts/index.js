@@ -530,3 +530,13 @@ export const EVENT_EDIT = {
   CITY_OUTSIDE_REGION:
     'היישוב שציינת לא באיזור הצפון. אנא הזינו יישוב מתאים',
 }
+
+// --- MANAGER (managers upload on behalf of another user) ---
+
+export const MANAGER = {
+  ASK_TARGET_PHONE: {
+    body: 'מעלה אירוע עבור משתמש אחר?\nאם כן, הזן את מספר הטלפון של המשתמש',
+    buttons: [{ id: 'manager_upload_self', title: 'אני מעלה את האירוע בשמי' }],
+  },
+  INVALID_PHONE: 'מספר הטלפון שהזנת אינו תקין. אנא הזן מספר טלפון ישראלי תקין (לדוגמה: 0501234567 או 972501234567)',
+}

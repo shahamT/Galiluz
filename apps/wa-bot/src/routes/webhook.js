@@ -21,6 +21,7 @@ import {
   EVENT_ADD,
   MAIN_MENU,
   BATCH_FLUSH_MS,
+  MANAGER,
 } from '../consts/index.js'
 import {
   sendInitialMessage,
@@ -91,6 +92,23 @@ function isPrivateMessage(message) {
   const ctxId = message.context?.id
   if (!ctxId) return true
   return typeof ctxId !== 'string' || !ctxId.endsWith('@g.us')
+}
+
+function isManager(from) {
+  return config.managersWaNumbers.includes(normalizePhone(from))
+}
+
+function validateAndNormalizeIsraeliPhone(raw) {
+  const digits = normalizePhone(raw)
+  if (digits.startsWith('972') && digits.length === 12) return digits
+  if (digits.startsWith('05') && digits.length === 10) return '972' + digits.slice(1)
+  if (digits.startsWith('5') && digits.length === 9) return '972' + digits
+  return null
+}
+
+function sendManagerAskTargetPhone(phoneNumberId, from) {
+  conversationState.set(from, { step: conversationState.STEPS.MANAGER_ASK_TARGET_PHONE })
+  return sendInteractiveButtons(phoneNumberId, from, MANAGER.ASK_TARGET_PHONE)
 }
 
 /**
@@ -430,7 +448,10 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
   const profileName = context.profileName
 
   if (isEventAddStep(state.step)) {
-    return handleEventAddFlow(phoneNumberId, from, msg, state, { profileName })
+    return handleEventAddFlow(phoneNumberId, from, msg, state, {
+      profileName,
+      managerTargetPhone: state.managerTargetPhone || null,
+    })
   }
 
   if (interactive?.type === 'button_reply') {
@@ -447,12 +468,17 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if (id === 'back_to_menu' || id === 'back_to_main') {
       return handleBackToMenu(phoneNumberId, from)
     }
+    if (id === 'manager_upload_self') {
+      conversationState.set(from, { managerTargetPhone: undefined })
+      return sendEventAddMethodChoice(phoneNumberId, from)
+    }
     if (id === 'event_add_new') {
       if (state.step === conversationState.STEPS.EVENT_ADD_SUCCESS) {
         conversationState.clear(from)
       }
       const { status } = await checkPublisher(from)
       if (status === 'approved') {
+        if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)
         return sendEventAddMethodChoice(phoneNumberId, from)
       }
       return handlePublishButton(phoneNumberId, from, profileName)
@@ -572,10 +598,14 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         if (intent === 'event_add_new') {
           if (isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
-          if (isPublisherChoice) return sendEventAddMethodChoice(phoneNumberId, from)
+          if (isPublisherChoice) {
+            if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)
+            return sendEventAddMethodChoice(phoneNumberId, from)
+          }
           const { status } = await checkPublisher(from)
           if (status === 'approved') {
             conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
+            if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)
             return sendEventAddMethodChoice(phoneNumberId, from)
           }
           return handlePublishButton(phoneNumberId, from, profileName)
@@ -667,6 +697,19 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if (state.step === conversationState.STEPS.PUBLISH_ASK_COMMITMENT) {
       return sendInteractiveButtons(phoneNumberId, from, PUBLISH.ASK_COMMITMENT)
     }
+    if (state.step === conversationState.STEPS.MANAGER_ASK_TARGET_PHONE) {
+      const normalized = validateAndNormalizeIsraeliPhone(textBody)
+      if (!normalized) {
+        await sendText(phoneNumberId, from, MANAGER.INVALID_PHONE)
+        return sendManagerAskTargetPhone(phoneNumberId, from)
+      }
+      conversationState.set(from, { managerTargetPhone: normalized })
+      return sendEventAddMethodChoice(phoneNumberId, from)
+    }
+  }
+
+  if (state.step === conversationState.STEPS.MANAGER_ASK_TARGET_PHONE) {
+    return sendManagerAskTargetPhone(phoneNumberId, from)
   }
 
   const publishSteps = [

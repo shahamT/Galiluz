@@ -808,7 +808,8 @@ async function runProcessDraftAfterFlagInput(phoneNumberId, from, state, context
       buttons: [EVENT_ADD.FORMAT_RETRY_BUTTON],
     })
   }
-  const publisherInfo = { phone: from, name: context?.profileName ?? '', waId: from }
+  const targetPhone = context?.managerTargetPhone || from
+  const publisherInfo = { phone: targetPhone, name: context?.profileName ?? '', waId: targetPhone }
   const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
   const mainCategory = (state.eventAddMainCategory ?? '').trim()
   const categories = Array.isArray(state.eventAddExtraCategories) ? state.eventAddExtraCategories : []
@@ -914,7 +915,8 @@ async function runProcessDraftAfterFlagInput(phoneNumberId, from, state, context
  * @returns {Promise<object>}
  */
 async function goToConfirmOrRetryMedia(phoneNumberId, from, state, context, opts = {}) {
-  const publisherInfo = { phone: from, name: context?.profileName ?? '', waId: from }
+  const targetPhone = context?.managerTargetPhone || from
+  const publisherInfo = { phone: targetPhone, name: context?.profileName ?? '', waId: targetPhone }
   let draftId = state.eventAddDraftId
 
   if (state.eventAddEditMediaMode && draftId) {
@@ -1725,7 +1727,8 @@ async function handleAiFreeLanguageInput(phoneNumberId, from, textBody, state, c
 
   conversationState.set(from, stateUpdate)
 
-  const publisherInfo = { phone: from, name: context?.profileName ?? '', waId: from }
+  const targetPhone = context?.managerTargetPhone || from
+  const publisherInfo = { phone: targetPhone, name: context?.profileName ?? '', waId: targetPhone }
   const currentState = conversationState.get(from)
   const draftBody = {
     rawEvent: buildMinimalRawEventForFreeLang(currentState, publisherInfo),
@@ -1809,7 +1812,8 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
     result = await activateEvent(state.eventAddDraftId)
     if (result.success) result.id = state.eventAddDraftId
   } else {
-    const publisherInfo = { phone: from, name: context?.profileName ?? '', waId: from }
+    const targetPhone = context?.managerTargetPhone || from
+  const publisherInfo = { phone: targetPhone, name: context?.profileName ?? '', waId: targetPhone }
     const rawEvent = buildRawEvent(state, publisherInfo)
     const media = Array.isArray(state.eventAddMedia) ? state.eventAddMedia : []
     const mainCategory = (state.eventAddMainCategory ?? '').trim()
