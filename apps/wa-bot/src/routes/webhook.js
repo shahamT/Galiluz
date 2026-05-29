@@ -108,8 +108,11 @@ function validateAndNormalizeIsraeliPhone(raw) {
   return null
 }
 
-function sendManagerAskTargetPhone(phoneNumberId, from) {
-  conversationState.set(from, { step: conversationState.STEPS.MANAGER_ASK_TARGET_PHONE })
+function sendManagerAskTargetPhone(phoneNumberId, from, intendedAction = null) {
+  conversationState.set(from, {
+    step: conversationState.STEPS.MANAGER_ASK_TARGET_PHONE,
+    managerIntendedAction: intendedAction,
+  })
   return sendInteractiveButtons(phoneNumberId, from, MANAGER.ASK_TARGET_PHONE)
 }
 
@@ -654,7 +657,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           if (isPublisherChoice) return sendEventAddMethodChoice(phoneNumberId, from)
           if (isManager(from)) {
             if (state.managerTargetPhone) return sendEventAddMethodChoice(phoneNumberId, from)
-            return sendManagerAskTargetPhone(phoneNumberId, from)
+            return sendManagerAskTargetPhone(phoneNumberId, from, 'event_add_new')
           }
           const { status } = await checkPublisher(from)
           if (status === 'approved') {
@@ -669,7 +672,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           if (isPublisherChoice) return handleEventUpdateChoice(phoneNumberId, from)
           if (isManager(from)) {
             if (state.managerTargetPhone) return handleEventUpdateChoice(phoneNumberId, from)
-            return sendManagerAskTargetPhone(phoneNumberId, from)
+            return sendManagerAskTargetPhone(phoneNumberId, from, 'event_update')
           }
           const { status } = await checkPublisher(from)
           if (status === 'approved') return handleEventUpdateChoice(phoneNumberId, from)
@@ -681,7 +684,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           if (isPublisherChoice) return handleEventDeleteChoice(phoneNumberId, from)
           if (isManager(from)) {
             if (state.managerTargetPhone) return handleEventDeleteChoice(phoneNumberId, from)
-            return sendManagerAskTargetPhone(phoneNumberId, from)
+            return sendManagerAskTargetPhone(phoneNumberId, from, 'event_delete')
           }
           const { status } = await checkPublisher(from)
           if (status === 'approved') return handleEventDeleteChoice(phoneNumberId, from)
@@ -762,12 +765,20 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       const normalized = validateAndNormalizeIsraeliPhone(textBody)
       if (!normalized) {
         await sendText(phoneNumberId, from, MANAGER.INVALID_PHONE)
-        return sendManagerAskTargetPhone(phoneNumberId, from)
+        return sendManagerAskTargetPhone(phoneNumberId, from, state.managerIntendedAction)
       }
+      const intendedAction = state.managerIntendedAction
       conversationState.set(from, {
         managerTargetPhone: normalized,
+        managerIntendedAction: undefined,
         step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION,
       })
+      if (intendedAction === 'event_add_new') {
+        await createGhostPublisher(normalized)
+        return sendEventAddMethodChoice(phoneNumberId, from)
+      }
+      if (intendedAction === 'event_update') return handleEventUpdateChoice(phoneNumberId, from)
+      if (intendedAction === 'event_delete') return handleEventDeleteChoice(phoneNumberId, from)
       return sendInteractiveButtons(phoneNumberId, from, PUBLISHER.HOW_TO_CONTINUE)
     }
   }
