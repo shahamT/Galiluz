@@ -191,7 +191,9 @@ function handleDiscoverTimeChoice(phoneNumberId, from, timeChoice) {
 }
 
 async function handleEventUpdateChoice(phoneNumberId, from) {
-  const { events, error } = await getEventsByPublisher(from)
+  const state = conversationState.get(from)
+  const publisherFrom = state.managerTargetPhone || from
+  const { events, error } = await getEventsByPublisher(publisherFrom)
   if (error || !events || events.length === 0) {
     conversationState.clear(from)
     return sendInteractiveButtons(phoneNumberId, from, {
@@ -209,7 +211,9 @@ async function handleEventUpdateChoice(phoneNumberId, from) {
 }
 
 async function handleEventDeleteChoice(phoneNumberId, from) {
-  const { events, error } = await getEventsByPublisher(from)
+  const state = conversationState.get(from)
+  const publisherFrom = state.managerTargetPhone || from
+  const { events, error } = await getEventsByPublisher(publisherFrom)
   if (error || !events || events.length === 0) {
     conversationState.clear(from)
     return sendInteractiveButtons(phoneNumberId, from, {
@@ -460,6 +464,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       return handleDiscoverButton(phoneNumberId, from)
     }
     if (id === 'publish') {
+      if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)
       return handlePublishButton(phoneNumberId, from, profileName)
     }
     if (id === 'contact') {
@@ -470,17 +475,13 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     }
     if (id === 'manager_upload_self') {
       conversationState.set(from, { managerTargetPhone: undefined })
-      return sendEventAddMethodChoice(phoneNumberId, from)
+      return handlePublishButton(phoneNumberId, from, profileName)
     }
     if (id === 'event_add_new') {
-      if (state.step === conversationState.STEPS.EVENT_ADD_SUCCESS) {
-        conversationState.clear(from)
-      }
+      if (state.step === conversationState.STEPS.EVENT_ADD_SUCCESS) conversationState.clear(from)
+      if (state.managerTargetPhone) return sendEventAddMethodChoice(phoneNumberId, from)
       const { status } = await checkPublisher(from)
-      if (status === 'approved') {
-        if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)
-        return sendEventAddMethodChoice(phoneNumberId, from)
-      }
+      if (status === 'approved') return sendEventAddMethodChoice(phoneNumberId, from)
       return handlePublishButton(phoneNumberId, from, profileName)
     }
     if (state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION) {
@@ -593,19 +594,17 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         if (intent === 'publish') {
           if (isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
+          if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)
           return handlePublishButton(phoneNumberId, from, profileName)
         }
         if (intent === 'event_add_new') {
           if (isSuccessScreen) conversationState.clear(from)
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
-          if (isPublisherChoice) {
-            if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)
-            return sendEventAddMethodChoice(phoneNumberId, from)
-          }
+          if (isPublisherChoice) return sendEventAddMethodChoice(phoneNumberId, from)
+          if (state.managerTargetPhone) return sendEventAddMethodChoice(phoneNumberId, from)
           const { status } = await checkPublisher(from)
           if (status === 'approved') {
             conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
-            if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)
             return sendEventAddMethodChoice(phoneNumberId, from)
           }
           return handlePublishButton(phoneNumberId, from, profileName)
@@ -703,8 +702,11 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         await sendText(phoneNumberId, from, MANAGER.INVALID_PHONE)
         return sendManagerAskTargetPhone(phoneNumberId, from)
       }
-      conversationState.set(from, { managerTargetPhone: normalized })
-      return sendEventAddMethodChoice(phoneNumberId, from)
+      conversationState.set(from, {
+        managerTargetPhone: normalized,
+        step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION,
+      })
+      return sendInteractiveButtons(phoneNumberId, from, PUBLISHER.HOW_TO_CONTINUE)
     }
   }
 
