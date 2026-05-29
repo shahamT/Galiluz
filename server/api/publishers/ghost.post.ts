@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
   try {
     const { db } = await getMongoConnection()
     const collection = db.collection(collectionName)
+    await collection.createIndex({ waId: 1 }, { unique: true }).catch(() => {})
     // Idempotent: $setOnInsert only runs on INSERT, so existing records (any status) are never touched.
     await collection.updateOne(
       { waId },

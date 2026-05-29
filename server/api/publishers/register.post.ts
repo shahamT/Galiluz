@@ -62,6 +62,7 @@ export default defineEventHandler(async (event) => {
           publishingAs,
           eventTypesDescription,
           status: 'pending',
+          createdOnBehalf: false,
           updatedAt: now,
         },
         $setOnInsert: {
