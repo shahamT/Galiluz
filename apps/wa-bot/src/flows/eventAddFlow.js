@@ -1881,7 +1881,7 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
     if (approverWaId && result.id) {
       const publisherPhone = context?.managerTargetPhone || from
       const eventTitle = state.eventAddFormattedPreview?.Title || ''
-      const publisherName = state.publisherFullName || state.eventAddFormattedPreview?.publisherName || ''
+      const publisherName = (!context?.managerTargetPhone ? state.publisherFullName : '') || state.eventAddFormattedPreview?.publisherName || ''
       approverEventNotifications.store(result.id, { publisherPhone, eventTitle })
       const notifBody = buildApproverEventNotificationBody(state.eventAddFormattedPreview, result.id, eventLink, publisherPhone, publisherName)
       sendInteractiveButtons(phoneNumberId, approverWaId, {
