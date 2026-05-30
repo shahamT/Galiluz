@@ -530,7 +530,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     }
     if (id === 'event_add_new') {
       if (state.step === conversationState.STEPS.EVENT_ADD_SUCCESS) conversationState.clear(from)
-      if (isPublisherChoice) return sendEventAddMethodChoice(phoneNumberId, from)
+      if (state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION) return sendEventAddMethodChoice(phoneNumberId, from)
       if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from, 'event_add_new')
       const { status } = await checkPublisher(from)
       if (status === 'approved') {
