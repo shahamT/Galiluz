@@ -270,7 +270,12 @@ function handlePublishCommitNo(phoneNumberId, from) {
   return sendInteractiveButtons(phoneNumberId, from, PUBLISH.NOT_REGISTERED)
 }
 
-async function handlePublishCommitYes(phoneNumberId, from) {
+function handlePublishCommitYes(phoneNumberId, from) {
+  conversationState.set(from, { step: conversationState.STEPS.PUBLISH_ASK_TERMS_APPROVAL })
+  return sendInteractiveButtons(phoneNumberId, from, PUBLISH.ASK_TERMS_APPROVAL)
+}
+
+async function handlePublishTermsApproved(phoneNumberId, from) {
   const state = conversationState.get(from)
   const waId = from
   const profileName = state.profileName || undefined
@@ -284,6 +289,7 @@ async function handlePublishCommitYes(phoneNumberId, from) {
     fullName,
     publishingAs,
     eventTypesDescription,
+    approvedTerms: true,
   })
   if (!result.success) {
     return sendText(phoneNumberId, from, PUBLISH.REGISTER_ERROR)
@@ -556,6 +562,9 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if (id === 'publish_commit_yes' && state.step === conversationState.STEPS.PUBLISH_ASK_COMMITMENT) {
       return handlePublishCommitYes(phoneNumberId, from)
     }
+    if (id === 'publish_terms_approved' && state.step === conversationState.STEPS.PUBLISH_ASK_TERMS_APPROVAL) {
+      return handlePublishTermsApproved(phoneNumberId, from)
+    }
     if (
       (id === 'today' || id === 'tomorrow') &&
       (state.step === conversationState.STEPS.DISCOVER_TIME ||
@@ -762,6 +771,9 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if (state.step === conversationState.STEPS.PUBLISH_ASK_COMMITMENT) {
       return sendInteractiveButtons(phoneNumberId, from, PUBLISH.ASK_COMMITMENT)
     }
+    if (state.step === conversationState.STEPS.PUBLISH_ASK_TERMS_APPROVAL) {
+      return sendInteractiveButtons(phoneNumberId, from, PUBLISH.ASK_TERMS_APPROVAL)
+    }
     if (state.step === conversationState.STEPS.MANAGER_ASK_TARGET_PHONE) {
       const normalized = validateAndNormalizeIsraeliPhone(textBody)
       if (!normalized) {
@@ -793,6 +805,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     conversationState.STEPS.PUBLISH_ASK_PUBLISHING_AS,
     conversationState.STEPS.PUBLISH_ASK_EVENT_TYPES,
     conversationState.STEPS.PUBLISH_ASK_COMMITMENT,
+    conversationState.STEPS.PUBLISH_ASK_TERMS_APPROVAL,
   ]
   if (publishSteps.includes(state.step) && msg.type !== 'text') {
     return sendText(phoneNumberId, from, PUBLISH.EXPECT_TEXT)

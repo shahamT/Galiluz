@@ -43,6 +43,7 @@ const STEPS = {
   PUBLISH_ASK_PUBLISHING_AS: 'publish_ask_publishing_as',
   PUBLISH_ASK_EVENT_TYPES: 'publish_ask_event_types',
   PUBLISH_ASK_COMMITMENT: 'publish_ask_commitment',
+  PUBLISH_ASK_TERMS_APPROVAL: 'publish_ask_terms_approval',
   APPROVER_WAITING_REASON: 'approver_waiting_reason',
   PUBLISHER_CHOOSE_ACTION: 'publisher_choose_action',
   EVENT_ADD_CHOOSE_METHOD: 'event_add_choose_method',
