@@ -7,6 +7,7 @@ interface RegisterBody {
   fullName: string
   publishingAs: string
   eventTypesDescription: string
+  approvedTerms?: boolean
 }
 
 export default defineEventHandler(async (event) => {
@@ -63,6 +64,8 @@ export default defineEventHandler(async (event) => {
           eventTypesDescription,
           status: 'pending',
           createdOnBehalf: false,
+          approvedTerms: body?.approvedTerms === true,
+          approvedTermsAt: body?.approvedTerms === true ? now : null,
           updatedAt: now,
         },
         $setOnInsert: {

@@ -133,6 +133,12 @@ export const PUBLISH = {
       { id: 'back_to_main', title: 'בחזרה לתפריט הראשי' },
     ],
   },
+  ASK_TERMS_APPROVAL: {
+    body: 'כמעט סיימנו! 🎉\nלפני שנרשמך, אנא קראו את תנאי השימוש ומדיניות הפרטיות:\nhttps://galiluz.co.il/terms-of-service\n\nלחצו על "מאשר/ת" כדי לאשר ולהמשיך.',
+    buttons: [
+      { id: 'publish_terms_approved', title: 'מאשר/ת' },
+    ],
+  },
   THANK_YOU: {
     body:
       '*זהו! סיימנו* 🤩\nאנחנו נבדוק את הפרטים ששלחת וברגע שנאשר - *תקבל/י מאיתנו הודעה* ותוכל/י להתחיל לפרסם אירועים!',
