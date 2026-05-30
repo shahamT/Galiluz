@@ -538,7 +538,7 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       (id === 'center' || id === 'golan' || id === 'upper') &&
       state.step === conversationState.STEPS.DISCOVER_REGION
     ) {
-      conversationState.set(from, { discoverRegion: id })
+      conversationState.set(from, { discoverRegion: id, step: conversationState.STEPS.DISCOVER_TIME })
       return sendInteractiveButtons(phoneNumberId, from, DISCOVER.ASK_TIME)
     }
     if (id === 'publish') {
