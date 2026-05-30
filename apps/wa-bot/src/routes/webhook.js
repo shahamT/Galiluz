@@ -240,9 +240,9 @@ async function handlePublishButton(phoneNumberId, from, profileName) {
   if (result.connectionError) {
     return sendInteractiveButtons(phoneNumberId, from, PUBLISH.CONNECTION_ERROR)
   }
-  const { status } = result
+  const { status, fullName: publisherFullName } = result
   if (status === 'approved') {
-    conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
+    conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION, publisherFullName: publisherFullName || '' })
     return sendInteractiveButtons(phoneNumberId, from, PUBLISHER.HOW_TO_CONTINUE)
   }
   if (status === 'pending') {
