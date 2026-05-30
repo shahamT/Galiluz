@@ -245,7 +245,7 @@ let _key = 0
 const nextKey = () => ++_key
 
 function freshOccurrence() {
-  return { _key: nextKey(), date: '', hasTime: false, startTime: '', endTime: '' }
+  return { _key: nextKey(), date: '', hasTime: true, startTime: '', endTime: '' }
 }
 
 function freshLink() {
