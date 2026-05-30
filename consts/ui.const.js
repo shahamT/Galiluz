@@ -43,6 +43,7 @@ export const MAIN_MENU = {
   events: 'לו"ז אירועים',
   about: 'אודות',
   publishEvents: 'מארגנים אירועים בצפון?',
+  termsOfService: 'תנאי שימוש',
   contactUs: 'צרו קשר',
 }
 

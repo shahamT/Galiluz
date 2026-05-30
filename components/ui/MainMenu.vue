@@ -49,6 +49,15 @@
               <UiIcon name="auto_stories" size="md" class="MainMenu-itemIcon" />
               <span>{{ MAIN_MENU.about }}</span>
             </NuxtLink>
+            <div class="MainMenu-separator" aria-hidden="true" />
+            <NuxtLink
+              to="/terms-of-service"
+              class="MainMenu-item"
+              @click="close"
+            >
+              <UiIcon name="description" size="md" class="MainMenu-itemIcon" />
+              <span>{{ MAIN_MENU.termsOfService }}</span>
+            </NuxtLink>
           </nav>
           <div class="MainMenu-footer">
             <a
