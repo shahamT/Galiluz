@@ -37,6 +37,7 @@ const stateByUser = new Map()
 const STEPS = {
   WELCOME: 'welcome',
   DISCOVER_CATEGORY: 'discover_category',
+  DISCOVER_REGION: 'discover_region',
   DISCOVER_TIME: 'discover_time',
   DISCOVER_AFTER_LIST: 'discover_after_list',
   PUBLISH_ASK_FULL_NAME: 'publish_ask_full_name',
