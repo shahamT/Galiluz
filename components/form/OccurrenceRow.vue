@@ -105,7 +105,7 @@ const minDate = computed(() => new Date().toISOString().slice(0, 10))
 const allDay = ref(!local.hasTime)
 
 const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
-const minutes = ['00', '15', '30', '45']
+const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
 
 function parseTime(t) {
   if (!t) return { h: '08', m: '00' }
@@ -170,6 +170,7 @@ function onAllDayChange() {
     display: inline-flex;
     align-items: center;
     gap: 2px;
+    direction: ltr;
     border: 1.5px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-background);
