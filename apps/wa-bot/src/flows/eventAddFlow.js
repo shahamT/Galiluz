@@ -1805,7 +1805,7 @@ export function sendInitialMessage(phoneNumberId, from) {
   })
 }
 
-function buildApproverEventNotificationBody(formattedPreview, eventId, eventLink, publisherPhone, publisherName) {
+function buildApproverEventNotificationBody(formattedPreview, eventId, eventLink, publisherPhone, publisherName, publisherPublishingAs) {
   const preview = formattedPreview && typeof formattedPreview === 'object' ? formattedPreview : {}
   const title = typeof preview.Title === 'string' ? preview.Title : '-'
   const shortDesc = typeof preview.shortDescription === 'string'
@@ -1829,6 +1829,7 @@ function buildApproverEventNotificationBody(formattedPreview, eventId, eventLink
     `*מחיר:* ${priceStr}`,
   ]
   if (publisherName) lines.push(`*מפרסם:* ${publisherName}`)
+  if (publisherPublishingAs) lines.push(`*מטעם:* ${publisherPublishingAs}`)
   if (publisherPhone) lines.push(`*טלפון:* ${publisherPhone}`)
   lines.push('', eventLink, `מזהה: ${eventId}`)
   return lines.join('\n')
@@ -1882,8 +1883,9 @@ async function submitEvent(phoneNumberId, from, state, context, opts = {}) {
       const publisherPhone = context?.managerTargetPhone || from
       const eventTitle = state.eventAddFormattedPreview?.Title || ''
       const publisherName = (!context?.managerTargetPhone ? state.publisherFullName : '') || state.eventAddFormattedPreview?.publisherName || ''
+      const publisherPublishingAs = !context?.managerTargetPhone ? state.publisherPublishingAs || '' : ''
       approverEventNotifications.store(result.id, { publisherPhone, eventTitle })
-      const notifBody = buildApproverEventNotificationBody(state.eventAddFormattedPreview, result.id, eventLink, publisherPhone, publisherName)
+      const notifBody = buildApproverEventNotificationBody(state.eventAddFormattedPreview, result.id, eventLink, publisherPhone, publisherName, publisherPublishingAs)
       sendInteractiveButtons(phoneNumberId, approverWaId, {
         body: notifBody,
         buttons: [{ id: `approver_delete_event_${result.id}`, title: APPROVER.DELETE_EVENT_BUTTON.title }],

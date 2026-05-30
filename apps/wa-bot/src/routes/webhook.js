@@ -254,9 +254,9 @@ async function handlePublishButton(phoneNumberId, from, profileName) {
   if (result.connectionError) {
     return sendInteractiveButtons(phoneNumberId, from, PUBLISH.CONNECTION_ERROR)
   }
-  const { status, fullName: publisherFullName } = result
+  const { status, fullName: publisherFullName, publishingAs: publisherPublishingAs } = result
   if (status === 'approved') {
-    conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION, publisherFullName: publisherFullName || '' })
+    conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION, publisherFullName: publisherFullName || '', publisherPublishingAs: publisherPublishingAs || '' })
     return sendInteractiveButtons(phoneNumberId, from, PUBLISHER.HOW_TO_CONTINUE)
   }
   if (status === 'pending') {
@@ -559,9 +559,9 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       if (state.step === conversationState.STEPS.EVENT_ADD_SUCCESS) conversationState.clear(from)
       if (state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION) return sendEventAddMethodChoice(phoneNumberId, from)
       if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from, 'event_add_new')
-      const { status, fullName: publisherFullName } = await checkPublisher(from)
+      const { status, fullName: publisherFullName, publishingAs: publisherPublishingAs } = await checkPublisher(from)
       if (status === 'approved') {
-        conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION, publisherFullName: publisherFullName || '' })
+        conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION, publisherFullName: publisherFullName || '', publisherPublishingAs: publisherPublishingAs || '' })
         return sendEventAddMethodChoice(phoneNumberId, from)
       }
       return handlePublishButton(phoneNumberId, from, profileName)

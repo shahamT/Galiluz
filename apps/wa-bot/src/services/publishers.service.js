@@ -22,7 +22,8 @@ export async function checkPublisher(waId) {
     const data = await res.json()
     const status = data.status === 'approved' ? 'approved' : data.status === 'pending' ? 'pending' : 'not_found'
     const fullName = typeof data.fullName === 'string' ? data.fullName : ''
-    return { status, fullName }
+    const publishingAs = typeof data.publishingAs === 'string' ? data.publishingAs : ''
+    return { status, fullName, publishingAs }
   } catch (err) {
     logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers check error', err)
     return { status: 'not_found', connectionError: true }
