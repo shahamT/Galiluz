@@ -160,18 +160,32 @@ function handleDiscoverButton(phoneNumberId, from) {
   return sendInteractiveList(phoneNumberId, from, DISCOVER_CATEGORY_LIST)
 }
 
+function sendDiscoverRegionStep(phoneNumberId, from) {
+  const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
+  const imageUrl = baseUrl.startsWith('http://localhost')
+    ? 'https://galiluz.co.il/imgs/areas-filter-map.png'
+    : `${baseUrl}/imgs/areas-filter-map.png`
+  conversationState.set(from, { step: conversationState.STEPS.DISCOVER_REGION })
+  return sendInteractiveButtons(phoneNumberId, from, {
+    header: { type: 'image', imageUrl },
+    body: DISCOVER.ASK_REGION,
+    buttons: [...EVENT_ADD.REGION_BUTTONS],
+  })
+}
+
 function handleDiscoverListReply(phoneNumberId, from, listReplyId) {
-  conversationState.set(from, { step: conversationState.STEPS.DISCOVER_TIME, categoryGroupId: listReplyId })
-  return sendInteractiveButtons(phoneNumberId, from, DISCOVER.ASK_TIME)
+  conversationState.set(from, { categoryGroupId: listReplyId })
+  return sendDiscoverRegionStep(phoneNumberId, from)
 }
 
 function handleDiscoverTimeChoice(phoneNumberId, from, timeChoice) {
   const state = conversationState.get(from)
   const categoryGroupId = state.categoryGroupId || CATEGORY_ALL_ID
+  const discoverRegion = state.discoverRegion || null
   const prevSearched = state.discoverSearchedTimesByCategory?.[categoryGroupId] || []
   const searchedTimesForCategory = [...new Set([...prevSearched, timeChoice])]
   const dateString = getDateIsrael(timeChoice)
-  return getEventsMessageForDateAndCategory(dateString, categoryGroupId, timeChoice)
+  return getEventsMessageForDateAndCategory(dateString, categoryGroupId, timeChoice, discoverRegion)
     .then((messageBody) => sendText(phoneNumberId, from, messageBody))
     .then((result) => {
       if (result?.success) {
@@ -519,6 +533,13 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     const id = interactive.button_reply?.id
     if (id === 'discover') {
       return handleDiscoverButton(phoneNumberId, from)
+    }
+    if (
+      (id === 'center' || id === 'golan' || id === 'upper') &&
+      state.step === conversationState.STEPS.DISCOVER_REGION
+    ) {
+      conversationState.set(from, { discoverRegion: id })
+      return sendInteractiveButtons(phoneNumberId, from, DISCOVER.ASK_TIME)
     }
     if (id === 'publish') {
       if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)

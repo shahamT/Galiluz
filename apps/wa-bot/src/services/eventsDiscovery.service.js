@@ -38,7 +38,7 @@ function getActiveEvents(events) {
   return events.filter((e) => e.isActive !== false)
 }
 
-function buildEventsApiUrl(dateString, categoryGroupId) {
+function buildEventsApiUrl(dateString, categoryGroupId, region = null) {
   const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const params = new URLSearchParams()
   params.set('dates', dateString)
@@ -46,6 +46,7 @@ function buildEventsApiUrl(dateString, categoryGroupId) {
     const group = CATEGORY_GROUPS.find((g) => g.id === categoryGroupId)
     if (group?.categoryIds?.length) params.set('categories', group.categoryIds.join(','))
   }
+  if (region) params.set('region', region)
   return `${baseUrl}/api/events?${params.toString()}`
 }
 
@@ -56,9 +57,9 @@ function buildEventsApiUrl(dateString, categoryGroupId) {
  * @param {string} timeChoice - 'today' | 'tomorrow' for header label
  * @returns {Promise<string>} Message body to send
  */
-export async function getEventsMessageForDateAndCategory(dateString, categoryGroupId, timeChoice) {
+export async function getEventsMessageForDateAndCategory(dateString, categoryGroupId, timeChoice, region = null) {
   const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
-  const apiUrl = buildEventsApiUrl(dateString, categoryGroupId)
+  const apiUrl = buildEventsApiUrl(dateString, categoryGroupId, region)
   const headers = { Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
 

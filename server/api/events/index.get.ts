@@ -33,12 +33,13 @@ export default defineEventHandler(async (event) => {
   const queryParams = getQuery(event)
   const dateStrings = parseDatesParam(queryParams.dates as string | undefined)
   const categoriesArray = parseCategoriesParam(queryParams.categories as string | undefined)
+  const region = typeof queryParams.region === 'string' ? queryParams.region.trim() : ''
 
   try {
     const { db } = await getMongoConnection()
     const collection = db.collection(collectionName)
     const cutoff = getCutoffDate()
-    const query = buildEventsQuery(cutoff, dateStrings, categoriesArray)
+    const query = buildEventsQuery(cutoff, dateStrings, categoriesArray, region || undefined)
 
     const documents = await collection.find(query).limit(EVENTS_QUERY_LIMIT).toArray()
 

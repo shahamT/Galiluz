@@ -27,6 +27,7 @@ export function buildEventsQuery(
   cutoff: Date,
   dateStrings: string[],
   categoriesArray: string[],
+  region?: string,
 ): Record<string, unknown> {
   const cutoffISO = cutoff.toISOString()
   const baseConditions: Record<string, unknown>[] = [
@@ -66,6 +67,10 @@ export function buildEventsQuery(
         { 'event.mainCategory': { $in: categoriesArray } },
       ],
     })
+  }
+
+  if (region && (region === 'center' || region === 'golan' || region === 'upper')) {
+    andConditions.push({ 'event.location.region': region })
   }
 
   return { $and: andConditions }

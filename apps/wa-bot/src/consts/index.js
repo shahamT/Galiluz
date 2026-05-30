@@ -68,6 +68,7 @@ export const MAIN_MENU = {
 
 export const DISCOVER = {
   ASK_CATEGORY: 'איזה אירועים את/ה מחפש/ת?',
+  ASK_REGION: 'באיזה איזור?',
   ASK_TIME: {
     body: 'מתי?',
     footer: 'לצפייה בכל האירועים כנסו ל־ galiluz.co.il',
