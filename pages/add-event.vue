@@ -26,7 +26,18 @@
               />
             </FormField>
 
-            <FormField label="תיאור האירוע" required :error="errors.description">
+            <FormField label="תיאור קצר" :error="errors.shortDescription" hint="משפט-שניים שמתארים את האירוע בקצרה (עד 200 תווים)">
+              <input
+                v-model="form.shortDescription"
+                type="text"
+                class="FormInput"
+                placeholder="לדוגמה: ערב מוזיקה אקוסטית עם אמנים מקומיים בפאב הקהילתי"
+                maxlength="200"
+                @input="clearError('shortDescription')"
+              />
+            </FormField>
+
+            <FormField label="תיאור מלא" required :error="errors.description">
               <textarea
                 v-model="form.description"
                 class="FormTextarea AddEventPage-descTextarea"
@@ -49,7 +60,7 @@
             <p class="AddEventPage-sectionHint">ניתן להוסיף מספר מועדים לאותו אירוע.</p>
 
             <div class="AddEventPage-occurrences">
-              <OccurrenceRow
+              <FormOccurrenceRow
                 v-for="(occ, i) in form.occurrences"
                 :key="occ._key"
                 v-model="form.occurrences[i]"
@@ -69,7 +80,7 @@
           <section class="AddEventPage-section">
             <h2 class="AddEventPage-sectionTitle">קטגוריה</h2>
             <FormField label="קטגוריה ראשית" required :error="errors.mainCategory">
-              <CategoryPicker
+              <FormCategoryPicker
                 v-model="form.mainCategory"
                 @update:model-value="clearError('mainCategory')"
               />
@@ -90,7 +101,7 @@
               />
             </FormField>
 
-            <CityPicker
+            <FormCityPicker
               v-model="form.city"
               :errors="{ city: errors.city, customCity: errors.customCity, region: errors.region }"
             />
@@ -167,7 +178,7 @@
             <p class="AddEventPage-sectionHint">כרטיסים, דף אירוע, טלפון ליצירת קשר ועוד.</p>
 
             <div v-if="form.links.length" class="AddEventPage-links">
-              <LinkRow
+              <FormLinkRow
                 v-for="(link, i) in form.links"
                 :key="link._key"
                 v-model="form.links[i]"
@@ -189,7 +200,7 @@
           <!-- 7. מדיה -->
           <section class="AddEventPage-section">
             <h2 class="AddEventPage-sectionTitle">תמונות וסרטונים <span class="AddEventPage-optional">(אופציונלי)</span></h2>
-            <MediaUpload v-model="form.media" />
+            <FormMediaUpload v-model="form.media" />
           </section>
 
           <!-- Submit -->
@@ -243,6 +254,7 @@ function freshLink() {
 
 const form = reactive({
   title: '',
+  shortDescription: '',
   description: '',
   occurrences: [freshOccurrence()],
   mainCategory: '',
@@ -361,6 +373,7 @@ async function onSubmit() {
 function resetForm() {
   submitted.value = false
   form.title = ''
+  form.shortDescription = ''
   form.description = ''
   form.occurrences = [freshOccurrence()]
   form.mainCategory = ''
