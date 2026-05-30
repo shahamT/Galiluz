@@ -196,7 +196,7 @@ function onAllDayChange() {
     color: var(--color-text);
     cursor: pointer;
     padding: 0;
-    width: 2.2rem;
+    width: 1.6rem;
     text-align: center;
     appearance: none;
     -webkit-appearance: none;
