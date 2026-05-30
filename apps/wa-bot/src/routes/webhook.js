@@ -538,9 +538,9 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       if (state.step === conversationState.STEPS.EVENT_ADD_SUCCESS) conversationState.clear(from)
       if (state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION) return sendEventAddMethodChoice(phoneNumberId, from)
       if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from, 'event_add_new')
-      const { status } = await checkPublisher(from)
+      const { status, fullName: publisherFullName } = await checkPublisher(from)
       if (status === 'approved') {
-        conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
+        conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION, publisherFullName: publisherFullName || '' })
         return sendEventAddMethodChoice(phoneNumberId, from)
       }
       return handlePublishButton(phoneNumberId, from, profileName)
@@ -669,9 +669,9 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
             if (state.managerTargetPhone) return sendEventAddMethodChoice(phoneNumberId, from)
             return sendManagerAskTargetPhone(phoneNumberId, from, 'event_add_new')
           }
-          const { status } = await checkPublisher(from)
+          const { status, fullName: publisherFullName } = await checkPublisher(from)
           if (status === 'approved') {
-            conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION })
+            conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION, publisherFullName: publisherFullName || '' })
             return sendEventAddMethodChoice(phoneNumberId, from)
           }
           return handlePublishButton(phoneNumberId, from, profileName)

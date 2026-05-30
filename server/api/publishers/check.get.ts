@@ -29,7 +29,8 @@ export default defineEventHandler(async (event) => {
     const doc = await collection.findOne({ waId })
     if (!doc) return { status: 'not_found' as const }
     const status = doc.status === 'approved' ? 'approved' : doc.status === 'pending' ? 'pending' : 'not_found'
-    return { status }
+    const fullName = typeof doc.fullName === 'string' ? doc.fullName : ''
+    return { status, fullName }
   } catch (err) {
     console.error('[PublishersAPI] Check error:', err instanceof Error ? err.message : String(err))
     return { status: 'not_found' as const }
