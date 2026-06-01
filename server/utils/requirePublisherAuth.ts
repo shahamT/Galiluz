@@ -7,15 +7,29 @@ export interface PublisherSession {
   waId: string
   fullName: string
   publishingAs: string
-  type: string
+  type: 'publisher' | 'manager'
+}
+
+export interface AuthOptions {
+  /** If true, throws 403 unless the authenticated user is a manager. */
+  requireManager?: boolean
 }
 
 /**
  * Validates the Bearer token from the Authorization header.
  * Throws 401 if missing, invalid, or expired.
+ * Throws 403 if options.requireManager is true and the user is not a manager.
  * Returns publisher session info on success.
+ *
+ * Usage:
+ *   const session = await requirePublisherAuth(event)                        // any authenticated user
+ *   const session = await requirePublisherAuth(event, { requireManager: true }) // manager only
+ *
+ * For resource ownership (publisher can only access own data):
+ *   if (session.type !== 'manager' && resource.publisherWaId !== session.waId)
+ *     throw createError({ statusCode: 403 })
  */
-export async function requirePublisherAuth(event: H3Event): Promise<PublisherSession> {
+export async function requirePublisherAuth(event: H3Event, options: AuthOptions = {}): Promise<PublisherSession> {
   const auth = getHeader(event, 'authorization') ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
 
@@ -40,13 +54,19 @@ export async function requirePublisherAuth(event: H3Event): Promise<PublisherSes
       throw createError({ statusCode: 401, statusMessage: 'Unauthorized', message: 'Invalid or expired token' })
     }
 
-    return {
+    const session: PublisherSession = {
       publisherId: doc._id.toString(),
       waId: doc.waId,
       fullName: doc.fullName || '',
       publishingAs: doc.publishingAs || '',
-      type: doc.type || 'publisher',
+      type: doc.type === 'manager' ? 'manager' : 'publisher',
     }
+
+    if (options.requireManager && session.type !== 'manager') {
+      throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'manager_only' })
+    }
+
+    return session
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'statusCode' in err) throw err
     console.error('[Auth] requirePublisherAuth error:', err instanceof Error ? err.message : String(err))
