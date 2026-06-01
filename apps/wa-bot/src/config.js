@@ -55,10 +55,6 @@ function loadConfig() {
     })(),
     galiluzAppApiKey: process.env.GALILUZ_APP_API_KEY || process.env.API_SECRET || '',
     publishersApproverWaNumber: process.env.PUBLISHERS_APPROVER_WA_NUMBER || '',
-    managersWaNumbers: (process.env.MANAGERS_WA_NUMBERS || '')
-      .split(',')
-      .map((v) => normalizePhone(v.trim()))
-      .filter(Boolean),
     /** Template to send to approver when interactive approval message fails with 131047 (re-engagement). Create in Meta Business Manager and set name + language here. */
     approverReengagementTemplateName: (process.env.APPROVER_REENGAGEMENT_TEMPLATE_NAME || '').trim(),
     approverReengagementTemplateLanguage: (process.env.APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE || 'he').trim() || 'he',

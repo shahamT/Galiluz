@@ -2,10 +2,45 @@ import { config } from '../config.js'
 import { logger } from '../utils/logger.js'
 import { LOG_PREFIXES } from '../consts/index.js'
 
+/** In-memory set of manager waIds — populated on startup via loadManagers() */
+let managersSet = new Set()
+
+/**
+ * Load manager waIds from the server API into the in-memory set.
+ * Called once on bot startup; safe to call again to refresh.
+ */
+export async function loadManagers() {
+  try {
+    const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
+    const headers = { Accept: 'application/json' }
+    if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
+    const res = await fetch(`${baseUrl}/api/publishers/managers`, { headers })
+    if (!res.ok) {
+      logger.error(LOG_PREFIXES.CLOUD_API, 'loadManagers failed', res.status, '— retrying in 15s')
+      setTimeout(() => loadManagers(), 15_000)
+      return
+    }
+    const waIds = await res.json()
+    // Only overwrite the set on a successful response; don't wipe on empty (could be transient)
+    managersSet = new Set(Array.isArray(waIds) ? waIds.map(String) : [])
+    logger.info(LOG_PREFIXES.CLOUD_API, `loadManagers: loaded ${managersSet.size} manager(s)`)
+  } catch (err) {
+    logger.error(LOG_PREFIXES.CLOUD_API, 'loadManagers error — retrying in 15s', err)
+    setTimeout(() => loadManagers(), 15_000)
+  }
+}
+
+/**
+ * Returns true if the given waId belongs to a manager (synchronous, uses in-memory set).
+ */
+export function isManagerWaId(waId) {
+  return managersSet.has(String(waId))
+}
+
 /**
  * Check publisher status by WhatsApp user id.
  * @param {string} waId - WhatsApp user id (msg.from)
- * @returns {Promise<{ status: 'not_found' | 'pending' | 'approved', connectionError?: boolean }>}
+ * @returns {Promise<{ status: 'not_found' | 'pending' | 'approved', fullName: string, publishingAs: string, type: string, connectionError?: boolean }>}
  */
 export async function checkPublisher(waId) {
   const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
@@ -23,7 +58,8 @@ export async function checkPublisher(waId) {
     const status = data.status === 'approved' ? 'approved' : data.status === 'pending' ? 'pending' : 'not_found'
     const fullName = typeof data.fullName === 'string' ? data.fullName : ''
     const publishingAs = typeof data.publishingAs === 'string' ? data.publishingAs : ''
-    return { status, fullName, publishingAs }
+    const type = data.type === 'manager' ? 'manager' : 'publisher'
+    return { status, fullName, publishingAs, type }
   } catch (err) {
     logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers check error', err)
     return { status: 'not_found', connectionError: true }

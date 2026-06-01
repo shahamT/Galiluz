@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
     // Idempotent: $setOnInsert only runs on INSERT, so existing records (any status) are never touched.
     await collection.updateOne(
       { waId },
-      { $setOnInsert: { waId, phone: waId, status: 'ghost', createdOnBehalf: true, createdAt: new Date() } },
+      { $setOnInsert: { waId, phone: waId, status: 'ghost', type: 'publisher', createdOnBehalf: true, createdAt: new Date() } },
       { upsert: true },
     )
     return { success: true }

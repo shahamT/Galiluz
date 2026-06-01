@@ -38,7 +38,12 @@ import {
   approvePublisher,
   rejectPublisher,
   createGhostPublisher,
+  loadManagers,
+  isManagerWaId,
 } from '../services/publishers.service.js'
+
+// Load managers from DB on module init (fire-and-forget)
+loadManagers()
 import { CATEGORY_GROUPS, CATEGORY_ALL_ID } from '../consts/categories.const.js'
 import { CITIES_LIST } from '../consts/cities.const.js'
 import {
@@ -97,7 +102,7 @@ function isPrivateMessage(message) {
 }
 
 function isManager(from) {
-  return config.managersWaNumbers.includes(normalizePhone(from))
+  return isManagerWaId(normalizePhone(from))
 }
 
 function validateAndNormalizeIsraeliPhone(raw) {
