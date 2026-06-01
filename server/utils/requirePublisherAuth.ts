@@ -33,10 +33,10 @@ export async function requirePublisherAuth(event: H3Event): Promise<PublisherSes
 
     const doc = await collection.findOne(
       { authKey: hash, authKeyExpiresAt: { $gt: new Date() } },
-      { projection: { _id: 1, waId: 1, fullName: 1, publishingAs: 1, type: 1 } },
+      { projection: { _id: 1, waId: 1, fullName: 1, publishingAs: 1, type: 1, status: 1 } },
     )
 
-    if (!doc) {
+    if (!doc || doc.status !== 'approved') {
       throw createError({ statusCode: 401, statusMessage: 'Unauthorized', message: 'Invalid or expired token' })
     }
 

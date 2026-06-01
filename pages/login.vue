@@ -52,7 +52,7 @@
             :class="{ 'LoginCard-otpBox--error': !!error }"
             :disabled="loading"
             @keydown="(e) => handleOtpKeydown(e, i)"
-            @input="(e) => handleOtpInput(e as InputEvent, i)"
+            @input="(e) => handleOtpInput(e, i)"
             @paste.prevent="handleOtpPaste"
           />
         </div>
@@ -200,9 +200,7 @@ function handleOtpInput(e, index) {
   if (val && index < 5) {
     nextTick(() => otpInputs.value[index + 1]?.focus())
   }
-  if (otpCode.value.length === 6) {
-    nextTick(() => handleVerifyOtp())
-  }
+  // Auto-submit is only triggered via handleOtpPaste to avoid double-submit on paste
 }
 
 function handleOtpKeydown(e, index) {
