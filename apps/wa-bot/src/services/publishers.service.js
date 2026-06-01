@@ -16,14 +16,17 @@ export async function loadManagers() {
     if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
     const res = await fetch(`${baseUrl}/api/publishers/managers`, { headers })
     if (!res.ok) {
-      logger.error(LOG_PREFIXES.CLOUD_API, 'loadManagers failed', res.status)
+      logger.error(LOG_PREFIXES.CLOUD_API, 'loadManagers failed', res.status, '— retrying in 15s')
+      setTimeout(() => loadManagers(), 15_000)
       return
     }
     const waIds = await res.json()
+    // Only overwrite the set on a successful response; don't wipe on empty (could be transient)
     managersSet = new Set(Array.isArray(waIds) ? waIds.map(String) : [])
     logger.info(LOG_PREFIXES.CLOUD_API, `loadManagers: loaded ${managersSet.size} manager(s)`)
   } catch (err) {
-    logger.error(LOG_PREFIXES.CLOUD_API, 'loadManagers error', err)
+    logger.error(LOG_PREFIXES.CLOUD_API, 'loadManagers error — retrying in 15s', err)
+    setTimeout(() => loadManagers(), 15_000)
   }
 }
 
