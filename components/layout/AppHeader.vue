@@ -24,6 +24,7 @@
           <span class="AppHeader-whatsappText">{{ CONTACT_WHATSAPP_CTA }}</span>
           <span class="AppHeader-whatsappIcon" aria-hidden="true" />
         </a>
+        <LayoutUserAvatar />
         <span class="AppHeader-separator" aria-hidden="true" />
         <button
           type="button"
