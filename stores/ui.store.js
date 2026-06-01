@@ -11,6 +11,7 @@ export const useUiStore = defineStore('ui', () => {
   /** True if welcome modal was shown at any point this session (onboarding flow). Used to avoid showing filter notify after first-time preference selection. */
   const welcomeModalShownThisSession = ref(false)
   const selectedEventId = ref(null)
+  const selectedOccurrenceDate = ref(null)
   const requestFilterPopupOpen = ref(false)
 
   function setWelcomeModalShowing(shown) {
@@ -24,8 +25,9 @@ export const useUiStore = defineStore('ui', () => {
     requestFilterPopupOpen.value = true
   }
 
-  function openEventModal(eventId) {
+  function openEventModal(eventId, occurrenceDate = null) {
     selectedEventId.value = eventId
+    selectedOccurrenceDate.value = occurrenceDate || null
     isEventModalShowing.value = true
 
     if (import.meta.client) {
@@ -38,6 +40,7 @@ export const useUiStore = defineStore('ui', () => {
   function closeEventModal() {
     isEventModalShowing.value = false
     selectedEventId.value = null
+    selectedOccurrenceDate.value = null
 
     if (import.meta.client) {
       const query = { ...route.query }
@@ -69,6 +72,7 @@ export const useUiStore = defineStore('ui', () => {
     isEventModalShowing,
     isWelcomeModalShowing,
     welcomeModalShownThisSession,
+    selectedOccurrenceDate,
     selectedEventId,
     requestFilterPopupOpen,
     openEventModal,

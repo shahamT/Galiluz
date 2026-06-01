@@ -11,12 +11,22 @@ function getVisitorId() {
 }
 
 export function useEventTracking() {
+  const uiStore = useUiStore()
+
   async function track(eventId, action, extra = {}) {
     if (!eventId || !import.meta.client) return
+    // Attach occurrence date for view/calendar actions
+    const occurrenceDate = uiStore.selectedOccurrenceDate
+    const body = {
+      action,
+      visitorId: getVisitorId(),
+      ...(occurrenceDate && (action === 'view' || action === 'calendar') ? { occurrenceDate } : {}),
+      ...extra,
+    }
     $fetch(`/api/events/${eventId}/interact`, {
       method: 'POST',
-      body: { action, visitorId: getVisitorId(), ...extra },
-    }).catch(() => {}) // fire-and-forget, never block UI
+      body,
+    }).catch(() => {})
   }
 
   return { track }
