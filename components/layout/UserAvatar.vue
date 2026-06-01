@@ -1,5 +1,5 @@
 <template>
-  <div v-if="authStore.isLoggedIn" ref="root" class="UserAvatar">
+  <div v-if="authStore.isLoggedIn && isProtectedRoute" ref="root" class="UserAvatar">
     <button
       type="button"
       class="UserAvatar-btn"
@@ -34,6 +34,8 @@ defineOptions({ name: 'UserAvatar' })
 
 const authStore = useAuthStore()
 const { logout } = useAuth()
+const route = useRoute()
+const isProtectedRoute = computed(() => route.path.startsWith('/publisher') || route.path.startsWith('/admin'))
 
 const open = ref(false)
 const root = ref(null)
