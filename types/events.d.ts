@@ -83,6 +83,11 @@ export interface Event {
   urls?: Array<{ Title: string; Url: string; type?: 'link' | 'phone' }> // link = web URL, phone = phone number
   media?: any[] // Media attachments (images, videos)
   publisherPhone?: string // WhatsApp contact number
+  /**
+   * When true (default), each occurrence is treated as a separate event for stats/presentation.
+   * When false, all occurrences belong to one event (e.g. a multi-day festival).
+   */
+  multiDayEvent?: boolean
 }
 
 /**
