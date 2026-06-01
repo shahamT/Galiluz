@@ -12,7 +12,7 @@
     <Transition name="UserAvatar-fade">
       <div v-if="open" class="UserAvatar-dropdown" role="menu">
         <button type="button" class="UserAvatar-close" aria-label="סגור" @click="open = false">
-          <UiIcon name="close" size="sm" />
+          <UiIcon name="close" size="md" />
         </button>
         <div class="UserAvatar-info">
           <div class="UserAvatar-fullName">{{ authStore.user?.fullName }}</div>
