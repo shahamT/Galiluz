@@ -26,5 +26,9 @@ export const useAuthStore = defineStore('auth', () => {
     authReady.value = true
   }
 
-  return { user, authReady, isLoggedIn, isManager, canManageAll, canManageOwn, setUser, login, logout, setAuthReady }
+  function resetAuthReady() {
+    authReady.value = false
+  }
+
+  return { user, authReady, isLoggedIn, isManager, canManageAll, canManageOwn, setUser, login, logout, setAuthReady, resetAuthReady }
 })
