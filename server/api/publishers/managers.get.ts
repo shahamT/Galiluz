@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   try {
     const { db } = await getMongoConnection()
     const collection = db.collection(collectionName)
-    const docs = await collection.find({ type: 'manager' }, { projection: { waId: 1 } }).toArray()
+    const docs = await collection.find({ type: 'manager', status: 'approved' }, { projection: { waId: 1 } }).toArray()
     return docs.map((d) => d.waId).filter(Boolean)
   } catch (err) {
     console.error('[PublishersAPI] Managers error:', err instanceof Error ? err.message : String(err))

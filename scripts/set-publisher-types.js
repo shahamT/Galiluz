@@ -35,7 +35,9 @@ try {
   )
 
   console.log(`✅ Updated ${result.modifiedCount} publisher record(s) with type: 'publisher'`)
-  console.log('   Managers must be set manually: db.publishers.updateOne({ waId: "..." }, { $set: { type: "manager" } })')
+  console.log('   To set a manager (must have BOTH fields):')
+  console.log('   db.publishers.updateOne({ waId: "..." }, { $set: { type: "manager", status: "approved" } })')
+  console.log('   Note: a manager record must have status:"approved" to be recognised by the bot.')
 } catch (err) {
   console.error('Migration failed:', err.message)
   process.exit(1)
