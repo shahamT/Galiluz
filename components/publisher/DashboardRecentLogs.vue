@@ -8,7 +8,9 @@
           <span class="material-symbols-rounded">{{ iconFor(log.action) }}</span>
         </span>
         <div class="DashboardRecentLogs-info">
-          <span class="DashboardRecentLogs-text" v-html="textFor(log)" />
+          <span class="DashboardRecentLogs-text">
+            {{ prefixFor(log.action) }} <strong>{{ log.title || 'אירוע' }}</strong>
+          </span>
           <span class="DashboardRecentLogs-time">{{ relativeTime(log.createdAt) }}</span>
         </div>
       </li>
@@ -27,12 +29,11 @@ function iconFor(action) {
   return 'history'
 }
 
-function textFor(log) {
-  const t = `<strong>${log.title || 'אירוע'}</strong>`
-  if (log.action === 'event_activated') return `פרסמת את ${t}`
-  if (log.action === 'event_edited') return `עדכנת את ${t}`
-  if (log.action === 'event_deleted') return `מחקת אירוע: ${t}`
-  return t
+function prefixFor(action) {
+  if (action === 'event_activated') return 'פרסמת את'
+  if (action === 'event_edited') return 'עדכנת את'
+  if (action === 'event_deleted') return 'מחקת אירוע:'
+  return ''
 }
 
 function relativeTime(iso) {
