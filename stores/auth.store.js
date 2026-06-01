@@ -1,5 +1,6 @@
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
+  const authReady = ref(false)
   const isLoggedIn = computed(() => !!user.value)
   const isManager = computed(() => user.value?.type === 'manager')
   /** Manager can act on any resource. Use to show/hide manager-only UI. */
@@ -18,7 +19,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   function logout() {
     user.value = null
+    authReady.value = false
   }
 
-  return { user, isLoggedIn, isManager, canManageAll, canManageOwn, setUser, login, logout }
+  function setAuthReady() {
+    authReady.value = true
+  }
+
+  function resetAuthReady() {
+    authReady.value = false
+  }
+
+  return { user, authReady, isLoggedIn, isManager, canManageAll, canManageOwn, setUser, login, logout, setAuthReady, resetAuthReady }
 })

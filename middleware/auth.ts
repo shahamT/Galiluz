@@ -10,6 +10,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // Only run on client (cookies and auth state are client-side)
   if (import.meta.server) return
 
+  // Reset auth-ready so the loader shows until this check resolves
+  if (isProtected) authStore.resetAuthReady()
+
   // Use cached state if available, otherwise verify with server (sends cookie automatically)
   const authenticated = authStore.isLoggedIn || await checkAuth()
 
@@ -24,5 +27,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (isLoginPage && authenticated) {
     return navigateTo(authStore.isManager ? '/admin' : '/publisher/dashboard')
+  }
+
+  // Auth check passed — signal to protected pages that they can render
+  if (isProtected && authenticated) {
+    authStore.setAuthReady()
   }
 })

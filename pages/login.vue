@@ -23,7 +23,11 @@
           />
         </div>
 
-        <p v-if="error" class="LoginCard-error">{{ error }}</p>
+        <p v-if="error && !notRegistered" class="LoginCard-error">{{ error }}</p>
+        <p v-if="notRegistered" class="LoginCard-error">
+          המספר אינו רשום כמפרסם מאושר.
+          <a :href="PUBLISH_EVENT_WHATSAPP_LINK" target="_blank" rel="noopener noreferrer" class="LoginCard-errorLink">לחצו כאן להרשמה דרך הבוט</a>
+        </p>
 
         <button class="LoginCard-btn" :disabled="loading || !phone.trim()" @click="handleSendOtp">
           <span v-if="loading" class="LoginCard-spinner" />
@@ -94,6 +98,8 @@ defineOptions({ name: 'LoginPage' })
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'כניסה | גלילו"ז' })
 
+import { PUBLISH_EVENT_WHATSAPP_LINK } from '~/consts/ui.const'
+
 const { sendOtp, verifyOtp } = useAuth()
 const authStore = useAuthStore()
 
@@ -103,6 +109,7 @@ const otpDigits = ref(Array(6).fill(''))
 const otpInputs = ref([])
 const loading = ref(false)
 const error = ref('')
+const notRegistered = ref(false)
 const resendCountdown = ref(0)
 let countdownTimer = null
 
@@ -112,7 +119,7 @@ const displayPhone = computed(() => phone.value.replace(/^972/, '0'))
 function parseErrorMessage(err) {
   const msg = err?.data?.message || err?.message || ''
   if (msg === 'invalid_phone') return 'מספר טלפון לא תקין'
-  if (msg === 'not_registered') return 'המספר אינו רשום כמפרסם מאושר'
+  if (msg === 'not_registered') { notRegistered.value = true; return '' }
   if (msg.startsWith('blocked:')) {
     const secs = parseInt(msg.split(':')[1], 10)
     const mins = Math.ceil(secs / 60)
@@ -151,6 +158,7 @@ async function handleSendOtp() {
     await nextTick()
     otpInputs.value[0]?.focus()
   } catch (err) {
+    notRegistered.value = false
     error.value = parseErrorMessage(err)
   } finally {
     loading.value = false
@@ -224,6 +232,7 @@ function resetToPhone() {
   state.value = 'phone'
   otpDigits.value = Array(6).fill('')
   error.value = ''
+  notRegistered.value = false
   clearInterval(countdownTimer)
   resendCountdown.value = 0
 }
@@ -369,6 +378,18 @@ onUnmounted(() => clearInterval(countdownTimer))
     font-size: var(--font-size-sm);
     color: var(--color-error);
     font-weight: 500;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  &-errorLink {
+    display: block;
+    margin-top: var(--spacing-xs);
+    color: var(--brand-dark-green);
+    font-weight: 600;
+    text-decoration: underline;
+
+    &:hover { opacity: 0.8; }
   }
 
   &-actions {
