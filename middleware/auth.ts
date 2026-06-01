@@ -25,4 +25,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (isLoginPage && authenticated) {
     return navigateTo(authStore.isManager ? '/admin' : '/publisher/dashboard')
   }
+
+  // Auth check passed — signal to protected pages that they can render
+  if (isProtected && authenticated) {
+    authStore.setAuthReady()
+  }
 })

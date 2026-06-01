@@ -1,12 +1,12 @@
 <template>
-  <LayoutAppShell>
+  <LayoutProtectedShell>
     <LayoutContentCard>
       <div class="PublisherEvents">
         <h1 class="PublisherEvents-title">האירועים שלי</h1>
         <p class="PublisherEvents-placeholder"><!-- TODO: publisher events list --></p>
       </div>
     </LayoutContentCard>
-  </LayoutAppShell>
+  </LayoutProtectedShell>
 </template>
 
 <script setup>

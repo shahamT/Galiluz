@@ -1,12 +1,12 @@
 <template>
-  <LayoutAppShell>
+  <LayoutProtectedShell>
     <LayoutContentCard>
       <div class="PublisherDashboard">
         <h1 class="PublisherDashboard-title">לוח בקרה</h1>
         <p class="PublisherDashboard-placeholder"><!-- TODO: publisher dashboard --></p>
       </div>
     </LayoutContentCard>
-  </LayoutAppShell>
+  </LayoutProtectedShell>
 </template>
 
 <script setup>

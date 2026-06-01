@@ -1,6 +1,6 @@
 <template>
   <!-- TODO: add OTP auth guard before enabling for public use -->
-  <LayoutAppShell>
+  <LayoutProtectedShell>
     <LayoutContentCard>
       <article class="AddEventPage">
         <header class="AddEventPage-hero">
@@ -231,7 +231,7 @@
         </div>
       </article>
     </LayoutContentCard>
-  </LayoutAppShell>
+  </LayoutProtectedShell>
 </template>
 
 <script setup>

@@ -1,12 +1,12 @@
 <template>
-  <LayoutAppShell>
+  <LayoutProtectedShell>
     <LayoutContentCard>
       <div class="AdminPage">
         <h1 class="AdminPage-title">ניהול</h1>
         <p class="AdminPage-placeholder"><!-- TODO: admin dashboard --></p>
       </div>
     </LayoutContentCard>
-  </LayoutAppShell>
+  </LayoutProtectedShell>
 </template>
 
 <script setup>
