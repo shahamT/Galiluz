@@ -18,11 +18,15 @@ function normaliseIsraeliPhone(raw: string): string | null {
 export default defineEventHandler(async (event) => {
   await checkAuthRateLimit(event)
 
-  // CSRF: reject cross-origin POST in production
-  const origin = getHeader(event, 'origin') ?? ''
-  const host = getHeader(event, 'host') ?? ''
-  if (process.env.NODE_ENV === 'production' && origin && !origin.includes(host)) {
-    throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'invalid_origin' })
+  // CSRF: strict origin check in production (exact host match, missing Origin rejected)
+  if (process.env.NODE_ENV === 'production') {
+    const originHeader = getHeader(event, 'origin') ?? ''
+    const host = (getHeader(event, 'host') ?? '').toLowerCase()
+    let originHost = ''
+    try { originHost = originHeader ? new URL(originHeader).host.toLowerCase() : '' } catch {}
+    if (!originHost || originHost !== host) {
+      throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'invalid_origin' })
+    }
   }
 
   const body = await readBody<{ phone?: string; otp?: string }>(event)
