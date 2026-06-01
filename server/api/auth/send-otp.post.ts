@@ -1,6 +1,6 @@
 import { createHmac, randomInt } from 'node:crypto'
 import { getMongoConnection } from '~/server/utils/mongodb'
-import { checkRateLimit } from '~/server/utils/rateLimit'
+import { checkAuthRateLimit } from '~/server/utils/rateLimit'
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000       // 10 minutes
 const OTP_SEND_LIMIT = 5                    // max OTPs per phone per hour
@@ -15,7 +15,7 @@ function normaliseIsraeliPhone(raw: string): string | null {
 }
 
 export default defineEventHandler(async (event) => {
-  await checkRateLimit(event)
+  await checkAuthRateLimit(event)
 
   const body = await readBody<{ phone?: string }>(event)
   const raw = typeof body?.phone === 'string' ? body.phone.trim() : ''
@@ -69,7 +69,8 @@ export default defineEventHandler(async (event) => {
         otp: otpHash,
         otpExpiresAt,
         otpAttempts: 0,
-        otpBlockedUntil: null,
+        // Do NOT clear otpBlockedUntil here — block must expire naturally.
+        // Clearing it would let attackers bypass the brute-force block by resending.
         otpSentCount: sentCount + 1,
         otpSentWindowStart: inWindow ? windowStart : now,
       },
@@ -96,8 +97,12 @@ export default defineEventHandler(async (event) => {
       console.error('[Auth] Failed to send OTP via WhatsApp:', err instanceof Error ? err.message : String(err))
       // Don't expose the error — OTP is stored, user can retry
     }
+  } else if (process.env.NODE_ENV === 'production') {
+    // Production with missing WA credentials — this should never happen (startup check catches it)
+    console.error('[Auth] CRITICAL: WA credentials missing in production — OTP not sent')
+    throw createError({ statusCode: 503, statusMessage: 'Service Unavailable', message: 'messaging_unavailable' })
   } else {
-    // Dev mode: log OTP to console
+    // Dev mode only: log OTP to console (never runs in production)
     console.info(`[Auth][DEV] OTP for ${waId}: ${otp}`)
   }
 

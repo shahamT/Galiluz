@@ -1,6 +1,6 @@
 import { createHmac, createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { getMongoConnection } from '~/server/utils/mongodb'
-import { checkRateLimit } from '~/server/utils/rateLimit'
+import { checkAuthRateLimit } from '~/server/utils/rateLimit'
 
 const MAX_ATTEMPTS = 5
 const BLOCK_MS = 30 * 60 * 1000   // 30 minutes
@@ -15,7 +15,7 @@ function normaliseIsraeliPhone(raw: string): string | null {
 }
 
 export default defineEventHandler(async (event) => {
-  await checkRateLimit(event)
+  await checkAuthRateLimit(event)
 
   const body = await readBody<{ phone?: string; otp?: string }>(event)
   const raw = typeof body?.phone === 'string' ? body.phone.trim() : ''
