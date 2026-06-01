@@ -1,0 +1,105 @@
+import { createHmac, randomInt } from 'node:crypto'
+import { getMongoConnection } from '~/server/utils/mongodb'
+import { checkRateLimit } from '~/server/utils/rateLimit'
+
+const OTP_EXPIRY_MS = 10 * 60 * 1000       // 10 minutes
+const OTP_SEND_LIMIT = 5                    // max OTPs per phone per hour
+const OTP_SEND_WINDOW_MS = 60 * 60 * 1000  // 1 hour window
+
+function normaliseIsraeliPhone(raw: string): string | null {
+  const digits = raw.replace(/\D/g, '')
+  if (digits.startsWith('972') && digits.length === 12) return digits
+  if (digits.startsWith('05') && digits.length === 10) return '972' + digits.slice(1)
+  if (digits.startsWith('5') && digits.length === 9) return '972' + digits
+  return null
+}
+
+export default defineEventHandler(async (event) => {
+  await checkRateLimit(event)
+
+  const body = await readBody<{ phone?: string }>(event)
+  const raw = typeof body?.phone === 'string' ? body.phone.trim() : ''
+  const waId = normaliseIsraeliPhone(raw)
+
+  if (!waId) {
+    throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'invalid_phone' })
+  }
+
+  const config = useRuntimeConfig()
+  if (!config.mongodbUri || !config.mongodbDbName) {
+    throw createError({ statusCode: 503, statusMessage: 'Service Unavailable' })
+  }
+
+  const { db } = await getMongoConnection()
+  const col = db.collection(config.mongodbCollectionPublishers || 'publishers')
+  const doc = await col.findOne({ waId }, { projection: { status: 1, otpBlockedUntil: 1, otpSentCount: 1, otpSentWindowStart: 1 } })
+
+  if (!doc || doc.status !== 'approved') {
+    throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'not_registered' })
+  }
+
+  const now = new Date()
+
+  // Check OTP block
+  if (doc.otpBlockedUntil && doc.otpBlockedUntil > now) {
+    const secondsLeft = Math.ceil((doc.otpBlockedUntil.getTime() - now.getTime()) / 1000)
+    throw createError({ statusCode: 429, statusMessage: 'Too Many Requests', message: `blocked:${secondsLeft}` })
+  }
+
+  // Check per-phone send-rate limit
+  const windowStart = doc.otpSentWindowStart instanceof Date ? doc.otpSentWindowStart : new Date(0)
+  const inWindow = now.getTime() - windowStart.getTime() < OTP_SEND_WINDOW_MS
+  const sentCount = inWindow ? (doc.otpSentCount ?? 0) : 0
+
+  if (sentCount >= OTP_SEND_LIMIT) {
+    const resetAt = Math.ceil((windowStart.getTime() + OTP_SEND_WINDOW_MS - now.getTime()) / 60_000)
+    throw createError({ statusCode: 429, statusMessage: 'Too Many Requests', message: `send_limit:${resetAt}` })
+  }
+
+  // Generate OTP
+  const otp = randomInt(100000, 1000000).toString()
+  const secret = config.otpSecret || process.env.OTP_SECRET || ''
+  const otpHash = createHmac('sha256', secret).update(otp).digest('hex')
+  const otpExpiresAt = new Date(now.getTime() + OTP_EXPIRY_MS)
+
+  await col.updateOne(
+    { waId },
+    {
+      $set: {
+        otp: otpHash,
+        otpExpiresAt,
+        otpAttempts: 0,
+        otpBlockedUntil: null,
+        otpSentCount: sentCount + 1,
+        otpSentWindowStart: inWindow ? windowStart : now,
+      },
+    },
+  )
+
+  // Send via WhatsApp Cloud API
+  const accessToken = config.waCloudAccessToken || process.env.WA_CLOUD_ACCESS_TOKEN || ''
+  const phoneNumberId = config.waPhoneNumberId || process.env.WA_PHONE_NUMBER_ID || ''
+
+  if (accessToken && phoneNumberId) {
+    try {
+      await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: waId,
+          type: 'text',
+          text: { body: `קוד האימות שלך לגלילו"ז: *${otp}*\nהקוד תקף ל-10 דקות.` },
+        }),
+      })
+    } catch (err) {
+      console.error('[Auth] Failed to send OTP via WhatsApp:', err instanceof Error ? err.message : String(err))
+      // Don't expose the error — OTP is stored, user can retry
+    }
+  } else {
+    // Dev mode: log OTP to console
+    console.info(`[Auth][DEV] OTP for ${waId}: ${otp}`)
+  }
+
+  return { success: true }
+})

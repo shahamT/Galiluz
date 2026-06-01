@@ -67,6 +67,10 @@ export default defineNuxtConfig({
     // Restored for build/SSR parity with pre-refactor (galiluz-web does not use OpenAI; wa-bot has its own).
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    // OTP authentication
+    otpSecret: process.env.OTP_SECRET || '',
+    waCloudAccessToken: process.env.WA_CLOUD_ACCESS_TOKEN || '',
+    waPhoneNumberId: process.env.WA_PHONE_NUMBER_ID || '',
     // Public keys (exposed to client-side)
     public: {
       posthogPublicKey: process.env.NUXT_PUBLIC_POSTHOG_PUBLIC_KEY || '',
