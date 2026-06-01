@@ -2,7 +2,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const authStore = useAuthStore()
   const { checkAuth } = useAuth()
 
-  const isProtected = to.path.startsWith('/publisher') || to.path.startsWith('/admin')
+  const isAdminRoute = to.path.startsWith('/admin')
+  const isPublisherRoute = to.path.startsWith('/publisher')
+  const isProtected = isAdminRoute || isPublisherRoute
   const isLoginPage = to.path === '/login'
 
   // Only run on client (localStorage not available on server)
@@ -12,6 +14,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (isProtected && !authenticated) {
     return navigateTo('/login')
+  }
+
+  // Role check: only managers can access /admin
+  if (isAdminRoute && authenticated && !authStore.isManager) {
+    return navigateTo('/publisher/dashboard')
   }
 
   if (isLoginPage && authenticated) {
