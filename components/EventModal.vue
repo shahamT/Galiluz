@@ -188,17 +188,20 @@ const { canShare, handleShare } = useEventModalShare(selectedEvent)
 const { isImagePopupOpen, currentImageIndex, openImagePopup, closeImagePopup } = useEventModalImagePopup()
 
 const { capture } = usePosthog()
+const { track } = useEventTracking()
 
 watch(selectedEventId, (eventId) => {
   if (import.meta.server) return
   if (eventId) {
     capture(ANALYTICS_EVENTS.EVENT_VIEWED, { event_id: eventId })
+    track(eventId, 'view')
   }
 }, { immediate: true })
 
 function trackContactPublisher() {
   if (selectedEvent.value?.id) {
     capture(ANALYTICS_EVENTS.EVENT_CONTACT_PUBLISHER_CLICKED, { event_id: selectedEvent.value.id })
+    track(selectedEvent.value.id, 'contact')
   }
 }
 
@@ -210,6 +213,7 @@ function trackCustomLinkClick(link, index) {
       link_type: link?.type ?? 'link',
       link_index: index,
     })
+    track(selectedEvent.value.id, 'link', { linkTitle: link?.Title ?? '', linkType: link?.type ?? 'link' })
   }
 }
 

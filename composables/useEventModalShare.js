@@ -8,6 +8,7 @@ import { ANALYTICS_EVENTS } from '~/consts/analytics.const'
 export function useEventModalShare(selectedEventRef) {
   const canShare = ref(false)
   const { capture } = usePosthog()
+  const { track } = useEventTracking()
 
   onMounted(() => {
     if (import.meta.client && navigator.share) {
@@ -24,6 +25,7 @@ export function useEventModalShare(selectedEventRef) {
         text: selectedEventRef.value.shortDescription || selectedEventRef.value.title,
       })
       capture(ANALYTICS_EVENTS.EVENT_SHARED, { event_id: selectedEventRef.value?.id })
+      track(selectedEventRef.value?.id, 'share')
     } catch (e) {
       if (e.name !== 'AbortError') {
         // User cancelled or share failed; no feedback required

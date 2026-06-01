@@ -61,6 +61,8 @@ export default defineNuxtConfig({
     mongodbCollectionPublishers: process.env.MONGODB_COLLECTION_PUBLISHERS || 'publishers',
     mongodbCollectionEventLogs: process.env.MONGODB_COLLECTION_EVENT_LOGS || 'eventLogs',
     mongodbCollectionAuthLogs: process.env.MONGODB_COLLECTION_AUTH_LOGS || 'authLogs',
+    mongodbCollectionEventInteractions: process.env.MONGODB_COLLECTION_EVENT_INTERACTIONS || 'eventInteractions',
+    mongodbCollectionEventStats: process.env.MONGODB_COLLECTION_EVENT_STATS || 'eventStats',
     cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
     cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
     cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
