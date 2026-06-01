@@ -22,7 +22,7 @@ const isEvents = computed(() => route.path === '/publisher/events')
 
 .PublisherNavTabs {
   display: flex;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 2px solid var(--brand-dark-green-tint);
   margin-bottom: var(--spacing-xl);
 
   &-tab {
