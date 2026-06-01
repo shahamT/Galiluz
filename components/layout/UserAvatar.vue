@@ -11,6 +11,9 @@
 
     <Transition name="UserAvatar-fade">
       <div v-if="open" class="UserAvatar-dropdown" role="menu">
+        <button type="button" class="UserAvatar-close" aria-label="סגור" @click="open = false">
+          <UiIcon name="close" size="sm" />
+        </button>
         <div class="UserAvatar-info">
           <div class="UserAvatar-fullName">{{ authStore.user?.fullName }}</div>
           <div class="UserAvatar-publishingAs">{{ authStore.user?.publishingAs }}</div>
@@ -91,7 +94,7 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
   &-dropdown {
     position: absolute;
     top: calc(var(--control-height) + var(--spacing-xs));
-    left: 0;
+    right: 0;
     min-width: 13rem;
     background: var(--color-background);
     border-radius: var(--radius-md);
@@ -99,6 +102,43 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
     border: 1px solid var(--color-border);
     z-index: 1100;
     overflow: hidden;
+
+    @media (max-width: 768px) {
+      position: fixed;
+      inset: 0;
+      top: 0;
+      right: 0;
+      border-radius: 0;
+      min-width: unset;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      border: none;
+      box-shadow: none;
+    }
+  }
+
+  &-close {
+    display: none;
+
+    @media (max-width: 768px) {
+      display: flex;
+      position: absolute;
+      top: var(--spacing-md);
+      left: var(--spacing-md);
+      width: 2.5rem;
+      height: 2.5rem;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 1.5px solid var(--color-border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      color: var(--color-text);
+    }
   }
 
   &-info {
@@ -107,12 +147,20 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
     flex-direction: column;
     gap: var(--spacing-2xs);
     text-align: right;
+
+    @media (max-width: 768px) {
+      text-align: center;
+      padding: var(--spacing-xl);
+      gap: var(--spacing-xs);
+    }
   }
 
   &-fullName {
     font-size: var(--font-size-base);
     font-weight: 700;
     color: var(--color-text);
+
+    @media (max-width: 768px) { font-size: var(--font-size-xl); }
   }
 
   &-publishingAs {
@@ -129,6 +177,8 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
   &-divider {
     height: 1px;
     background: var(--color-border);
+
+    @media (max-width: 768px) { width: 80%; margin: var(--spacing-md) auto; }
   }
 
   &-logout {
@@ -147,6 +197,13 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
     transition: background 0.15s;
 
     &:hover { background: var(--color-surface); }
+
+    @media (max-width: 768px) {
+      justify-content: center;
+      font-size: var(--font-size-base);
+      padding: var(--spacing-md);
+      width: auto;
+    }
   }
 
   &-fade-enter-active,
