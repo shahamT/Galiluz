@@ -50,9 +50,8 @@ export default defineEventHandler(async (event) => {
   const doc = await col.findOne({ waId }, { projection: { status: 1, otpBlockedUntil: 1, otpSentCount: 1, otpSentWindowStart: 1 } })
 
   if (!doc || doc.status !== 'approved') {
-    // Return success silently — never reveal whether a phone is registered
     console.info(`[Auth] OTP request for unregistered/unapproved phone: ${waId}`)
-    return { success: true }
+    throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'not_registered' })
   }
 
   const now = new Date()
