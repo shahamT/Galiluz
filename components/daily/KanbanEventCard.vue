@@ -83,7 +83,7 @@ const getCategoryLabel = (categoryId) => {
 }
 
 const handleCardClick = () => {
-  uiStore.openEventModal(props.event.eventId)
+  uiStore.openEventModal(props.event.eventId, props.event.date || null)
 }
 </script>
 
