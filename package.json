@@ -13,7 +13,8 @@
     "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "set-publisher-types": "node scripts/set-publisher-types.js"
   },
   "dependencies": {
     "@flasd/whatsapp-formatting": "^0.2.0",

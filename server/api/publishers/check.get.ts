@@ -31,7 +31,8 @@ export default defineEventHandler(async (event) => {
     const status = doc.status === 'approved' ? 'approved' : doc.status === 'pending' ? 'pending' : 'not_found'
     const fullName = typeof doc.fullName === 'string' ? doc.fullName : ''
     const publishingAs = typeof doc.publishingAs === 'string' ? doc.publishingAs : ''
-    return { status, fullName, publishingAs }
+    const type = doc.type === 'manager' ? 'manager' : 'publisher'
+    return { status, fullName, publishingAs, type }
   } catch (err) {
     console.error('[PublishersAPI] Check error:', err instanceof Error ? err.message : String(err))
     return { status: 'not_found' as const }

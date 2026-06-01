@@ -63,6 +63,7 @@ export default defineEventHandler(async (event) => {
           publishingAs,
           eventTypesDescription,
           status: 'pending',
+          type: 'publisher',
           createdOnBehalf: false,
           approvedTerms: body?.approvedTerms === true,
           approvedTermsAt: body?.approvedTerms === true ? now : null,
