@@ -119,8 +119,6 @@ envVarGroups:
         sync: false
       - key: PUBLISHERS_APPROVER_WA_NUMBER
         sync: false
-      - key: MANAGERS_WA_NUMBERS
-        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
