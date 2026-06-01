@@ -1,9 +1,10 @@
-import { createHmac, createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { getMongoConnection } from '~/server/utils/mongodb'
-import { checkAuthRateLimit } from '~/server/utils/rateLimit'
+import { checkAuthRateLimit, checkPhoneRateLimit } from '~/server/utils/rateLimit'
+import { logAuthEvent } from '~/server/utils/authLog'
 
 const MAX_ATTEMPTS = 5
-const BLOCK_MS = 30 * 60 * 1000   // 30 minutes
+const BLOCK_MS = 30 * 60 * 1000      // 30 minutes
 const AUTH_KEY_EXPIRY_MS = 60 * 60 * 1000 // 1 hour
 
 function normaliseIsraeliPhone(raw: string): string | null {
@@ -17,6 +18,13 @@ function normaliseIsraeliPhone(raw: string): string | null {
 export default defineEventHandler(async (event) => {
   await checkAuthRateLimit(event)
 
+  // CSRF: reject cross-origin POST in production
+  const origin = getHeader(event, 'origin') ?? ''
+  const host = getHeader(event, 'host') ?? ''
+  if (process.env.NODE_ENV === 'production' && origin && !origin.includes(host)) {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'invalid_origin' })
+  }
+
   const body = await readBody<{ phone?: string; otp?: string }>(event)
   const raw = typeof body?.phone === 'string' ? body.phone.trim() : ''
   const submittedOtp = typeof body?.otp === 'string' ? body.otp.trim() : ''
@@ -25,6 +33,9 @@ export default defineEventHandler(async (event) => {
   if (!waId || !submittedOtp || !/^\d{6}$/.test(submittedOtp)) {
     throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'invalid_input' })
   }
+
+  // Per-phone rate limit (distributed attack protection)
+  checkPhoneRateLimit(waId)
 
   const config = useRuntimeConfig()
   const { db } = await getMongoConnection()
@@ -40,6 +51,7 @@ export default defineEventHandler(async (event) => {
 
   if (doc.otpBlockedUntil && doc.otpBlockedUntil > now) {
     const secondsLeft = Math.ceil((doc.otpBlockedUntil.getTime() - now.getTime()) / 1000)
+    await logAuthEvent(event, 'blocked', waId, { secondsLeft })
     throw createError({ statusCode: 429, statusMessage: 'Too Many Requests', message: `blocked:${secondsLeft}` })
   }
 
@@ -68,16 +80,16 @@ export default defineEventHandler(async (event) => {
         },
       },
     )
+    const attemptsLeft = MAX_ATTEMPTS - newAttempts
+    await logAuthEvent(event, 'otp_failed', waId, { attemptsLeft, blocked })
     if (blocked) {
       throw createError({ statusCode: 429, statusMessage: 'Too Many Requests', message: `blocked:${BLOCK_MS / 1000}` })
     }
-    const attemptsLeft = MAX_ATTEMPTS - newAttempts
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized', message: `invalid_otp:${attemptsLeft}` })
   }
 
   // OTP correct — issue session token
   const token = randomBytes(32).toString('hex')
-  // HMAC with server secret: leaked DB hash is useless without the secret
   const authKey = createHmac('sha256', secret).update(token).digest('hex')
   const authKeyExpiresAt = new Date(now.getTime() + AUTH_KEY_EXPIRY_MS)
 
@@ -89,8 +101,18 @@ export default defineEventHandler(async (event) => {
     },
   )
 
+  // Set HttpOnly cookie — token never exposed to JavaScript
+  setCookie(event, 'galiluz_auth', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/api',
+    maxAge: 3600,
+  })
+
+  await logAuthEvent(event, 'login', waId)
+
   return {
-    token,
     expiresAt: authKeyExpiresAt.toISOString(),
     user: {
       waId: doc.waId,

@@ -26,6 +26,15 @@ function checkMemoryLimit(key: string, max: number, windowMs: number): void {
 }
 
 /**
+ * Per-phone rate limit: 10 attempts per phone per 5 minutes.
+ * Prevents distributed IP attacks targeting a specific phone number.
+ * Uses in-memory store only (phone numbers are not sensitive as keys).
+ */
+export function checkPhoneRateLimit(phone: string): void {
+  checkMemoryLimit(`phone:${phone}`, 10, 5 * 60_000)
+}
+
+/**
  * Stricter rate limit for auth endpoints: 10 requests per IP per 5 minutes.
  */
 export async function checkAuthRateLimit(event: Parameters<typeof getRequestIP>[0]): Promise<void> {

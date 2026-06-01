@@ -30,8 +30,9 @@ export interface AuthOptions {
  *     throw createError({ statusCode: 403 })
  */
 export async function requirePublisherAuth(event: H3Event, options: AuthOptions = {}): Promise<PublisherSession> {
-  const auth = getHeader(event, 'authorization') ?? ''
-  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
+  // Read from HttpOnly cookie (browser) with fallback to Authorization header (internal tools)
+  const token = getCookie(event, 'galiluz_auth')?.trim()
+    || (() => { const h = getHeader(event, 'authorization') ?? ''; return h.startsWith('Bearer ') ? h.slice(7).trim() : '' })()
 
   if (!token) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized', message: 'Missing auth token' })

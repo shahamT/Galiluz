@@ -7,9 +7,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const isProtected = isAdminRoute || isPublisherRoute
   const isLoginPage = to.path === '/login'
 
-  // Only run on client (localStorage not available on server)
+  // Only run on client (cookies and auth state are client-side)
   if (import.meta.server) return
 
+  // Use cached state if available, otherwise verify with server (sends cookie automatically)
   const authenticated = authStore.isLoggedIn || await checkAuth()
 
   if (isProtected && !authenticated) {
@@ -22,7 +23,6 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   if (isLoginPage && authenticated) {
-    const dest = authStore.isManager ? '/admin' : '/publisher/dashboard'
-    return navigateTo(dest)
+    return navigateTo(authStore.isManager ? '/admin' : '/publisher/dashboard')
   }
 })

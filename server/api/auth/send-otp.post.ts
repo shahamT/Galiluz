@@ -1,6 +1,7 @@
 import { createHmac, randomInt } from 'node:crypto'
 import { getMongoConnection } from '~/server/utils/mongodb'
-import { checkAuthRateLimit } from '~/server/utils/rateLimit'
+import { checkAuthRateLimit, checkPhoneRateLimit } from '~/server/utils/rateLimit'
+import { logAuthEvent } from '~/server/utils/authLog'
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000       // 10 minutes
 const OTP_SEND_LIMIT = 5                    // max OTPs per phone per hour
@@ -17,6 +18,13 @@ function normaliseIsraeliPhone(raw: string): string | null {
 export default defineEventHandler(async (event) => {
   await checkAuthRateLimit(event)
 
+  // CSRF: reject cross-origin POST in production
+  const origin = getHeader(event, 'origin') ?? ''
+  const host = getHeader(event, 'host') ?? ''
+  if (process.env.NODE_ENV === 'production' && origin && !origin.includes(host)) {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'invalid_origin' })
+  }
+
   const body = await readBody<{ phone?: string }>(event)
   const raw = typeof body?.phone === 'string' ? body.phone.trim() : ''
   const waId = normaliseIsraeliPhone(raw)
@@ -24,6 +32,9 @@ export default defineEventHandler(async (event) => {
   if (!waId) {
     throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'invalid_phone' })
   }
+
+  // Per-phone rate limit (distributed attack protection)
+  checkPhoneRateLimit(waId)
 
   const config = useRuntimeConfig()
   if (!config.mongodbUri || !config.mongodbDbName) {
@@ -108,5 +119,6 @@ export default defineEventHandler(async (event) => {
     console.info(`[Auth][DEV] OTP for ${waId}: ${otp}`)
   }
 
+  await logAuthEvent(event, 'otp_sent', waId)
   return { success: true }
 })
