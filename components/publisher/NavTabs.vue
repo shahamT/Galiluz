@@ -1,7 +1,7 @@
 <template>
   <nav class="PublisherNavTabs">
     <NuxtLink to="/publisher/dashboard" class="PublisherNavTabs-tab" :class="{ 'PublisherNavTabs-tab--active': isDashboard }">
-      לוח בקרה
+      דשבורד
     </NuxtLink>
     <NuxtLink to="/publisher/events" class="PublisherNavTabs-tab" :class="{ 'PublisherNavTabs-tab--active': isEvents }">
       האירועים שלי
