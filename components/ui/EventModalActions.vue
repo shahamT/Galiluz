@@ -92,6 +92,7 @@ const props = defineProps({
 
 const route = useRoute()
 const { capture } = usePosthog()
+const { track } = useEventTracking()
 
 const isCalendarPopupOpen = ref(false)
 const calendarButtonRef = ref(null)
@@ -153,6 +154,7 @@ const handleCalendarSelect = async (calendarType) => {
     event_id: props.event?.id,
     calendar_type: calendarType,
   })
+  track(props.event?.id, 'calendar', { calendarType })
 }
 
 const handleNavigationSelect = (navType) => {
@@ -161,6 +163,7 @@ const handleNavigationSelect = (navType) => {
     event_id: props.event?.id,
     nav_type: navType,
   })
+  track(props.event?.id, 'nav', { navType })
 }
 </script>
 

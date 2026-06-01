@@ -60,6 +60,9 @@ export default defineNuxtConfig({
     mongodbCollectionRawMessages: process.env.MONGODB_COLLECTION_RAW_MESSAGES || 'raw_messages',
     mongodbCollectionPublishers: process.env.MONGODB_COLLECTION_PUBLISHERS || 'publishers',
     mongodbCollectionEventLogs: process.env.MONGODB_COLLECTION_EVENT_LOGS || 'eventLogs',
+    mongodbCollectionAuthLogs: process.env.MONGODB_COLLECTION_AUTH_LOGS || 'authLogs',
+    mongodbCollectionEventInteractions: process.env.MONGODB_COLLECTION_EVENT_INTERACTIONS || 'eventInteractions',
+    mongodbCollectionEventStats: process.env.MONGODB_COLLECTION_EVENT_STATS || 'eventStats',
     cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
     cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
     cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
@@ -67,6 +70,10 @@ export default defineNuxtConfig({
     // Restored for build/SSR parity with pre-refactor (galiluz-web does not use OpenAI; wa-bot has its own).
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    // OTP authentication
+    otpSecret: process.env.OTP_SECRET || '',
+    waCloudAccessToken: process.env.WA_CLOUD_ACCESS_TOKEN || '',
+    waPhoneNumberId: process.env.WA_PHONE_NUMBER_ID || '',
     // Public keys (exposed to client-side)
     public: {
       posthogPublicKey: process.env.NUXT_PUBLIC_POSTHOG_PUBLIC_KEY || '',
@@ -85,6 +92,8 @@ export default defineNuxtConfig({
           'X-Content-Type-Options': 'nosniff',
           'Referrer-Policy': 'strict-origin-when-cross-origin',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+          'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://eu.i.posthog.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://eu.i.posthog.com; frame-ancestors 'none'; form-action 'self';",
         },
       },
     },

@@ -37,3 +37,26 @@ export async function writeRateLimitFile(filePath: string, data: Record<string, 
   writeQueue = writeQueue.then(run, run)
   await writeQueue
 }
+
+/**
+ * Atomically reads, mutates via updater, and writes a single key.
+ * The entire read-mutate-write runs inside the write queue so no two callers can interleave.
+ * Returns the new entry for the key.
+ */
+export async function atomicUpdateEntry(
+  filePath: string,
+  key: string,
+  updater: (current: RateLimitEntry | undefined) => RateLimitEntry,
+): Promise<RateLimitEntry> {
+  let result!: RateLimitEntry
+  const run = async () => {
+    await mkdir(dirname(filePath), { recursive: true }).catch(() => {})
+    const data = await readRateLimitFile(filePath)
+    result = updater(data[key])
+    data[key] = result
+    await writeFile(filePath, JSON.stringify(data), 'utf-8')
+  }
+  writeQueue = writeQueue.then(run, run)
+  await writeQueue
+  return result
+}

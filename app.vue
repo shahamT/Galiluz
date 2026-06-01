@@ -1,7 +1,7 @@
 <template>
   <div class="App">
     <NuxtPage />
-    <EventModal v-if="isEventModalShowing" />
+    <EventModal v-if="isEventModalShowing && !isProtectedRoute" />
     <UiFilterNotifyBar
       :visible="filterNotifyStore.visible"
       :filter-summary="filterNotifyStore.filterSummary"
@@ -17,6 +17,10 @@
 const uiStore = useUiStore()
 const filterNotifyStore = useFilterNotifyStore()
 const { isEventModalShowing } = storeToRefs(uiStore)
+const route = useRoute()
+const isProtectedRoute = computed(() =>
+  route.path.startsWith('/publisher') || route.path.startsWith('/admin') || route.path === '/login'
+)
 
 const requestUrl = useRequestURL()
 const ogImageUrl = new URL('/galiluz-thumbnail.png', requestUrl.origin).href
