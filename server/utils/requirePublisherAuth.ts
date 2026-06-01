@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHmac } from 'node:crypto'
 import type { H3Event } from 'h3'
 import { getMongoConnection } from '~/server/utils/mongodb'
 
@@ -37,13 +37,17 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized', message: 'Missing auth token' })
   }
 
-  const hash = createHash('sha256').update(token).digest('hex')
+  const config = useRuntimeConfig()
+  const secret = config.otpSecret || process.env.OTP_SECRET || ''
+  const hash = createHmac('sha256', secret).update(token).digest('hex')
 
   try {
-    const config = useRuntimeConfig()
     const collectionName = config.mongodbCollectionPublishers || process.env.MONGODB_COLLECTION_PUBLISHERS || 'publishers'
     const { db } = await getMongoConnection()
     const collection = db.collection(collectionName)
+
+    // Ensure index exists for auth token lookups (idempotent)
+    collection.createIndex({ authKey: 1, authKeyExpiresAt: 1 }).catch(() => {})
 
     const doc = await collection.findOne(
       { authKey: hash, authKeyExpiresAt: { $gt: new Date() } },

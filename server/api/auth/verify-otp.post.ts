@@ -77,14 +77,15 @@ export default defineEventHandler(async (event) => {
 
   // OTP correct — issue session token
   const token = randomBytes(32).toString('hex')
-  const authKey = createHash('sha256').update(token).digest('hex')
+  // HMAC with server secret: leaked DB hash is useless without the secret
+  const authKey = createHmac('sha256', secret).update(token).digest('hex')
   const authKeyExpiresAt = new Date(now.getTime() + AUTH_KEY_EXPIRY_MS)
 
   await col.updateOne(
     { waId },
     {
-      $set: { authKey, authKeyExpiresAt },
-      $unset: { otp: '', otpExpiresAt: '', otpAttempts: '', otpBlockedUntil: '' },
+      $set: { authKey, authKeyExpiresAt, otpAttempts: 0 },
+      $unset: { otp: '', otpExpiresAt: '', otpBlockedUntil: '' },
     },
   )
 

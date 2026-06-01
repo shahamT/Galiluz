@@ -35,7 +35,9 @@ export default defineEventHandler(async (event) => {
   const doc = await col.findOne({ waId }, { projection: { status: 1, otpBlockedUntil: 1, otpSentCount: 1, otpSentWindowStart: 1 } })
 
   if (!doc || doc.status !== 'approved') {
-    throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'not_registered' })
+    // Return success silently — never reveal whether a phone is registered
+    console.info(`[Auth] OTP request for unregistered/unapproved phone: ${waId}`)
+    return { success: true }
   }
 
   const now = new Date()
@@ -68,9 +70,9 @@ export default defineEventHandler(async (event) => {
       $set: {
         otp: otpHash,
         otpExpiresAt,
-        otpAttempts: 0,
+        // Do NOT reset otpAttempts here — each OTP gets its own 5 attempts but
+        // resetting allows 5×N attempts. Counter resets only on successful login.
         // Do NOT clear otpBlockedUntil here — block must expire naturally.
-        // Clearing it would let attackers bypass the brute-force block by resending.
         otpSentCount: sentCount + 1,
         otpSentWindowStart: inWindow ? windowStart : now,
       },
@@ -102,7 +104,7 @@ export default defineEventHandler(async (event) => {
     console.error('[Auth] CRITICAL: WA credentials missing in production — OTP not sent')
     throw createError({ statusCode: 503, statusMessage: 'Service Unavailable', message: 'messaging_unavailable' })
   } else {
-    // Dev mode only: log OTP to console (never runs in production)
+    // Dev mode only (gated by NODE_ENV !== 'production')
     console.info(`[Auth][DEV] OTP for ${waId}: ${otp}`)
   }
 

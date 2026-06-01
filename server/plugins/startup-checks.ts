@@ -7,7 +7,7 @@ export default defineNitroPlugin(() => {
 
   if (isProduction) {
     const missing: string[] = []
-    if (!config.otpSecret) missing.push('OTP_SECRET')
+    if (!config.otpSecret || config.otpSecret.length < 32) missing.push('OTP_SECRET (must be at least 32 characters)')
     if (!config.waCloudAccessToken) missing.push('WA_CLOUD_ACCESS_TOKEN')
     if (!config.waPhoneNumberId) missing.push('WA_PHONE_NUMBER_ID')
 
