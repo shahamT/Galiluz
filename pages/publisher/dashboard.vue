@@ -4,7 +4,7 @@
 
     <div class="PublisherDashboard-header">
       <h1 class="PublisherDashboard-title">דשבורד אירועים</h1>
-      <p class="PublisherDashboard-greeting">ברוך/ה הבאה {{ authStore.user?.fullName }}, כאן תוכל לקבל מבט על על כל האירועים שפרסמת!</p>
+      <p class="PublisherDashboard-greeting">ברוך/ה הבאה {{ authStore.user?.fullName }}, כאן תוכל לקבל מבט מלמעלה על כל האירועים שפרסמת!</p>
     </div>
 
     <template v-if="data?.eventCounts?.total === 0">
