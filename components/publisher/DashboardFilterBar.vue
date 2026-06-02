@@ -21,9 +21,9 @@ defineProps({ modelValue: { type: String, default: 'all' } })
 const emit = defineEmits(['update:modelValue'])
 
 const options = [
-  { value: 'all', label: 'כל הזמנים', icon: 'history' },
+  { value: 'all', label: 'כל האירועים', icon: 'history' },
   { value: 'active', label: 'אירועים פעילים', icon: 'event_available' },
-  { value: 'month', label: 'החודש', icon: 'calendar_today' },
+  { value: 'month', label: 'אירועים החודש', icon: 'calendar_today' },
 ]
 </script>
 

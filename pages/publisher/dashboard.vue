@@ -58,7 +58,7 @@ definePageMeta({ middleware: 'auth' })
 useHead({ title: 'דשבורד | גלילו"ז' })
 
 const authStore = useAuthStore()
-const filter = ref('all')
+const filter = ref('active')
 
 const { data, refresh } = await useFetch('/api/publisher/dashboard', {
   query: computed(() => ({ filter: filter.value })),
