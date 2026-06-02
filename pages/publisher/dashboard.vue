@@ -2,6 +2,10 @@
   <LayoutProtectedShell>
     <PublisherNavTabs />
 
+    <template v-if="data?.eventCounts?.total === 0">
+      <PublisherDashboardEmptyState />
+    </template>
+    <template v-else>
     <PublisherDashboardEventsOverview :counts="data?.eventCounts || { total: 0, future: 0, past: 0 }" />
 
     <PublisherDashboardFilterBar v-model="filter" />
@@ -39,6 +43,7 @@
       <PublisherDashboardTopEvents :events="data?.topEvents || []" />
       <PublisherDashboardRecentLogs :logs="data?.recentLogs || []" />
     </div>
+    </template>
   </LayoutProtectedShell>
 </template>
 
