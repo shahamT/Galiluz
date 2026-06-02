@@ -1,11 +1,12 @@
 <template>
-  <div class="DashboardFilterBar">
+  <div class="DashboardFilterBar" role="group" aria-label="סינון נתונים">
     <button
       v-for="opt in options"
       :key="opt.value"
       type="button"
-      class="DashboardFilterBar-chip"
-      :class="{ 'DashboardFilterBar-chip--active': modelValue === opt.value }"
+      class="DashboardFilterBar-segment"
+      :class="{ 'DashboardFilterBar-segment--active': modelValue === opt.value }"
+      :aria-pressed="modelValue === opt.value"
       @click="emit('update:modelValue', opt.value)"
     >
       {{ opt.label }}
@@ -30,36 +31,46 @@ const options = [
 
 .DashboardFilterBar {
   display: flex;
-  gap: var(--spacing-xs);
+  align-items: stretch;
+  height: var(--control-height);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: var(--light-bg);
+  width: fit-content;
   margin-bottom: var(--spacing-lg);
 
-  &-chip {
+  @include mobile {
+    height: var(--control-height-mobile);
+    width: 100%;
+  }
+
+  &-segment {
     display: flex;
     align-items: center;
-    justify-content: center;
-    height: var(--control-height);
     padding: 0 var(--spacing-md);
-    border: 2px solid var(--brand-dark-green);
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--brand-dark-green);
     font-size: var(--font-size-sm);
-    font-family: var(--font-family-body);
     font-weight: 600;
+    font-family: var(--font-family-body);
+    color: var(--brand-dark-green);
+    background-color: transparent;
+    border: none;
     cursor: pointer;
-    transition: background-color 0.2s ease, color 0.2s ease;
     white-space: nowrap;
+    transition: background-color 0.2s ease, color 0.2s ease;
 
-    &:hover { background-color: var(--brand-dark-green); color: var(--chip-text-white); }
+    &:hover:not(.DashboardFilterBar-segment--active) {
+      background-color: var(--day-cell-hover-bg);
+    }
 
     &--active {
-      background: var(--brand-dark-green);
+      background-color: var(--brand-dark-green);
       color: var(--chip-text-white);
     }
 
     @include mobile {
-      height: var(--section-header-height);
-      font-size: var(--font-size-md);
+      flex: 1;
+      justify-content: center;
+      padding: 0 var(--spacing-sm);
     }
   }
 }
