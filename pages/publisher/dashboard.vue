@@ -16,7 +16,7 @@
         label="צפיות"
         :value="data?.totals?.views || 0"
         icon="visibility"
-        color="var(--brand-dark-green)"
+        color="#0b974a"
       />
       <PublisherDashboardKpiCard
         label="מבקרים ייחודיים"

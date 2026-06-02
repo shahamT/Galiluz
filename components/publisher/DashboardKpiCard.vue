@@ -17,13 +17,32 @@ const props = defineProps({
 const formattedValue = computed(() =>
   props.value >= 1000 ? `${(props.value / 1000).toFixed(1)}K` : String(props.value)
 )
+
+function hexToRgb(hex) {
+  const c = hex.replace('#', '')
+  const r = parseInt(c.substring(0, 2), 16)
+  const g = parseInt(c.substring(2, 4), 16)
+  const b = parseInt(c.substring(4, 6), 16)
+  return `${r}, ${g}, ${b}`
+}
+
+function colorToRgb(color) {
+  if (color.startsWith('#')) return hexToRgb(color)
+  // For CSS vars like var(--brand-dark-green) use a fallback
+  return '11, 151, 74'
+}
+
+const bgColor = computed(() => `rgba(${colorToRgb(props.color)}, 0.08)`)
+const borderColor = computed(() => `rgba(${colorToRgb(props.color)}, 0.2)`)
 </script>
 
 <style lang="scss">
 .DashboardKpiCard {
-  background: var(--color-background);
+  background: v-bind(bgColor);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid v-bind(borderColor);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
   padding: var(--spacing-lg);
   display: flex;
   flex-direction: column;
