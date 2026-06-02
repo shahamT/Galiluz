@@ -37,9 +37,9 @@ defineProps({ events: { type: Array, default: () => [] } })
 
   &-title {
     margin: 0 0 var(--spacing-md);
-    font-size: var(--font-size-base);
-    font-weight: 700;
-    color: var(--color-text);
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--brand-dark-green);
   }
 
   &-empty {

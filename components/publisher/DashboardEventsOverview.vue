@@ -89,21 +89,28 @@ defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, pas
   &-cta {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--spacing-xs);
-    padding: var(--spacing-sm) var(--spacing-lg);
+    height: var(--control-height);
+    padding: 0 var(--spacing-xl);
     background: var(--brand-dark-green);
-    color: #fff;
+    color: var(--chip-text-white);
     border-radius: var(--radius-md);
     font-size: var(--font-size-sm);
     font-weight: 600;
     text-decoration: none;
     white-space: nowrap;
-    transition: opacity 0.15s;
+    transition: opacity 0.2s ease;
     flex-shrink: 0;
 
     &:hover { opacity: 0.9; }
 
-    @include mobile { justify-content: center; }
+    @include mobile {
+      height: var(--section-header-height);
+      font-size: var(--font-size-md);
+      padding: 0 var(--spacing-md);
+      align-self: stretch;
+    }
   }
 }
 </style>

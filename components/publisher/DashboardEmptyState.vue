@@ -27,6 +27,8 @@ defineOptions({ name: 'DashboardEmptyState' })
 </script>
 
 <style lang="scss">
+@use '~/assets/css/breakpoints' as *;
+
 .DashboardEmptyState {
   display: flex;
   flex-direction: column;
@@ -52,17 +54,25 @@ defineOptions({ name: 'DashboardEmptyState' })
   &-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--spacing-xs);
-    padding: var(--spacing-sm-lg) var(--spacing-xl);
+    height: var(--control-height);
+    padding: 0 var(--spacing-xl);
     background: var(--brand-dark-green);
-    color: #fff;
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-base);
-    font-weight: 700;
+    color: var(--chip-text-white);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
     text-decoration: none;
-    transition: opacity 0.15s;
+    transition: opacity 0.2s ease;
 
     &:hover { opacity: 0.9; }
+
+    @include mobile {
+      height: var(--section-header-height);
+      font-size: var(--font-size-md);
+      padding: 0 var(--spacing-md);
+    }
   }
 }
 </style>

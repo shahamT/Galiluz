@@ -26,31 +26,40 @@ const options = [
 </script>
 
 <style lang="scss">
+@use '~/assets/css/breakpoints' as *;
+
 .DashboardFilterBar {
   display: flex;
   gap: var(--spacing-xs);
   margin-bottom: var(--spacing-lg);
 
   &-chip {
-    padding: var(--spacing-xs) var(--spacing-md);
-    border: 1.5px solid var(--color-border);
-    border-radius: var(--radius-full);
-    background: var(--color-background);
-    color: var(--color-text-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--control-height);
+    padding: 0 var(--spacing-md);
+    border: 2px solid var(--brand-dark-green);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--brand-dark-green);
     font-size: var(--font-size-sm);
     font-family: var(--font-family-body);
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: background-color 0.2s ease, color 0.2s ease;
     white-space: nowrap;
 
-    &:hover { border-color: var(--brand-dark-green); color: var(--brand-dark-green); }
+    &:hover { background-color: var(--brand-dark-green); color: var(--chip-text-white); }
 
     &--active {
       background: var(--brand-dark-green);
-      border-color: var(--brand-dark-green);
-      color: #fff;
-      font-weight: 600;
+      color: var(--chip-text-white);
+    }
+
+    @include mobile {
+      height: var(--section-header-height);
+      font-size: var(--font-size-md);
     }
   }
 }
