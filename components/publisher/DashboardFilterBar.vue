@@ -48,6 +48,7 @@ const options = [
   &-segment {
     display: flex;
     align-items: center;
+    gap: var(--spacing-xs);
     padding: 0 var(--spacing-md);
     font-size: var(--font-size-sm);
     font-weight: 600;
