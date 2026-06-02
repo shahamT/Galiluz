@@ -31,10 +31,7 @@ defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, pas
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-lg);
-  background: rgba(100, 116, 139, 0.07);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(100, 116, 139, 0.18);
+  background: var(--light-bg);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg) var(--spacing-xl);
   margin-bottom: var(--spacing-xl);
