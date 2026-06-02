@@ -2,6 +2,11 @@
   <LayoutProtectedShell>
     <PublisherNavTabs />
 
+    <div class="PublisherDashboard-header">
+      <h1 class="PublisherDashboard-title">דשבורד אירועים</h1>
+      <p class="PublisherDashboard-greeting">ברוך/ה הבאה {{ authStore.user?.fullName }}, כאן תוכל לקבל מבט על על כל האירועים שפרסמת!</p>
+    </div>
+
     <template v-if="data?.eventCounts?.total === 0">
       <PublisherDashboardEmptyState />
     </template>
@@ -52,6 +57,7 @@ defineOptions({ name: 'PublisherDashboard' })
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'דשבורד | גלילו"ז' })
 
+const authStore = useAuthStore()
 const filter = ref('all')
 
 const { data, refresh } = await useFetch('/api/publisher/dashboard', {
@@ -70,6 +76,24 @@ const totalInteractions = computed(() => {
 @use '~/assets/css/breakpoints' as *;
 
 .PublisherDashboard {
+  &-header {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  &-title {
+    margin: 0 0 var(--spacing-xs);
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--brand-dark-green);
+  }
+
+  &-greeting {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text-light);
+    line-height: 1.5;
+  }
+
   &-kpis {
     display: flex;
     gap: var(--spacing-md);
