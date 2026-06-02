@@ -9,6 +9,7 @@
       :aria-pressed="modelValue === opt.value"
       @click="emit('update:modelValue', opt.value)"
     >
+      <UiIcon :name="opt.icon" size="sm" />
       {{ opt.label }}
     </button>
   </div>
@@ -20,9 +21,9 @@ defineProps({ modelValue: { type: String, default: 'all' } })
 const emit = defineEmits(['update:modelValue'])
 
 const options = [
-  { value: 'all', label: 'כל הזמנים' },
-  { value: 'active', label: 'אירועים פעילים' },
-  { value: 'month', label: 'החודש' },
+  { value: 'all', label: 'כל הזמנים', icon: 'history' },
+  { value: 'active', label: 'אירועים פעילים', icon: 'event_available' },
+  { value: 'month', label: 'החודש', icon: 'calendar_today' },
 ]
 </script>
 
