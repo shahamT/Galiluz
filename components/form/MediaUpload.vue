@@ -21,7 +21,11 @@
         <template v-if="isFull">הגעתם למקסימום (6 קבצים)</template>
         <template v-else>גררו קבצים לכאן או <strong>לחצו לבחירה</strong></template>
       </span>
-      <span class="MediaUpload-sub">תמונות וסרטונים, עד 6 קבצים</span>
+      <span class="MediaUpload-sub">תמונות וסרטונים, עד 6 קבצים, עד 20MB לקובץ</span>
+    </div>
+
+    <div v-if="fileErrors.length" class="MediaUpload-errors">
+      <p v-for="err in fileErrors" :key="err" class="MediaUpload-error">{{ err }}</p>
     </div>
 
     <div v-if="previews.length" class="MediaUpload-previews">
@@ -32,7 +36,9 @@
       >
         <img v-if="item.isImage" :src="item.url" :alt="`קובץ ${i + 1}`" class="MediaUpload-thumbImg" />
         <div v-else class="MediaUpload-thumbVideo">
-          <UiIcon name="videocam" size="md" />
+          <img v-if="videoThumbnails[item.id]" :src="videoThumbnails[item.id]" :alt="`סרטון ${i + 1}`" class="MediaUpload-thumbImg" />
+          <UiIcon v-else name="videocam" size="md" />
+          <div class="MediaUpload-thumbVideoBadge"><UiIcon name="play_arrow" size="sm" /></div>
         </div>
         <button
           type="button"
@@ -57,7 +63,33 @@ const emit = defineEmits(['update:modelValue'])
 
 const fileInput = ref(null)
 const isDragOver = ref(false)
+const fileErrors = ref([])
+const videoThumbnails = ref({})
+
+async function generateVideoThumbnail(file) {
+  const id = file.name + file.size
+  const url = URL.createObjectURL(file)
+  return new Promise((resolve) => {
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.muted = true
+    video.src = url
+    video.currentTime = 0.5
+    video.addEventListener('seeked', () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = video.videoWidth || 320
+      canvas.height = video.videoHeight || 180
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+      videoThumbnails.value[id] = canvas.toDataURL('image/jpeg', 0.7)
+      URL.revokeObjectURL(url)
+      resolve()
+    }, { once: true })
+    video.addEventListener('error', () => { URL.revokeObjectURL(url); resolve() }, { once: true })
+  })
+}
 const MAX_FILES = 6
+const MAX_SIZE_MB = 20
+const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 
 const previews = computed(() =>
   props.modelValue.map((f) => ({
@@ -70,9 +102,27 @@ const previews = computed(() =>
 const isFull = computed(() => props.modelValue.length >= MAX_FILES)
 
 function addFiles(files) {
+  fileErrors.value = []
+  const errors = []
+  const valid = []
+
+  for (const file of Array.from(files)) {
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+      errors.push(`"${file.name}" — סוג קובץ לא נתמך`)
+      continue
+    }
+    if (file.size > MAX_SIZE_BYTES) {
+      errors.push(`"${file.name}" — חורג מ-${MAX_SIZE_MB}MB`)
+      continue
+    }
+    valid.push(file)
+  }
+
+  fileErrors.value = errors
   const remaining = MAX_FILES - props.modelValue.length
-  const toAdd = Array.from(files).slice(0, remaining)
+  const toAdd = valid.slice(0, remaining)
   emit('update:modelValue', [...props.modelValue, ...toAdd])
+  toAdd.filter(f => f.type.startsWith('video/')).forEach(f => generateVideoThumbnail(f))
 }
 
 function onFileChange(e) {
@@ -144,6 +194,18 @@ function remove(index) {
     color: var(--color-text-muted);
   }
 
+  &-errors {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &-error {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--color-error);
+  }
+
   &-previews {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
@@ -165,6 +227,7 @@ function remove(index) {
   }
 
   &-thumbVideo {
+    position: relative;
     width: 100%;
     height: 100%;
     display: flex;
@@ -172,6 +235,21 @@ function remove(index) {
     justify-content: center;
     background: var(--color-surface);
     color: var(--color-text-muted);
+  }
+
+  &-thumbVideoBadge {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
   }
 
   &-thumbRemove {

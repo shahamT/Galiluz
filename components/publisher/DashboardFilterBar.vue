@@ -10,7 +10,8 @@
       @click="emit('update:modelValue', opt.value)"
     >
       <UiIcon :name="opt.icon" size="sm" />
-      {{ opt.label }}
+      <span class="DashboardFilterBar-label">{{ opt.label }}</span>
+      <span class="DashboardFilterBar-labelMobile">{{ opt.mobileLabel }}</span>
     </button>
   </div>
 </template>
@@ -21,9 +22,9 @@ defineProps({ modelValue: { type: String, default: 'all' } })
 const emit = defineEmits(['update:modelValue'])
 
 const options = [
-  { value: 'all', label: 'כל האירועים', icon: 'history' },
-  { value: 'active', label: 'אירועים פעילים', icon: 'event_available' },
-  { value: 'month', label: 'אירועים החודש', icon: 'calendar_today' },
+  { value: 'all',    label: 'כל האירועים',    mobileLabel: 'הכל',              icon: 'history' },
+  { value: 'active', label: 'אירועים עתידיים', mobileLabel: 'אירועים עתידיים', icon: 'event_available' },
+  { value: 'month',  label: 'אירועים החודש',   mobileLabel: 'החודש',            icon: 'calendar_today' },
 ]
 </script>
 
@@ -73,6 +74,13 @@ const options = [
       flex: 1;
       justify-content: center;
       padding: 0 var(--spacing-sm);
+    }
+
+    .DashboardFilterBar-labelMobile { display: none; }
+
+    @include mobile {
+      .DashboardFilterBar-label { display: none; }
+      .DashboardFilterBar-labelMobile { display: inline; }
     }
   }
 }

@@ -1,11 +1,20 @@
 <template>
   <div class="DashboardRecentLogs">
     <h3 class="DashboardRecentLogs-title">פעילות אחרונה</h3>
-    <div v-if="!logs?.length" class="DashboardRecentLogs-empty">אין פעילות אחרונה</div>
+    <ul v-if="loading" class="DashboardRecentLogs-list">
+      <li v-for="i in 6" :key="i" class="DashboardRecentLogs-row">
+        <div class="DashboardRecentLogs-sk DashboardRecentLogs-sk--icon" />
+        <div class="DashboardRecentLogs-info">
+          <div class="DashboardRecentLogs-sk DashboardRecentLogs-sk--text" />
+          <div class="DashboardRecentLogs-sk DashboardRecentLogs-sk--time" />
+        </div>
+      </li>
+    </ul>
+    <div v-else-if="!logs?.length" class="DashboardRecentLogs-empty">אין פעילות אחרונה</div>
     <ul v-else class="DashboardRecentLogs-list">
       <li v-for="log in logs" :key="log.createdAt" class="DashboardRecentLogs-row">
         <span class="DashboardRecentLogs-icon" :class="`DashboardRecentLogs-icon--${log.action}`">
-          <span class="material-symbols-rounded">{{ iconFor(log.action) }}</span>
+          <UiIcon :name="iconFor(log.action)" size="sm" />
         </span>
         <div class="DashboardRecentLogs-info">
           <span class="DashboardRecentLogs-text">
@@ -20,7 +29,10 @@
 
 <script setup>
 defineOptions({ name: 'DashboardRecentLogs' })
-defineProps({ logs: { type: Array, default: () => [] } })
+defineProps({
+  logs: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
+})
 
 function iconFor(action) {
   if (action === 'event_activated') return 'check_circle'
@@ -99,8 +111,6 @@ function relativeTime(iso) {
     &--event_activated { background: rgba(11,151,74,0.12); color: var(--brand-dark-green); }
     &--event_edited    { background: rgba(25,118,210,0.12); color: var(--color-primary); }
     &--event_deleted   { background: rgba(211,47,47,0.12);  color: var(--color-error); }
-
-    .material-symbols-rounded { font-size: 1.1rem; }
   }
 
   &-info {
@@ -119,6 +129,22 @@ function relativeTime(iso) {
   &-time {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
+  }
+
+  &-sk {
+    border-radius: var(--radius-sm);
+    background: linear-gradient(90deg, var(--color-border) 25%, rgba(255,255,255,0.6) 50%, var(--color-border) 75%);
+    background-size: 200% 100%;
+    animation: logsShimmer 1.4s infinite;
+
+    &--icon { width: 2rem; height: 2rem; border-radius: 50%; flex-shrink: 0; }
+    &--text { width: 75%; height: 0.85rem; }
+    &--time { width: 40%; height: 0.7rem; margin-top: 4px; }
+  }
+
+  @keyframes logsShimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 }
 </style>

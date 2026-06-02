@@ -1,7 +1,20 @@
 <template>
   <div class="DashboardTopEvents">
     <h3 class="DashboardTopEvents-title">האירועים המובילים</h3>
-    <div v-if="!events?.length" class="DashboardTopEvents-empty">אין נתוני צפיות עדיין</div>
+    <ul v-if="loading" class="DashboardTopEvents-list">
+      <li v-for="i in 5" :key="i" class="DashboardTopEvents-row">
+        <div class="DashboardTopEvents-sk DashboardTopEvents-sk--rank" />
+        <div class="DashboardTopEvents-info">
+          <div class="DashboardTopEvents-sk DashboardTopEvents-sk--name" />
+          <div class="DashboardTopEvents-sk DashboardTopEvents-sk--date" />
+        </div>
+        <div class="DashboardTopEvents-metrics">
+          <div class="DashboardTopEvents-sk DashboardTopEvents-sk--views" />
+          <div class="DashboardTopEvents-sk DashboardTopEvents-sk--unique" />
+        </div>
+      </li>
+    </ul>
+    <div v-else-if="!events?.length" class="DashboardTopEvents-empty">אין נתוני צפיות עדיין</div>
     <ul v-else class="DashboardTopEvents-list">
       <li v-for="(ev, i) in events" :key="`${ev.eventId}-${ev.occurrenceDate || i}`" class="DashboardTopEvents-row">
         <span class="DashboardTopEvents-rank">{{ i + 1 }}</span>
@@ -23,7 +36,10 @@
 
 <script setup>
 defineOptions({ name: 'DashboardTopEvents' })
-defineProps({ events: { type: Array, default: () => [] } })
+defineProps({
+  events: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
+})
 </script>
 
 <style lang="scss">
@@ -124,6 +140,24 @@ defineProps({ events: { type: Array, default: () => [] } })
   &-unique {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
+  }
+
+  &-sk {
+    border-radius: var(--radius-sm);
+    background: linear-gradient(90deg, var(--color-border) 25%, rgba(255,255,255,0.6) 50%, var(--color-border) 75%);
+    background-size: 200% 100%;
+    animation: topEventsShimmer 1.4s infinite;
+
+    &--rank  { width: 1.2rem; height: 0.85rem; }
+    &--name  { width: 65%; height: 0.85rem; }
+    &--date  { width: 30%; height: 0.7rem; margin-top: 3px; }
+    &--views { width: 3.5rem; height: 0.85rem; }
+    &--unique { width: 2.8rem; height: 0.7rem; margin-top: 3px; }
+  }
+
+  @keyframes topEventsShimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 }
 </style>

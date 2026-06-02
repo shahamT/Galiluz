@@ -11,16 +11,17 @@
         <span class="DashboardEventsOverview-label">אירועים שהסתיימו</span>
       </div>
     </div>
-    <NuxtLink to="/publisher/add-event" class="DashboardEventsOverview-cta">
+    <button type="button" class="DashboardEventsOverview-cta" @click="emit('add-event')">
       <UiIcon name="add" size="sm" />
-      פרסם אירוע חדש
-    </NuxtLink>
+      אירוע חדש
+    </button>
   </div>
 </template>
 
 <script setup>
 defineOptions({ name: 'DashboardEventsOverview' })
 defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, past: 0 }) } })
+const emit = defineEmits(['add-event'])
 </script>
 
 <style lang="scss">
@@ -34,7 +35,6 @@ defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, pas
   background: var(--light-bg);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg) var(--spacing-xl);
-  margin-bottom: var(--spacing-xl);
 
   @include mobile {
     flex-direction: column;
@@ -53,7 +53,7 @@ defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, pas
   &-divider {
     width: 1px;
     height: 2rem;
-    background: var(--color-border);
+    background: var(--brand-light-green);
     flex-shrink: 0;
   }
 
@@ -75,7 +75,7 @@ defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, pas
   }
 
   &-label {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     color: var(--color-text-light);
     white-space: nowrap;
   }
@@ -89,9 +89,12 @@ defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, pas
     padding: 0 var(--spacing-xl);
     background: var(--brand-dark-green);
     color: var(--chip-text-white);
+    border: none;
     border-radius: var(--radius-md);
     font-size: var(--font-size-sm);
     font-weight: 600;
+    font-family: var(--font-family-body);
+    cursor: pointer;
     text-decoration: none;
     white-space: nowrap;
     transition: opacity 0.2s ease;

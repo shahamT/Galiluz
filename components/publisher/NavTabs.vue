@@ -14,7 +14,7 @@ defineOptions({ name: 'PublisherNavTabs' })
 
 const route = useRoute()
 const isDashboard = computed(() => route.path === '/publisher/dashboard' || route.path === '/publisher')
-const isEvents = computed(() => route.path === '/publisher/events')
+const isEvents = computed(() => route.path.startsWith('/publisher/events'))
 </script>
 
 <style lang="scss">

@@ -186,7 +186,7 @@ export default defineEventHandler(async (event) => {
   // ── 6. Recent logs ────────────────────────────────────────────────────────
   const rawLogs = await logsCol.find(
     { publisherId: session.publisherId, action: { $in: PUBLISHER_LOG_ACTIONS } },
-    { sort: { createdAt: -1 }, limit: 3, projection: { action: 1, title: 1, rawTitle: 1, createdAt: 1 } },
+    { sort: { createdAt: -1 }, limit: 6, projection: { action: 1, title: 1, rawTitle: 1, createdAt: 1 } },
   ).toArray()
 
   const recentLogs = rawLogs.map((l: any) => ({

@@ -2,53 +2,62 @@
   <LayoutProtectedShell>
     <PublisherNavTabs />
 
+    <div class="PublisherDashboard-body">
     <div class="PublisherDashboard-header">
       <h1 class="PublisherDashboard-title">דשבורד אירועים</h1>
-      <p class="PublisherDashboard-greeting">ברוך/ה הבאה {{ authStore.user?.fullName }}, כאן תוכל לקבל מבט מלמעלה על כל האירועים שפרסמת!</p>
+      <p class="PublisherDashboard-greeting">ברוך/ה הבאה {{ authStore.user?.fullName }}, כאן תוכל/י לקבל מבט מלמעלה על כל האירועים שפרסמת!</p>
     </div>
 
     <template v-if="data?.eventCounts?.total === 0">
       <PublisherDashboardEmptyState />
     </template>
     <template v-else>
-    <PublisherDashboardEventsOverview :counts="data?.eventCounts || { total: 0, future: 0, past: 0 }" />
+    <PublisherDashboardEventsOverview :counts="data?.eventCounts || { total: 0, future: 0, past: 0 }" @add-event="showEventForm = true" />
 
+    <div class="PublisherDashboard-divider" />
     <PublisherDashboardFilterBar v-model="filter" />
 
     <!-- KPI row -->
     <div class="PublisherDashboard-kpis">
       <PublisherDashboardKpiCard
+        label="אירועים פעילים"
+        :value="data?.activeEventsCount || 0"
+        icon="event"
+        color="#0b974a"
+        :loading="pending"
+      />
+      <PublisherDashboardKpiCard
         label="צפיות"
         :value="data?.totals?.views || 0"
         icon="visibility"
-        color="#0b974a"
+        color="#85c84b"
+        :loading="pending"
       />
       <PublisherDashboardKpiCard
         label="מבקרים ייחודיים"
         :value="data?.totals?.uniqueViews || 0"
         icon="person"
-        color="#0ea5e9"
-      />
-      <PublisherDashboardKpiCard
-        label="אירועים פעילים"
-        :value="data?.activeEventsCount || 0"
-        icon="event"
-        color="#6366f1"
+        color="#3c92b5"
+        :loading="pending"
       />
       <PublisherDashboardKpiCard
         label="אינטרקציות"
         :value="totalInteractions"
         icon="touch_app"
-        color="#f59e0b"
+        color="#80dcda"
+        :loading="pending"
       />
     </div>
 
     <!-- Bottom row -->
     <div class="PublisherDashboard-bottom">
-      <PublisherDashboardTopEvents :events="data?.topEvents || []" />
-      <PublisherDashboardRecentLogs :logs="data?.recentLogs || []" />
+      <PublisherDashboardTopEvents :events="data?.topEvents || []" :loading="pending" />
+      <PublisherDashboardRecentLogs :logs="data?.recentLogs || []" :loading="pending" />
     </div>
     </template>
+    </div>
+
+    <PublisherEventFormModal v-if="showEventForm" @close="showEventForm = false" />
   </LayoutProtectedShell>
 </template>
 
@@ -59,8 +68,9 @@ useHead({ title: 'דשבורד | גלילו"ז' })
 
 const authStore = useAuthStore()
 const filter = ref('active')
+const showEventForm = ref(false)
 
-const { data, refresh } = await useFetch('/api/publisher/dashboard', {
+const { data, pending } = await useAuthFetch('/api/publisher/dashboard', {
   query: computed(() => ({ filter: filter.value })),
   watch: [filter],
 })
@@ -76,6 +86,16 @@ const totalInteractions = computed(() => {
 @use '~/assets/css/breakpoints' as *;
 
 .PublisherDashboard {
+  &-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+
+    @include mobile {
+      padding-inline: var(--spacing-md);
+    }
+  }
+
   &-header {
     margin-bottom: var(--spacing-xl);
   }
@@ -92,6 +112,12 @@ const totalInteractions = computed(() => {
     font-size: var(--font-size-base);
     color: var(--color-text-light);
     line-height: 1.5;
+  }
+
+  &-divider {
+    height: 1px;
+    background: var(--brand-light-green);
+    margin: var(--spacing-lg) 0;
   }
 
   &-kpis {
