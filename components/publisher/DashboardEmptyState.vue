@@ -14,7 +14,7 @@
         <path d="M111 100 L118 107 L129 93" stroke="#0b974a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
-    <p class="DashboardEmptyState-text">עדיין אין לכם אירועים מפורסמים</p>
+    <p class="DashboardEmptyState-text">עדיין אין לכם אירועים</p>
     <NuxtLink to="/publisher/add-event" class="DashboardEmptyState-btn">
       <UiIcon name="add" size="sm" />
       פרסמו את האירוע הראשון שלכם!
