@@ -7,12 +7,12 @@
       </div>
       <div class="DashboardEventsOverview-divider" />
       <div class="DashboardEventsOverview-stat">
-        <span class="DashboardEventsOverview-value DashboardEventsOverview-value--muted">{{ counts.past }}</span>
+        <span class="DashboardEventsOverview-value DashboardEventsOverview-value--light-green">{{ counts.past }}</span>
         <span class="DashboardEventsOverview-label">אירועים שהסתיימו</span>
       </div>
       <div class="DashboardEventsOverview-divider" />
       <div class="DashboardEventsOverview-stat">
-        <span class="DashboardEventsOverview-value">{{ counts.total }}</span>
+        <span class="DashboardEventsOverview-value DashboardEventsOverview-value--light-green">{{ counts.total }}</span>
         <span class="DashboardEventsOverview-label">סה"כ אירועים</span>
       </div>
     </div>
@@ -79,7 +79,7 @@ defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, pas
     line-height: 1;
 
     &--green { color: var(--brand-dark-green); }
-    &--muted { color: var(--color-text-muted); }
+    &--light-green { color: var(--brand-light-green); }
   }
 
   &-label {
