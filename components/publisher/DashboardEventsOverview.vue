@@ -2,18 +2,18 @@
   <div class="DashboardEventsOverview">
     <div class="DashboardEventsOverview-stats">
       <div class="DashboardEventsOverview-stat">
-        <span class="DashboardEventsOverview-value">{{ counts.total }}</span>
-        <span class="DashboardEventsOverview-label">סה"כ אירועים</span>
-      </div>
-      <div class="DashboardEventsOverview-divider" />
-      <div class="DashboardEventsOverview-stat">
         <span class="DashboardEventsOverview-value DashboardEventsOverview-value--green">{{ counts.future }}</span>
-        <span class="DashboardEventsOverview-label">אירועים עתידיים</span>
+        <span class="DashboardEventsOverview-label">אירועים פעילים</span>
       </div>
       <div class="DashboardEventsOverview-divider" />
       <div class="DashboardEventsOverview-stat">
         <span class="DashboardEventsOverview-value DashboardEventsOverview-value--muted">{{ counts.past }}</span>
         <span class="DashboardEventsOverview-label">אירועים שהסתיימו</span>
+      </div>
+      <div class="DashboardEventsOverview-divider" />
+      <div class="DashboardEventsOverview-stat">
+        <span class="DashboardEventsOverview-value">{{ counts.total }}</span>
+        <span class="DashboardEventsOverview-label">סה"כ אירועים</span>
       </div>
     </div>
     <NuxtLink to="/publisher/add-event" class="DashboardEventsOverview-cta">
