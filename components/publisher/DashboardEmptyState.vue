@@ -66,6 +66,7 @@ defineOptions({ name: 'DashboardEmptyState' })
     text-decoration: none;
     transition: opacity 0.2s ease;
 
+    &:hover, &:visited, &:active { color: var(--chip-text-white); }
     &:hover { opacity: 0.9; }
 
     @include mobile {

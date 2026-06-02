@@ -103,6 +103,7 @@ defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, pas
     transition: opacity 0.2s ease;
     flex-shrink: 0;
 
+    &:hover, &:visited, &:active { color: var(--chip-text-white); }
     &:hover { opacity: 0.9; }
 
     @include mobile {
