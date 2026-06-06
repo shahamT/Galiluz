@@ -28,7 +28,24 @@
       <p v-for="err in fileErrors" :key="err" class="MediaUpload-error">{{ err }}</p>
     </div>
 
-    <div v-if="previews.length" class="MediaUpload-previews">
+    <div v-if="existingPreviews.length || previews.length" class="MediaUpload-previews">
+      <!-- Existing cloudinary media -->
+      <div
+        v-for="(item, i) in existingPreviews"
+        :key="`existing-${i}`"
+        class="MediaUpload-thumb"
+      >
+        <img :src="item.url" :alt="`קובץ קיים ${i + 1}`" class="MediaUpload-thumbImg" />
+        <button
+          type="button"
+          class="MediaUpload-thumbRemove"
+          :aria-label="`הסר קובץ קיים ${i + 1}`"
+          @click="removeExisting(i)"
+        >
+          <UiIcon name="close" size="sm" />
+        </button>
+      </div>
+      <!-- New file uploads -->
       <div
         v-for="(item, i) in previews"
         :key="item.id"
@@ -57,9 +74,20 @@
 defineOptions({ name: 'MediaUpload' })
 
 const props = defineProps({
-  modelValue: { type: Array, default: () => [] },
+  modelValue:    { type: Array, default: () => [] },
+  existingMedia: { type: Array, default: () => [] },
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'update:existingMedia'])
+
+const existingPreviews = computed(() =>
+  props.existingMedia.map(m => ({ url: m.cloudinaryURL || m.url || '' })).filter(m => m.url)
+)
+
+function removeExisting(i) {
+  const updated = [...props.existingMedia]
+  updated.splice(i, 1)
+  emit('update:existingMedia', updated)
+}
 
 const fileInput = ref(null)
 const isDragOver = ref(false)
@@ -75,31 +103,64 @@ async function generateVideoThumbnail(file) {
     video.muted = true
     video.src = url
     video.currentTime = 0.5
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      URL.revokeObjectURL(url)
+      resolve()
+    }
+    const timeout = setTimeout(finish, 8000)
     video.addEventListener('seeked', () => {
       const canvas = document.createElement('canvas')
       canvas.width = video.videoWidth || 320
       canvas.height = video.videoHeight || 180
       canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
       videoThumbnails.value[id] = canvas.toDataURL('image/jpeg', 0.7)
-      URL.revokeObjectURL(url)
-      resolve()
+      clearTimeout(timeout)
+      finish()
     }, { once: true })
-    video.addEventListener('error', () => { URL.revokeObjectURL(url); resolve() }, { once: true })
+    video.addEventListener('error', () => { clearTimeout(timeout); finish() }, { once: true })
+    video.addEventListener('abort', () => { clearTimeout(timeout); finish() }, { once: true })
   })
 }
+
 const MAX_FILES = 6
 const MAX_SIZE_MB = 20
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 
+// Cache object URLs to avoid creating new ones on every render
+const previewUrls = ref({})
+
+watch(() => props.modelValue.map(f => f.name + f.size), (newIds) => {
+  const idSet = new Set(newIds)
+  // Revoke URLs for removed files
+  Object.keys(previewUrls.value).forEach(key => {
+    if (!idSet.has(key)) {
+      URL.revokeObjectURL(previewUrls.value[key])
+      delete previewUrls.value[key]
+    }
+  })
+  // Create URLs for new files
+  props.modelValue.forEach(f => {
+    const key = f.name + f.size
+    if (!previewUrls.value[key]) previewUrls.value[key] = URL.createObjectURL(f)
+  })
+}, { immediate: true })
+
+onUnmounted(() => {
+  Object.values(previewUrls.value).forEach(url => URL.revokeObjectURL(url))
+})
+
 const previews = computed(() =>
   props.modelValue.map((f) => ({
     id: f.name + f.size,
-    url: URL.createObjectURL(f),
+    url: previewUrls.value[f.name + f.size] || '',
     isImage: f.type.startsWith('image/'),
   }))
 )
 
-const isFull = computed(() => props.modelValue.length >= MAX_FILES)
+const isFull = computed(() => props.modelValue.length + props.existingMedia.length >= MAX_FILES)
 
 function addFiles(files) {
   fileErrors.value = []

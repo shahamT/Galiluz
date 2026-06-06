@@ -57,7 +57,7 @@
     </template>
     </div>
 
-    <PublisherEventFormModal v-if="showEventForm" @close="showEventForm = false" />
+    <PublisherEventFormModal v-if="showEventForm" @close="showEventForm = false" @submitted="onEventSaved" />
   </LayoutProtectedShell>
 </template>
 
@@ -69,6 +69,10 @@ useHead({ title: 'דשבורד | גלילו"ז' })
 const authStore = useAuthStore()
 const filter = ref('active')
 const showEventForm = ref(false)
+function onEventSaved({ id }) {
+  showEventForm.value = false
+  if (id) navigateTo(`/publisher/events/${id}?success=created`)
+}
 
 const { data, pending } = await useAuthFetch('/api/publisher/dashboard', {
   query: computed(() => ({ filter: filter.value })),

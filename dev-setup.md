@@ -12,10 +12,12 @@ Three services make up the system:
 ## Running the UI Locally
 
 ```bash
-npm run dev:web
+npm run dev
 ```
 
 Opens at `http://localhost:3000`. Reads from the **dev MongoDB** (`valley_luz_app_dev`).
+
+> **Note:** `npm run dev` runs `node scripts/dev.js` which starts both Vite and the Nitro server together. The old `npm run dev:web` alias also works but `npm run dev` is the standard command.
 
 This DB is separate from production, so any events you create locally won't affect the live site. If you want to see production data in the local UI, change `MONGODB_DB_NAME=valley_luz_app` in the root `.env` — but be careful, writes go to production too.
 
@@ -134,6 +136,42 @@ To switch local UI to read production data: change `MONGODB_DB_NAME=valley_luz_a
 
 | | Local Nuxt URL | MongoDB |
 |---|---|---|
-| `npm run dev:web` | `http://localhost:3000` | `valley_luz_app_dev` |
+| `npm run dev` | `http://localhost:3000` | `valley_luz_app_dev` |
 | `npm run dev:wa-bot` | talks to localhost:3000 | via Nuxt API |
 | Production | `https://galiluz.co.il` | `valley_luz_app` |
+
+---
+
+## Testing the Publisher Portal
+
+The publisher portal lives at `/publisher/dashboard` and requires authentication.
+
+### Logging in locally
+
+1. Start the app: `npm run dev`
+2. Go to `http://localhost:3000/login`
+3. Enter your phone number (must exist in the `publishers` collection with `status: 'approved'`)
+4. **OTP in dev mode:** If `WA_ACCESS_TOKEN` or `WA_PHONE_NUMBER_ID` are not set in the root `.env`, the OTP is **not sent via WhatsApp** and is instead printed to the Nitro console:
+   ```
+   [Auth][DEV] OTP for 972507153850: 123456
+   ```
+5. Enter the code and you're in.
+
+### Adding a publisher for testing
+
+Connect to the dev MongoDB and insert a document into the `publishers` collection:
+
+```js
+db.publishers.insertOne({
+  waId: "972507153850",   // phone in international format, digits only
+  fullName: "Test Publisher",
+  publishingAs: "Test Org",
+  status: "approved",
+  type: "publisher",
+  createdAt: new Date()
+})
+```
+
+### Manager access
+
+Set `type: "manager"` to get unrestricted access to all publisher events and the admin panel.

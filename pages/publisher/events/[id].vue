@@ -3,6 +3,14 @@
     <PublisherNavTabs />
 
     <div class="EventPage-body">
+      <!-- Success banner -->
+      <Transition name="EventPage-bannerFade">
+        <div v-if="successBanner" class="EventPage-successBanner">
+          <UiIcon name="check_circle" size="sm" />
+          {{ successBanner }}
+        </div>
+      </Transition>
+
       <!-- Page header -->
       <div class="EventPage-header">
         <NuxtLink to="/publisher/events" class="EventPage-back">
@@ -14,10 +22,10 @@
           <div v-else class="EventPage-titleSkeleton" />
         </div>
         <div v-if="event" class="EventPage-actions">
-          <NuxtLink :to="`/publisher/events/edit/${event.id}`" class="EventPage-actionBtn EventPage-actionBtn--edit">
+          <button type="button" class="EventPage-actionBtn EventPage-actionBtn--edit" @click="showEditForm = true">
             <UiIcon name="edit" size="sm" />
             עריכת אירוע
-          </NuxtLink>
+          </button>
           <button type="button" class="EventPage-actionBtn EventPage-actionBtn--delete" @click="showDeleteModal = true">
             <UiIcon name="delete" size="sm" />
             מחיקה
@@ -130,6 +138,14 @@
       </template>
     </div>
 
+    <PublisherEventFormModal
+      v-if="showEditForm && event"
+      mode="edit"
+      :initial-data="event"
+      @close="showEditForm = false"
+      @submitted="onEditSubmitted"
+    />
+
     <PublisherEventDeleteModal
       v-if="showDeleteModal && event"
       :event-title="event.title"
@@ -145,9 +161,30 @@ defineOptions({ name: 'PublisherEventDetail' })
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
+const router = useRouter()
 const showDeleteModal = ref(false)
+const showEditForm = ref(false)
 
-const { data: event, pending } = await useAuthFetch(`/api/publisher/event/${route.params.id}`)
+const successBanner = ref('')
+onMounted(() => {
+  const s = route.query.success
+  if (s === 'created') successBanner.value = 'האירוע נוסף בהצלחה!'
+  else if (s === 'updated') successBanner.value = 'האירוע עודכן בהצלחה!'
+  if (successBanner.value) {
+    const t = setTimeout(() => { successBanner.value = '' }, 4000)
+    onUnmounted(() => clearTimeout(t))
+    router.replace({ query: {} })
+  }
+})
+
+// M4: await refresh before showing success banner
+async function onEditSubmitted() {
+  showEditForm.value = false
+  await refresh()
+  router.replace({ query: { success: 'updated' } })
+}
+
+const { data: event, pending, refresh } = await useAuthFetch(`/api/publisher/event/${route.params.id}`)
 
 useHead(computed(() => ({ title: event.value ? `${event.value.title} | גלילו"ז` : 'פרטי אירוע | גלילו"ז' })))
 
@@ -160,9 +197,10 @@ const isZeroStats = computed(() => {
 const linksWithClicks = computed(() => {
   const urls = event.value?.urls || []
   const breakdown = event.value?.stats?.linkBreakdown || []
+  const breakdownMap = new Map(breakdown.map(b => [b.title.toLowerCase().trim(), b.clicks]))
   return urls.map(u => ({
     title: u.Title,
-    clicks: breakdown.find(b => b.title === u.Title)?.clicks || 0,
+    clicks: breakdownMap.get((u.Title || '').toLowerCase().trim()) || 0,
   }))
 })
 
@@ -183,6 +221,25 @@ function formatOccurrenceDate(dateStr) {
     gap: var(--spacing-lg);
 
     @include mobile { padding-inline: var(--spacing-md); }
+  }
+
+  &-successBanner {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: rgba(11,151,74,0.1);
+    color: var(--brand-dark-green);
+    border: 1px solid var(--brand-dark-green-tint);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+  }
+
+  &-bannerFade {
+    &-enter-active, &-leave-active { transition: opacity 0.4s, transform 0.4s; }
+    &-enter-from { opacity: 0; transform: translateY(-8px); }
+    &-leave-to   { opacity: 0; transform: translateY(-8px); }
   }
 
   &-header {

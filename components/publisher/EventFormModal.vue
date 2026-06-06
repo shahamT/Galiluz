@@ -3,7 +3,7 @@
     <div class="EventFormModal-backdrop">
       <div class="EventFormModal-panel">
         <header class="EventFormModal-header">
-          <h2 class="EventFormModal-title">אירוע חדש</h2>
+          <h2 class="EventFormModal-title">{{ props.mode === 'edit' ? 'עדכון אירוע' : 'אירוע חדש' }}</h2>
           <button type="button" class="EventFormModal-close" @click="emit('close')">
             <UiIcon name="close" size="md" />
           </button>
@@ -16,7 +16,7 @@
             <section class="AddEventPage-section">
               <h2 class="AddEventPage-sectionTitle">פרטי האירוע</h2>
 
-              <FormField label="שם האירוע" required :error="errors.title" hint="6–80 תווים">
+              <FormField label="שם האירוע" required :error="errors.title" hint="2–80 תווים">
                 <input
                   v-model="form.title"
                   type="text"
@@ -114,7 +114,7 @@
               <h2 class="AddEventPage-sectionTitle">קטגוריה</h2>
 
               <!-- Main category -->
-              <div class="AddEventPage-categoryField">
+              <div class="AddEventPage-categoryField" :class="{ 'FormField--error': errors.mainCategory }">
                 <div class="AddEventPage-categoryLabel">
                   קטגוריה ראשית <span class="AddEventPage-required">*</span>
                 </div>
@@ -182,25 +182,31 @@
               <h2 class="AddEventPage-sectionTitle">מיקום</h2>
               <p class="AddEventPage-sectionHint">יש להזין לפחות אחד מן השדות — שם המקום / כתובת. אין חובה למלא את שניהם.</p>
 
-              <FormField label="שם המקום" hint="שם המתחם שבו האירוע יתקיים">
-                <input
-                  v-model="form.locationName"
-                  type="text"
-                  class="FormInput"
-                  placeholder="לדוגמה: הפילוסופ, מרכז קהילתי, מגרש הכדורגל"
-                  maxlength="40"
-                />
-              </FormField>
+              <div :class="{ 'FormField--error': errors.locationRequired }" class="AddEventPage-locationGroup">
+                <p v-if="errors.locationRequired" class="AddEventPage-locationError">{{ errors.locationRequired }}</p>
 
-              <FormField label="כתובת" hint="רחוב ומספר">
-                <input
-                  v-model="form.addressLine1"
-                  type="text"
-                  class="FormInput"
-                  placeholder="לדוגמה: רוז'נסקי 29"
-                  maxlength="100"
-                />
-              </FormField>
+                <FormField label="שם המקום" hint="שם המתחם שבו האירוע יתקיים">
+                  <input
+                    v-model="form.locationName"
+                    type="text"
+                    class="FormInput"
+                    placeholder="לדוגמה: הפאב של דני, מרכז קהילתי, מגרש הכדורגל"
+                    maxlength="40"
+                    @input="clearError('locationRequired')"
+                  />
+                </FormField>
+
+                <FormField label="כתובת" hint="רחוב ומספר">
+                  <input
+                    v-model="form.addressLine1"
+                    type="text"
+                    class="FormInput"
+                    placeholder="לדוגמה: רוז'נסקי 29"
+                    maxlength="100"
+                    @input="clearError('locationRequired')"
+                  />
+                </FormField>
+              </div>
 
               <FormCityPicker
                 v-model="form.city"
@@ -248,7 +254,7 @@
                   :key="link._key"
                   v-model="form.links[i]"
                   :errors="linkErrors[i] || {}"
-                  @blur="validateLink(i)"
+                  @blur="(field) => validateLink(i, field)"
                   @remove="removeLink(i)"
                 />
               </div>
@@ -262,7 +268,7 @@
             <!-- 7. מדיה -->
             <section class="AddEventPage-section">
               <h2 class="AddEventPage-sectionTitle">תמונות וסרטונים <span class="AddEventPage-optional">(אופציונלי)</span></h2>
-              <FormMediaUpload v-model="form.media" />
+              <FormMediaUpload v-model="form.media" v-model:existing-media="existingMedia" />
             </section>
 
           </form>
@@ -277,6 +283,7 @@
 
         <!-- Fixed footer -->
         <div class="EventFormModal-footer">
+          <p v-if="submitError" class="EventFormModal-footerError">{{ submitError }}</p>
           <button
             v-if="!submitted"
             type="submit"
@@ -285,7 +292,7 @@
             :disabled="isSubmitting"
           >
             <span v-if="isSubmitting" class="AddEventPage-submitSpinner" />
-            <template v-else>פרסם אירוע ✓</template>
+            <template v-else>{{ props.mode === 'edit' ? 'עדכון אירוע ✓' : 'פרסם אירוע ✓' }}</template>
           </button>
           <button v-else type="button" class="EventFormModal-footerBtn" @click="resetForm">
             פרסם אירוע נוסף
@@ -298,14 +305,23 @@
 
 <script setup>
 import { EVENT_CATEGORIES } from '~/consts/events.const.js'
+import { CITIES } from '~/consts/regions.const.js'
 
 defineOptions({ name: 'PublisherEventFormModal' })
-defineProps({ mode: { type: String, default: 'add' } })
+const props = defineProps({
+  mode:        { type: String, default: 'add' },
+  initialData: { type: Object, default: null },
+})
 const emit = defineEmits(['close', 'submitted'])
 
 const bodyEl = ref(null)
 
-onMounted(() => { document.body.style.overflow = 'hidden' })
+const existingMedia = ref([])
+
+onMounted(() => {
+  document.body.style.overflow = 'hidden'
+  if (props.initialData) initFromData(props.initialData)
+})
 onUnmounted(() => { document.body.style.overflow = '' })
 
 // --- Form state ---
@@ -348,30 +364,17 @@ const errors = reactive({})
 const occurrenceErrors = reactive({})
 const isSubmitting = ref(false)
 const submitted = ref(false)
+const submitError = ref('')
 const hasErrors = computed(() => Object.values(errors).some(Boolean))
 
-const isFormValid = computed(() => {
-  if (form.title.trim() && (form.title.trim().length < 2 || form.title.length > 80)) return false
-  if (!form.shortDescription.trim() || form.shortDescription.trim().length > 150) return false
-  if (getTextLength(form.description) < 40 || /<a\b/i.test(form.description)) return false
-  const _today = todayLocal()
-  for (const occ of form.occurrences) {
-    if (!occ.date || occ.date < _today) return false
-    if (occ.hasTime && !occ.startTime) return false
-  }
-  if (!form.mainCategory) return false
-  if (!form.city.cityId && form.city.customCity === undefined) return false
-  if (form.city.customCity !== undefined && !form.city.customCity?.trim()) return false
-  if (form.city.customCity !== undefined && !form.city.region) return false
-  if (form.price !== null && form.price !== '' && Number(form.price) < 0) return false
-  return true
-})
 
 function validateField(key) {
-  delete errors[key]
+  errors[key] = ''
   switch (key) {
     case 'title':
-      if (form.title.trim() && form.title.trim().length < 2)
+      if (!form.title.trim())
+        errors.title = 'יש להוסיף שם לאירוע'
+      else if (form.title.trim().length < 2)
         errors.title = 'שם האירוע חייב להכיל לפחות 2 תווים'
       else if (form.title.length > 80)
         errors.title = 'שם האירוע ארוך מדי (מקסימום 80 תווים)'
@@ -383,8 +386,8 @@ function validateField(key) {
         errors.shortDescription = 'התיאור הקצר לא יכול לעלות על 150 תווים'
       break
     case 'description':
-      if (getTextLength(form.description) < 40)
-        errors.description = 'התיאור חייב להכיל לפחות 40 תווים'
+      if (getTextLength(form.description) < 70)
+        errors.description = 'התיאור חייב להכיל לפחות 70 תווים'
       else if (/<a\b/i.test(form.description))
         errors.description = 'התיאור לא יכול להכיל קישורים'
       break
@@ -396,7 +399,7 @@ function validateField(key) {
 }
 
 watch(() => form.occurrences, () => {
-  Object.keys(occurrenceErrors).forEach(k => delete occurrenceErrors[k])
+  Object.keys(occurrenceErrors).forEach(k => { occurrenceErrors[k] = {} })
   const today = todayLocal()
   form.occurrences.forEach((occ, i) => {
     if (!occ.date)
@@ -407,6 +410,11 @@ watch(() => form.occurrences, () => {
       occurrenceErrors[i] = { ...(occurrenceErrors[i] || {}), startTime: 'יש להזין שעת התחלה' }
   })
 }, { deep: true })
+
+// When main category changes, remove it from additional categories to prevent duplication
+watch(() => form.mainCategory, (newMain) => {
+  form.categories = form.categories.filter(c => c !== newMain)
+})
 
 watch(() => form.occurrences.length, (len, prevLen) => {
   if (len <= 1) {
@@ -455,24 +463,68 @@ function removeOccurrence(i) { form.occurrences.splice(i, 1) }
 function addLink() { form.links.push(freshLink()) }
 function removeLink(i) { form.links.splice(i, 1) }
 
-function validateLink(i) {
+function validateLink(i, field) {
   const link = form.links[i]
   if (!link) return
-  const e = {}
-  if (!link.label.trim() || link.label.trim().length < 3) e.label = 'יש להוסיף תווית (לפחות 3 תווים)'
-  if (!link.url.trim()) {
-    e.url = 'יש להוסיף קישור או מספר טלפון'
-  } else if (link.type === 'phone' && !isValidPhone(link.url)) {
-    e.url = 'מספר טלפון לא תקין'
-  } else if (link.type === 'link' && !isValidUrl(link.url)) {
-    e.url = 'כתובת URL לא תקינה (יש להתחיל עם https://)'
+  const e = { ...(linkErrors[i] || {}) }
+  if (field === 'label' || !field) {
+    delete e.label
+    if (!link.label.trim() || link.label.trim().length < 3) e.label = 'יש להוסיף תווית (לפחות 3 תווים)'
   }
-  linkErrors[i] = e
+  if (field === 'url' || !field) {
+    delete e.url
+    if (!link.url.trim()) {
+      e.url = 'יש להוסיף קישור או מספר טלפון'
+    } else if (link.type === 'phone' && !isValidPhone(link.url)) {
+      e.url = 'מספר טלפון לא תקין'
+    } else if (link.type === 'link' && !isValidUrl(link.url)) {
+      e.url = 'כתובת URL לא תקינה (יש להתחיל עם https://)'
+    }
+  }
+  linkErrors.splice(i, 1, e)
 }
-function clearError(key) { delete errors[key] }
+function clearError(key) { errors[key] = '' }
 function onPriceBlur() {
-  if (form.price === 0) form.price = null
+  const n = parseFloat(form.price)
+  form.price = isNaN(n) ? null : n === 0 ? null : n
   validateField('price')
+}
+
+function normalizeTime(t) {
+  if (!t) return ''
+  if (/^\d{2}:\d{2}$/.test(String(t))) return t
+  const match = String(t).match(/T(\d{2}):(\d{2})/)
+  if (match) return `${match[1]}:${match[2]}`
+  return ''
+}
+
+function initFromData(data) {
+  form.title = data.title || ''
+  form.shortDescription = data.shortDescription || ''
+  form.description = data.fullDescription || ''
+  form.occurrences = data.occurrences?.length
+    ? data.occurrences.map(o => ({ _key: nextKey(), date: o.date || '', hasTime: o.hasTime !== false, startTime: normalizeTime(o.startTime), endTime: normalizeTime(o.endTime) }))
+    : [freshOccurrence()]
+  form.multiDayEvent = data.multiDayEvent !== false
+  form.mainCategory = data.mainCategory || ''
+  form.categories = (data.categories || []).filter(c => c !== data.mainCategory)
+  form.locationName = data.location?.locationName || ''
+  form.addressLine1 = data.location?.addressLine1 || ''
+  form.locationNotes = data.location?.locationNotes || ''
+  const hasCustomLinks = !!(data.location?.wazeNavLink || data.location?.gmapsNavLink)
+  form.autoNav = !hasCustomLinks
+  form.wazeLink = data.location?.wazeNavLink || ''
+  form.gmapsLink = data.location?.gmapsNavLink || ''
+  form.price = data.price || null
+  form.links = (data.urls || []).filter(Boolean).map(u => ({ _key: nextKey(), type: u.type || 'link', label: u.Title || '', url: u.Url || '' }))
+  existingMedia.value = data.media || []
+  const cityKey = data.location?.city || ''
+  if (cityKey && CITIES[cityKey]) {
+    form.city = { cityId: cityKey, customCity: undefined, region: CITIES[cityKey].region }
+  } else if (cityKey) {
+    // Custom city — restore the region from the stored event data
+    form.city = { cityId: '', customCity: cityKey, region: data.location?.region || '' }
+  }
 }
 
 function getTextLength(html) {
@@ -485,20 +537,19 @@ function isValidPhone(val) {
 function isValidUrl(val) {
   return /^https?:\/\/.+/.test(val.trim())
 }
-function wordCount(str) {
-  return str.trim().split(/\s+/).filter(Boolean).length
-}
 
 // --- Validation ---
 const linkErrors = reactive([])
 
 function validate() {
-  Object.keys(errors).forEach((k) => delete errors[k])
-  Object.keys(occurrenceErrors).forEach((k) => delete occurrenceErrors[k])
+  Object.keys(errors).forEach((k) => { errors[k] = '' })
+  Object.keys(occurrenceErrors).forEach((k) => { occurrenceErrors[k] = {} })
   linkErrors.splice(0)
   let ok = true
 
-  if (form.title.trim() && form.title.trim().length < 2) {
+  if (!form.title.trim()) {
+    errors.title = 'יש להוסיף שם לאירוע'; ok = false
+  } else if (form.title.trim().length < 2) {
     errors.title = 'שם האירוע חייב להכיל לפחות 2 תווים'; ok = false
   } else if (form.title.length > 80) {
     errors.title = 'שם האירוע ארוך מדי (מקסימום 80 תווים)'; ok = false
@@ -510,8 +561,8 @@ function validate() {
     errors.shortDescription = 'התיאור הקצר לא יכול לעלות על 150 תווים'; ok = false
   }
 
-  if (getTextLength(form.description) < 40) {
-    errors.description = 'התיאור חייב להכיל לפחות 40 תווים'; ok = false
+  if (getTextLength(form.description) < 70) {
+    errors.description = 'התיאור חייב להכיל לפחות 70 תווים'; ok = false
   } else if (/<a\b/i.test(form.description)) {
     errors.description = 'התיאור לא יכול להכיל קישורים'; ok = false
   }
@@ -530,6 +581,10 @@ function validate() {
 
   if (!form.mainCategory) { errors.mainCategory = 'יש לבחור קטגוריה'; ok = false }
 
+  if (!form.locationName.trim() && !form.addressLine1.trim()) {
+    errors.locationRequired = 'יש להזין לפחות שם המקום או כתובת'; ok = false
+  }
+
   if (!form.city.cityId && form.city.customCity === undefined) {
     errors.city = 'יש לבחור ישוב'; ok = false
   } else if (form.city.customCity !== undefined && !form.city.customCity?.trim()) {
@@ -540,7 +595,8 @@ function validate() {
     errors.region = 'יש לבחור אזור'; ok = false
   }
 
-  if (form.price !== null && form.price !== '' && Number(form.price) < 0) {
+  const priceNum = parseFloat(form.price)
+  if (form.price !== null && form.price !== '' && (!isNaN(priceNum) && priceNum < 0)) {
     errors.price = 'המחיר לא יכול להיות שלילי'; ok = false
   }
 
@@ -562,20 +618,83 @@ function validate() {
 }
 
 // --- Submit ---
+async function uploadMediaFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      try {
+        const base64 = e.target.result.split(',')[1]
+        const result = await $fetch('/api/publisher/media', {
+          method: 'POST',
+          body: { file: base64, mimetype: file.type, filename: file.name },
+        })
+        resolve(result)
+      } catch (err) { reject(err) }
+    }
+    reader.onerror = () => reject(new Error('file read failed'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function buildEventPayload(f, allMedia) {
+  return {
+    title:            f.title,
+    shortDescription: f.shortDescription,
+    fullDescription:  f.description,
+    occurrences:      f.occurrences.map(o => ({ date: o.date, hasTime: o.hasTime, startTime: o.startTime, endTime: o.endTime || null })),
+    multiDayEvent:    f.multiDayEvent,
+    mainCategory:     f.mainCategory,
+    categories:       f.categories,
+    location: {
+      city:          f.city.cityId || f.city.customCity || '',
+      locationName:  f.locationName,
+      addressLine1:  f.addressLine1,
+      locationNotes: f.locationNotes,
+      wazeNavLink:   f.autoNav ? null : (f.wazeLink || null),
+      gmapsNavLink:  f.autoNav ? null : (f.gmapsLink || null),
+    },
+    price: f.price ?? null,
+    urls:  f.links.map(l => ({ Title: l.label, Url: l.url, type: l.type })),
+    media: allMedia,
+  }
+}
+
 async function onSubmit() {
   if (!validate()) {
     nextTick(() => {
       const firstError = bodyEl.value?.querySelector('.FormField--error')
-      firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (firstError) {
+        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        const focusable = firstError.querySelector('input, textarea, button, select')
+        focusable?.focus()
+      }
     })
     return
   }
   isSubmitting.value = true
-  await new Promise((r) => setTimeout(r, 800))
-  console.log('[EventFormModal] form submitted (mock):', toRaw(form))
-  isSubmitting.value = false
-  submitted.value = true
-  emit('submitted')
+  submitError.value = ''
+  try {
+    // Upload new media files — snapshot array first to avoid mutation during upload
+    const mediaToUpload = [...form.media]
+    const uploadedMedia = await Promise.all(mediaToUpload.map(f => uploadMediaFile(f)))
+    const allMedia = [...existingMedia.value, ...uploadedMedia]
+    const payload = buildEventPayload(toRaw(form), allMedia)
+
+    let eventId
+    if (props.mode === 'edit') {
+      await $fetch(`/api/publisher/event/${props.initialData.id}`, { method: 'PATCH', body: payload })
+      eventId = props.initialData.id
+    } else {
+      const result = await $fetch('/api/publisher/events', { method: 'POST', body: payload })
+      eventId = result.id
+    }
+    emit('submitted', { id: eventId, mode: props.mode })
+    emit('close')
+  } catch (err) {
+    submitError.value = err?.data?.message || err?.message || 'אירעה שגיאה, נסו שנית'
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 function resetForm() {
@@ -599,7 +718,13 @@ function resetForm() {
   form.media = []
   form.categories = []
   form.multiDayEvent = true
-  Object.keys(errors).forEach((k) => delete errors[k])
+  Object.keys(errors).forEach((k) => { errors[k] = '' })
+  Object.keys(occurrenceErrors).forEach((k) => { occurrenceErrors[k] = {} })
+  linkErrors.splice(0)
+  existingMedia.value = []
+  showMainPicker.value = false
+  showOtherPicker.value = false
+  submitError.value = ''
 }
 </script>
 
@@ -722,14 +847,14 @@ function resetForm() {
   &-form {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-2xl);
+    gap: var(--spacing-xl);
   }
 
   &-section {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
-    padding-bottom: var(--spacing-2xl);
+    padding-bottom: var(--spacing-xl);
     border-bottom: 1px solid var(--color-border);
     &:last-child { border-bottom: none; }
   }
@@ -811,6 +936,18 @@ function resetForm() {
         &::after { transform: translateX(-1.25rem); }
       }
     }
+  }
+
+  &-locationGroup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  &-locationError {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--color-error);
   }
 
   &-categoryField {

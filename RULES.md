@@ -14,11 +14,60 @@ NPM packages → Hooks/Services → Components → SVG/Icons, with blank lines b
 
 ### Style scoping
 
-Do not use `style scoped`. Scope styles under the component's root class.
+Do not use `style scoped`. Scope styles under the component's root class using BEM:
+
+```scss
+.ComponentName {
+  &-element { ... }
+  &--modifier { ... }
+}
+```
+
+Breakpoints via `@include mobile` imported from `~/assets/css/breakpoints`.
 
 ### Framework and utilities
 
-Prefer framework components (Quasar if present). Use semantic HTML when HTML is needed. Use design tokens and existing variables.
+Use semantic HTML. Use design tokens (CSS custom properties) and existing spacing/color variables — never hardcode values that exist as variables. Prefer existing components before creating new ones.
+
+### Language
+
+- **Client-side** (components, composables, stores, utils): plain JavaScript with JSDoc hints where helpful.
+- **Server-side** (server/api/, server/utils/, server/consts/): TypeScript.
+
+### CSS variables
+
+All design tokens live in `assets/css/variables.scss`. Key namespaces:
+- `--brand-*` — brand colors (dark-green, light-green, dark-blue, light-blue)
+- `--spacing-*` — spacing scale (2xs → 3xl)
+- `--font-size-*` — type scale (xs → 4xl)
+- `--radius-*` — border radius (sm → full)
+- `--color-*` — semantic colors (text, border, error, background)
+- `--control-height`, `--section-header-height` — standard control heights
+
+---
+
+## Nuxt server (API routes + utilities)
+
+### Route conventions
+
+- `server/api/` routes use `defineEventHandler`.
+- All publisher-facing endpoints call `requirePublisherAuth(event)` as the first line.
+- All internal endpoints (called server-to-server) call `requireApiSecret(event)`.
+- Respond 400 for bad input, 401/403 for auth failures, 422 for validation failures, 503 when a required service is unavailable, 500 for unexpected errors.
+- Use `createError({ statusCode, message })` — never throw raw errors.
+
+### Validation and sanitization
+
+Before persisting any publisher-submitted event data:
+1. Call `sanitizeEventFields(body)` to strip HTML from text fields and validate URLs.
+2. Call `normalizePublisherFormattedEvent(event, validCategoryIds)` to normalize categories and occurrence times.
+3. Call `validatePublisherFormattedEvent(event)` — throws 422 if invalid.
+
+### Audit logging
+
+All mutations to event documents must call the appropriate log function from `server/utils/eventLogs.service.ts`: `logEventCreation`, `logEventEdit`, or `logEventDeletion`.
+
+---
 
 ## wa-bot
 

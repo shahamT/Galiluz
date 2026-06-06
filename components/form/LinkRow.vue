@@ -9,7 +9,7 @@
         placeholder="לדוגמה: לקניית כרטיסים"
         maxlength="50"
         @input="update({ label: $event.target.value })"
-        @blur="emit('blur')"
+        @blur="emit('blur', 'label')"
       />
       <div class="LinkRow-bottom">
         <div class="LinkRow-typeToggle">
@@ -37,7 +37,7 @@
           :class="{ 'LinkRow-inputError': errors.url }"
           :placeholder="modelValue.type === 'phone' ? '050-0000000' : 'https://...'"
           @input="update({ url: $event.target.value })"
-          @blur="emit('blur')"
+          @blur="emit('blur', 'url')"
         />
       </div>
       <div v-if="errors.label || errors.url" class="LinkRow-errors">

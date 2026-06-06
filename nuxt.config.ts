@@ -16,16 +16,17 @@ export default defineNuxtConfig({
   
   modules: ['@pinia/nuxt', '@vueuse/nuxt'],
 
-  build: {
-    transpile: ['floating-vue', '@floating-ui/core', '@floating-ui/dom'],
-  },
-
   vue: {
     compilerOptions: {
+      isCustomElement: (tag) => tag === 'emoji-picker',
       directiveTransforms: {
         tooltip: () => ({ props: [], needRuntime: true }),
       },
     },
+  },
+
+  build: {
+    transpile: ['floating-vue', '@floating-ui/core', '@floating-ui/dom'],
   },
   
   app: {

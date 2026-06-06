@@ -115,7 +115,14 @@ function handleOutsideClick(e) {
   }
 }
 
-onMounted(() => document.addEventListener('click', handleOutsideClick))
+// Only add the outside-click listener while the picker is open
+watch(showEmojiPicker, (isOpen) => {
+  if (isOpen) {
+    nextTick(() => document.addEventListener('click', handleOutsideClick))
+  } else {
+    document.removeEventListener('click', handleOutsideClick)
+  }
+})
 onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
 
 const editor = useEditor({

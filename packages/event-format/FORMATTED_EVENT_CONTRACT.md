@@ -24,13 +24,16 @@ This document defines the **publisher-formatted event** shape produced by `forma
 
 | Field | Type | Required | Notes |
 |-------|------|----------|--------|
-| `City` | string | yes | Normalized city name. |
+| `City` | string | yes | Normalized city name (display value). Used by the WA-bot path. |
+| `city` | string | no | City identifier key from the `CITIES` constant (e.g. `'Katzrin'`). Used by the publisher portal path. Either `City` (display) or `city` (key) must be present for location validation to pass. |
 | `locationName` | string \| undefined | no | Venue/place name. |
 | `addressLine1` | string \| null | no | |
 | `addressLine2` | string \| null | no | |
-| `locationDetails` | string \| null | no | |
+| `locationDetails` | string \| null | no | Navigation/arrival instructions. |
 | `wazeNavLink` | string \| null | no | Extracted from raw nav links. |
 | `gmapsNavLink` | string \| null | no | Extracted from raw nav links. |
+
+> **City key vs display name:** The WA-bot pipeline uses `City` (uppercase, Hebrew display name normalized from OCR/AI, e.g. `'קצרין'`). The publisher portal uses `city` (lowercase, the key from `consts/regions.const.js` CITIES map, e.g. `'Katzrin'`). Server validation (`validatePublisherFormattedEvent`) accepts either a non-empty `locationName` or a non-empty `city`/`City` field.
 
 ## occurrences[]
 

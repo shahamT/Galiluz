@@ -54,7 +54,7 @@
       </div>
     </div>
 
-    <PublisherEventFormModal v-if="showEventForm" @close="showEventForm = false" />
+    <PublisherEventFormModal v-if="showEventForm" @close="showEventForm = false" @submitted="({ id }) => { showEventForm = false; if (id) navigateTo(`/publisher/events/${id}?success=created`) }" />
   </LayoutProtectedShell>
 </template>
 
@@ -65,6 +65,7 @@ useHead({ title: 'האירועים שלי | גלילו"ז' })
 
 const filter = ref('future')
 const search = ref('')
+const debouncedSearch = useDebounce(search, 200)
 const showEventForm = ref(false)
 
 const { data: events, pending } = await useAuthFetch('/api/publisher/events')
@@ -80,8 +81,8 @@ const filteredEvents = computed(() => {
     list = list.filter(e => e.occurrences.every(o => o.date < today))
   }
 
-  if (search.value.trim()) {
-    const q = search.value.trim().toLowerCase()
+  if (debouncedSearch.value.trim()) {
+    const q = debouncedSearch.value.trim().toLowerCase()
     list = list.filter(e => e.title.toLowerCase().includes(q))
   }
 

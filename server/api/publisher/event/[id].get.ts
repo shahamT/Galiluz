@@ -51,11 +51,12 @@ export default defineEventHandler(async (event) => {
     mainCategory:     doc.event?.mainCategory || '',
     categories:       doc.event?.categories || [],
     location: {
-      city:         doc.event?.location?.city || '',
-      locationName: doc.event?.location?.locationName || '',
-      addressLine1: doc.event?.location?.addressLine1 || '',
-      wazeNavLink:  doc.event?.location?.wazeNavLink || null,
-      gmapsNavLink: doc.event?.location?.gmapsNavLink || null,
+      city:          doc.event?.location?.city || '',
+      locationName:  doc.event?.location?.locationName || '',
+      addressLine1:  doc.event?.location?.addressLine1 || '',
+      locationNotes: doc.event?.location?.locationDetails || doc.event?.location?.locationNotes || '',
+      wazeNavLink:   doc.event?.location?.wazeNavLink || null,
+      gmapsNavLink:  doc.event?.location?.gmapsNavLink || null,
     },
     occurrences: (doc.event?.occurrences || []).map((o: any) => ({
       date:      o.date,
@@ -65,6 +66,11 @@ export default defineEventHandler(async (event) => {
     })),
     price: doc.event?.price ?? null,
     urls:  (doc.event?.urls || []).map((u: any) => ({ Title: u.Title, Url: u.Url, type: u.type })),
+    media: (doc.event?.media || []).map((m: any) => ({
+      cloudinaryURL: m.cloudinaryURL || m.url || '',
+      cloudinaryData: m.cloudinaryData || {},
+      isMain: m.isMain || false,
+    })),
     stats: {
       shares:        eventStats?.shares || 0,
       navClicks:     eventStats?.navClicks || 0,

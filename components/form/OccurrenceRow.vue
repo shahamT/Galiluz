@@ -108,7 +108,10 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'remove'])
 
 const local = reactive({ ...props.modelValue })
-watch(() => props.modelValue, (val) => Object.assign(local, val))
+watch(() => props.modelValue, (val) => {
+  // Re-clone the full object to ensure all fields sync correctly
+  Object.assign(local, { ...val })
+}, { deep: true })
 
 const minDate = computed(() => new Date().toISOString().slice(0, 10))
 const allDay = ref(!local.hasTime)
