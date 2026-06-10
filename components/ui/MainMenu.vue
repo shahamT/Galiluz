@@ -58,7 +58,7 @@
               <UiIcon name="description" size="md" class="MainMenu-itemIcon" />
               <span>{{ MAIN_MENU.termsOfService }}</span>
             </NuxtLink>
-            <template v-if="!isInstalled && (canInstall || isIOS)">
+            <template v-if="installEnabled && !isInstalled && (canInstall || isIOS)">
               <div class="MainMenu-separator" aria-hidden="true" />
               <button
                 type="button"
@@ -68,20 +68,14 @@
                 <UiIcon name="add_to_home_screen" size="md" class="MainMenu-itemIcon" />
                 <span>הוסף לדף הבית</span>
               </button>
-              <UiInstallInstructions
-                v-if="showIOSInstructions"
-                @close="showIOSInstructions = false"
-              />
             </template>
           </nav>
           <div class="MainMenu-footer">
-            <template v-if="feedbackEnabled">
-              <button type="button" class="MainMenu-item" @click="showFeedback = true; close()">
-                <UiIcon name="rate_review" size="md" class="MainMenu-itemIcon" />
-                <span>{{ MAIN_MENU.sendFeedback }}</span>
-              </button>
-              <div class="MainMenu-separator" aria-hidden="true" />
-            </template>
+            <button type="button" class="MainMenu-item" @click="showFeedback = true; close()">
+              <UiIcon name="rate_review" size="md" class="MainMenu-itemIcon" />
+              <span>{{ MAIN_MENU.sendFeedback }}</span>
+            </button>
+            <div class="MainMenu-separator" aria-hidden="true" />
             <a
               :href="MAIN_MENU_CONTACT_LINK"
               target="_blank"
@@ -115,28 +109,12 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-const route = useRoute()
-const { canInstall, isIOS, isInstalled, triggerInstall } = useInstallPrompt()
-const showIOSInstructions = ref(false)
+const { canInstall, isIOS, isInstalled, installEnabled, showInstructions, triggerInstall } = useInstallPrompt()
 const showFeedback = ref(false)
-const feedbackEnabled = ref(false)
-
-const FEEDBACK_FLAG_KEY = 'galiluz-dev-feedback'
-
-onMounted(() => {
-  if (route.query.feedback === '1') {
-    try { sessionStorage.setItem(FEEDBACK_FLAG_KEY, '1') } catch {}
-  }
-  try { feedbackEnabled.value = sessionStorage.getItem(FEEDBACK_FLAG_KEY) === '1' } catch {}
-})
 
 function onInstallClick() {
-  if (isIOS.value) {
-    showIOSInstructions.value = true
-  } else {
-    triggerInstall()
-    close()
-  }
+  if (isIOS.value) { showInstructions.value = true; close() }
+  else { triggerInstall(); close() }
 }
 
 watch(() => props.modelValue, (visible) => {

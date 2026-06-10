@@ -1,7 +1,9 @@
 <template>
   <div class="AppShell">
+    <UiInstallBanner />
     <LayoutAppHeader @menu-click="isMainMenuOpen = true" />
     <UiMainMenu v-model="isMainMenuOpen" />
+    <UiInstallInstructions v-if="showInstructions" @close="showInstructions = false" />
     <div class="AppShell-content">
       <slot />
     </div>
@@ -12,6 +14,7 @@
 defineOptions({ name: 'AppShell' })
 
 const isMainMenuOpen = ref(false)
+const { showInstructions } = useInstallPrompt()
 </script>
 
 <style lang="scss">

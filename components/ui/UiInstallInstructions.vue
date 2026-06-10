@@ -1,26 +1,30 @@
 <template>
-  <div class="UiInstallInstructions">
-    <div class="UiInstallInstructions-header">
-      <span class="UiInstallInstructions-title">הוספה למסך הבית</span>
-      <button
-        type="button"
-        class="UiInstallInstructions-close"
-        aria-label="סגור"
-        @click="$emit('close')"
-      >
-        <UiIcon name="close" size="sm" />
-      </button>
+  <Teleport to="body">
+    <div class="UiInstallInstructions-overlay" @click.self="$emit('close')">
+      <div class="UiInstallInstructions-content">
+        <div class="UiInstallInstructions-header">
+          <span class="UiInstallInstructions-title">הוספה למסך הבית</span>
+          <button
+            type="button"
+            class="UiInstallInstructions-close"
+            aria-label="סגור"
+            @click="$emit('close')"
+          >
+            <UiIcon name="close" size="sm" />
+          </button>
+        </div>
+        <ol class="UiInstallInstructions-steps">
+          <li class="UiInstallInstructions-step">
+            לחצ/י על כפתור השיתוף
+            <span class="UiInstallInstructions-shareIcon" aria-hidden="true" />
+            בתחתית המסך
+          </li>
+          <li class="UiInstallInstructions-step">בחר/י <strong>"הוסף למסך הבית"</strong></li>
+          <li class="UiInstallInstructions-step">לחצ/י <strong>"הוסף"</strong></li>
+        </ol>
+      </div>
     </div>
-    <ol class="UiInstallInstructions-steps">
-      <li class="UiInstallInstructions-step">
-        לחצ/י על כפתור השיתוף
-        <span class="UiInstallInstructions-shareIcon" aria-hidden="true" />
-        בתחתית המסך
-      </li>
-      <li class="UiInstallInstructions-step">בחר/י <strong>"הוסף למסך הבית"</strong></li>
-      <li class="UiInstallInstructions-step">לחצ/י <strong>"הוסף"</strong></li>
-    </ol>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -29,22 +33,47 @@ defineEmits(['close'])
 </script>
 
 <style lang="scss">
+@use '~/assets/css/breakpoints' as *;
+
 .UiInstallInstructions {
-  margin: var(--spacing-sm) var(--spacing-md);
-  padding: var(--spacing-md) var(--spacing-lg);
-  background-color: var(--light-bg);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--brand-dark-green-tint);
+  &-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--modal-backdrop-bg);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: var(--z-index-modal);
+    padding: var(--spacing-md);
+
+    @include mobile {
+      padding: 0;
+    }
+  }
+
+  &-content {
+    width: 100%;
+    max-width: 22rem;
+    background: var(--color-background);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: var(--spacing-lg);
+
+    @include mobile {
+      max-width: 100%;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+  }
 
   &-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
   }
 
   &-title {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     font-weight: 700;
     color: var(--brand-dark-green);
   }
@@ -70,7 +99,7 @@ defineEmits(['close'])
     padding-inline-start: var(--spacing-xl);
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-sm);
   }
 
   &-step {
