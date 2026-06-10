@@ -72,7 +72,7 @@ const emit = defineEmits(['close'])
 
 const TOPICS = [
   { value: 'bug',     label: 'תקלה טכנית' },
-  { value: 'feature', label: 'בקשת תכונה' },
+  { value: 'feature', label: "בקשת פיצ'ר" },
   { value: 'content', label: 'תוכן שגוי באירוע' },
   { value: 'general', label: 'שאלה / הצעה' },
   { value: 'other',   label: 'אחר' },

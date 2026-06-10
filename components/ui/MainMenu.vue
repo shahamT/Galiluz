@@ -73,13 +73,13 @@
                 @close="showIOSInstructions = false"
               />
             </template>
-            <div class="MainMenu-separator" aria-hidden="true" />
+          </nav>
+          <div class="MainMenu-footer">
             <button type="button" class="MainMenu-item" @click="showFeedback = true; close()">
               <UiIcon name="rate_review" size="md" class="MainMenu-itemIcon" />
               <span>{{ MAIN_MENU.sendFeedback }}</span>
             </button>
-          </nav>
-          <div class="MainMenu-footer">
+            <div class="MainMenu-separator" aria-hidden="true" />
             <a
               :href="MAIN_MENU_CONTACT_LINK"
               target="_blank"
@@ -245,10 +245,14 @@ function close() {
     align-items: center;
     gap: var(--spacing-md);
     padding: var(--spacing-md) var(--spacing-lg);
+    border: none;
     border-radius: var(--radius-md);
+    background: transparent;
     color: var(--brand-dark-green);
     font-size: var(--font-size-base);
+    font-family: var(--font-family-body);
     text-decoration: none;
+    cursor: pointer;
     transition: background-color 0.2s ease;
 
     &:hover,
