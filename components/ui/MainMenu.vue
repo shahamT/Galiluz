@@ -58,7 +58,7 @@
               <UiIcon name="description" size="md" class="MainMenu-itemIcon" />
               <span>{{ MAIN_MENU.termsOfService }}</span>
             </NuxtLink>
-            <template v-if="installEnabled && !isInstalled && (canInstall || isIOS)">
+            <template v-if="!isInstalled && (canInstall || isIOS)">
               <div class="MainMenu-separator" aria-hidden="true" />
               <button
                 type="button"
@@ -96,7 +96,6 @@
 
 <script setup>
 import { MAIN_MENU, MAIN_MENU_CONTACT_LINK } from '~/consts/ui.const'
-import { useInstallPrompt } from '~/composables/useInstallPrompt'
 
 defineOptions({ name: 'MainMenu' })
 
@@ -109,7 +108,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-const { canInstall, isIOS, isInstalled, installEnabled, showInstructions, triggerInstall } = useInstallPrompt()
+const { canInstall, isIOS, isInstalled, showInstructions, triggerInstall } = useInstallPrompt()
 const showFeedback = ref(false)
 
 function onInstallClick() {
