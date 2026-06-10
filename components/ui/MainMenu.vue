@@ -73,6 +73,11 @@
                 @close="showIOSInstructions = false"
               />
             </template>
+            <div class="MainMenu-separator" aria-hidden="true" />
+            <button type="button" class="MainMenu-item" @click="showFeedback = true; close()">
+              <UiIcon name="rate_review" size="md" class="MainMenu-itemIcon" />
+              <span>{{ MAIN_MENU.sendFeedback }}</span>
+            </button>
           </nav>
           <div class="MainMenu-footer">
             <a
@@ -90,6 +95,7 @@
       </div>
     </Transition>
   </Teleport>
+  <UiFeedbackModal v-if="showFeedback" @close="showFeedback = false" />
 </template>
 
 <script setup>
@@ -109,6 +115,7 @@ const emit = defineEmits(['update:modelValue'])
 
 const { canInstall, isIOS, isInstalled, triggerInstall } = useInstallPrompt()
 const showIOSInstructions = ref(false)
+const showFeedback = ref(false)
 
 function onInstallClick() {
   if (isIOS.value) {
