@@ -81,6 +81,7 @@
                   :key="occ._key"
                   v-model="form.occurrences[i]"
                   :is-first="i === 0"
+                  :frozen="!!occ._frozen"
                   :errors="occurrenceErrors[i] || {}"
                   @remove="removeOccurrence(i)"
                 />
@@ -402,6 +403,7 @@ watch(() => form.occurrences, () => {
   Object.keys(occurrenceErrors).forEach(k => { occurrenceErrors[k] = {} })
   const today = todayLocal()
   form.occurrences.forEach((occ, i) => {
+    if (occ._frozen) return
     if (!occ.date)
       occurrenceErrors[i] = { ...(occurrenceErrors[i] || {}), date: 'יש לבחור תאריך' }
     else if (occ.date < today)
@@ -502,8 +504,9 @@ function initFromData(data) {
   form.title = data.title || ''
   form.shortDescription = data.shortDescription || ''
   form.description = data.fullDescription || ''
+  const today = todayLocal()
   form.occurrences = data.occurrences?.length
-    ? data.occurrences.map(o => ({ _key: nextKey(), date: o.date || '', hasTime: o.hasTime !== false, startTime: normalizeTime(o.startTime), endTime: normalizeTime(o.endTime) }))
+    ? data.occurrences.map(o => ({ _key: nextKey(), date: o.date || '', hasTime: o.hasTime !== false, startTime: normalizeTime(o.startTime), endTime: normalizeTime(o.endTime), _frozen: (o.date || '') < today }))
     : [freshOccurrence()]
   form.multiDayEvent = data.multiDayEvent !== false
   form.mainCategory = data.mainCategory || ''
@@ -575,6 +578,7 @@ function validate() {
 
   const today = todayLocal()
   form.occurrences.forEach((occ, i) => {
+    if (occ._frozen) return
     if (!occ.date) {
       occurrenceErrors[i] = { ...(occurrenceErrors[i] || {}), date: 'יש לבחור תאריך' }; ok = false
     } else if (occ.date < today) {

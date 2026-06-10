@@ -1,5 +1,5 @@
 <template>
-  <div class="OccurrenceRow">
+  <div class="OccurrenceRow" :class="{ 'OccurrenceRow--frozen': frozen }">
     <div class="OccurrenceRow-layout">
 
       <!-- Content: group1 + group2 wrap internally -->
@@ -12,14 +12,15 @@
                 type="date"
                 class="FormInput OccurrenceRow-dateInput"
                 :min="minDate"
+                :disabled="frozen"
                 @change="emit('update:modelValue', local)"
               />
             </FormField>
           </div>
           <div class="OccurrenceRow-allDayWrap">
             <span class="OccurrenceRow-allDayLabel">יום מלא</span>
-            <label class="OccurrenceRow-toggle">
-              <input v-model="allDay" type="checkbox" class="OccurrenceRow-toggleInput" @change="onAllDayChange" />
+            <label class="OccurrenceRow-toggle" :class="{ 'OccurrenceRow-toggle--disabled': frozen }">
+              <input v-model="allDay" type="checkbox" class="OccurrenceRow-toggleInput" :disabled="frozen" @change="onAllDayChange" />
               <span class="OccurrenceRow-toggleTrack" />
             </label>
           </div>
@@ -27,12 +28,12 @@
         <div class="OccurrenceRow-group2">
           <div class="OccurrenceRow-timeWrap OccurrenceRow-timeWrap--start">
             <FormField label="התחלה" required :error="errors.startTime">
-              <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': allDay }">
-                <select :value="startH" :disabled="allDay" class="OccurrenceRow-timeSelect" @change="onStartHChange">
+              <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': allDay || frozen }">
+                <select :value="startH" :disabled="allDay || frozen" class="OccurrenceRow-timeSelect" @change="onStartHChange">
                   <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
                 </select>
                 <span class="OccurrenceRow-timeSep">:</span>
-                <select :value="startM" :disabled="allDay" class="OccurrenceRow-timeSelect" @change="onStartMChange">
+                <select :value="startM" :disabled="allDay || frozen" class="OccurrenceRow-timeSelect" @change="onStartMChange">
                   <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
                 </select>
               </div>
@@ -41,16 +42,16 @@
           <div class="OccurrenceRow-timeWrap">
             <span class="OccurrenceRow-endLabel">סיום</span>
             <div class="OccurrenceRow-endUnit">
-              <label class="OccurrenceRow-toggle" :class="{ 'OccurrenceRow-toggle--disabled': allDay }">
-                <input v-model="hasEndTime" type="checkbox" class="OccurrenceRow-toggleInput" :disabled="allDay" @change="onHasEndTimeChange" />
+              <label class="OccurrenceRow-toggle" :class="{ 'OccurrenceRow-toggle--disabled': allDay || frozen }">
+                <input v-model="hasEndTime" type="checkbox" class="OccurrenceRow-toggleInput" :disabled="allDay || frozen" @change="onHasEndTimeChange" />
                 <span class="OccurrenceRow-toggleTrack" />
               </label>
-              <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': !hasEndTime || allDay }">
-                <select :value="endH" :disabled="!hasEndTime || allDay" class="OccurrenceRow-timeSelect" @change="onEndHChange">
+              <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': !hasEndTime || allDay || frozen }">
+                <select :value="endH" :disabled="!hasEndTime || allDay || frozen" class="OccurrenceRow-timeSelect" @change="onEndHChange">
                   <option v-for="h in endHoursFiltered" :key="h" :value="h">{{ h }}</option>
                 </select>
                 <span class="OccurrenceRow-timeSep">:</span>
-                <select :value="endM" :disabled="!hasEndTime || allDay" class="OccurrenceRow-timeSelect" @change="onEndMChange">
+                <select :value="endM" :disabled="!hasEndTime || allDay || frozen" class="OccurrenceRow-timeSelect" @change="onEndMChange">
                   <option v-for="m in endMinutesFiltered" :key="m" :value="m">{{ m }}</option>
                 </select>
               </div>
@@ -59,9 +60,9 @@
         </div>
       </div>
 
-      <!-- Delete button (or invisible placeholder on first row to keep consistent break point) -->
+      <!-- Delete button (or invisible placeholder on first row / frozen rows) -->
       <button
-        v-if="!isFirst"
+        v-if="!isFirst && !frozen"
         type="button"
         class="OccurrenceRow-remove"
         aria-label="הסר מועד"
@@ -72,6 +73,9 @@
       <div v-else class="OccurrenceRow-removePlaceholder" aria-hidden="true" />
 
     </div>
+
+    <!-- Past badge -->
+    <div v-if="frozen" class="OccurrenceRow-pastBadge">מועד שעבר</div>
 
     <!-- Inline errors below the row -->
     <div v-if="errors.date || errors.startTime" class="OccurrenceRow-errors">
@@ -102,6 +106,7 @@ defineOptions({ name: 'OccurrenceRow' })
 const props = defineProps({
   modelValue: { type: Object, required: true },
   isFirst: { type: Boolean, default: false },
+  frozen: { type: Boolean, default: false },
   errors: { type: Object, default: () => ({}) },
 })
 
@@ -113,7 +118,7 @@ watch(() => props.modelValue, (val) => {
   Object.assign(local, { ...val })
 }, { deep: true })
 
-const minDate = computed(() => new Date().toISOString().slice(0, 10))
+const minDate = computed(() => props.frozen ? undefined : new Date().toISOString().slice(0, 10))
 const allDay = ref(!local.hasTime)
 const hasEndTime = ref(!!local.endTime)
 
@@ -222,6 +227,24 @@ function confirmRemove() {
 
   // Hide error text inside the row to prevent layout breakage — shown below instead
   &-layout .FormField-error { display: none; }
+
+  &--frozen {
+    opacity: 0.6;
+    background: var(--color-surface, #f5f5f5);
+    border-color: var(--color-border);
+    pointer-events: none;
+  }
+
+  &-pastBadge {
+    margin-top: var(--spacing-xs);
+    display: inline-block;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    background: var(--color-border);
+    border-radius: var(--radius-full);
+    padding: 2px 10px;
+  }
 
   &-errors {
     display: flex;
