@@ -2,21 +2,11 @@ const _deferredPrompt = ref(null)
 const canInstall = ref(false)
 const isIOS = ref(false)
 const isInstalled = ref(false)
-const installEnabled = ref(false)
 const showInstructions = ref(false)
 let _listenersAttached = false
 
-const INSTALL_FLAG_KEY = 'galiluz-dev-install'
-
 export function useInstallPrompt() {
-  const route = useRoute()
-
   onMounted(() => {
-    if (route.query.install === '1') {
-      try { sessionStorage.setItem(INSTALL_FLAG_KEY, '1') } catch {}
-    }
-    try { installEnabled.value = sessionStorage.getItem(INSTALL_FLAG_KEY) === '1' } catch {}
-
     if (_listenersAttached) return
     _listenersAttached = true
 
@@ -48,5 +38,5 @@ export function useInstallPrompt() {
     _deferredPrompt.value = null
   }
 
-  return { canInstall, isIOS, isInstalled, installEnabled, showInstructions, triggerInstall }
+  return { canInstall, isIOS, isInstalled, showInstructions, triggerInstall }
 }

@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="installEnabled && !isInstalled && !dismissed && (canInstall || isIOS)"
+    v-if="!isInstalled && !dismissed && (canInstall || isIOS)"
     class="UiInstallBanner"
     role="banner"
     @click="handleInstallClick"
@@ -21,18 +21,12 @@
 <script setup>
 defineOptions({ name: 'UiInstallBanner' })
 
-const { canInstall, isIOS, isInstalled, installEnabled, showInstructions, triggerInstall } = useInstallPrompt()
+const { canInstall, isIOS, isInstalled, showInstructions, triggerInstall } = useInstallPrompt()
 
-const BANNER_DISMISSED_KEY = 'galiluz-install-banner-dismissed'
 const dismissed = ref(false)
-
-onMounted(() => {
-  try { dismissed.value = sessionStorage.getItem(BANNER_DISMISSED_KEY) === '1' } catch {}
-})
 
 function dismiss() {
   dismissed.value = true
-  try { sessionStorage.setItem(BANNER_DISMISSED_KEY, '1') } catch {}
 }
 
 async function handleInstallClick() {
@@ -47,19 +41,20 @@ async function handleInstallClick() {
 
 <style lang="scss">
 .UiInstallBanner {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-lg);
-  background-color: var(--brand-dark-blue);
+  padding: var(--spacing-sm) var(--spacing-3xl);
+  background-color: var(--brand-dark-green);
   color: #fff;
   cursor: pointer;
   width: 100%;
   user-select: none;
 
   &:hover {
-    background-color: #3483a3;
+    filter: brightness(1.1);
   }
 
   &-icon {
@@ -70,11 +65,12 @@ async function handleInstallClick() {
   &-text {
     font-size: var(--font-size-sm);
     font-weight: 600;
+    text-align: center;
   }
 
   &-close {
-    margin-inline-start: auto;
-    flex-shrink: 0;
+    position: absolute;
+    inset-inline-end: var(--spacing-md);
     display: flex;
     align-items: center;
     justify-content: center;
