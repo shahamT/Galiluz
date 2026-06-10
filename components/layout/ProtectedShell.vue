@@ -1,11 +1,19 @@
 <template>
-  <LayoutAppShell v-if="authStore.authReady">
-    <slot />
-  </LayoutAppShell>
-  <div v-else class="AuthLoader">
-    <img src="/logos/galiluz-logo-rtl.svg" alt='גלילו"ז' class="AuthLoader-logo" />
-    <div class="AuthLoader-spinner" aria-label="טוען..." />
-  </div>
+  <ClientOnly>
+    <LayoutAppShell v-if="authStore.authReady">
+      <slot />
+    </LayoutAppShell>
+    <div v-else class="AuthLoader">
+      <img src="/logos/galiluz-logo-rtl.svg" alt='גלילו"ז' class="AuthLoader-logo" />
+      <div class="AuthLoader-spinner" aria-label="טוען..." />
+    </div>
+    <template #fallback>
+      <div class="AuthLoader">
+        <img src="/logos/galiluz-logo-rtl.svg" alt='גלילו"ז' class="AuthLoader-logo" />
+        <div class="AuthLoader-spinner" aria-label="טוען..." />
+      </div>
+    </template>
+  </ClientOnly>
 </template>
 
 <script setup>

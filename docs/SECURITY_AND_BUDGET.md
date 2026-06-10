@@ -1,5 +1,52 @@
 # Security and API Budget
 
+## Publisher authentication
+
+Publishers log in via WhatsApp OTP. The session is stored in a secure cookie.
+
+### Flow
+
+1. `POST /api/auth/send-otp` — generates a 6-digit OTP, stores its HMAC-SHA256 hash (`authKey`) in the publisher's MongoDB document with a 10-minute expiry (`otpExpiresAt`). In production the OTP is sent via WhatsApp Cloud API; in dev (no WA credentials) it is logged to the Nitro console.
+2. `POST /api/auth/verify-otp` — checks the hash, then creates a 1-hour session: generates a random token, stores its hash (`authKey`) with `authKeyExpiresAt = now + 1h`, and sets the `galiluz_auth` HttpOnly cookie (`Secure; SameSite=Strict`).
+3. Subsequent requests include the cookie automatically. `requirePublisherAuth(event)` in `server/utils/requirePublisherAuth.ts`:
+   - Reads token from `galiluz_auth` cookie (browser) or `Authorization: Bearer` header (internal tools).
+   - Hashes with HMAC-SHA256 using `OTP_SECRET` env var.
+   - Queries MongoDB: `{ authKey: hash, authKeyExpiresAt: { $gt: now } }`.
+   - Requires `status === 'approved'` on the publisher record.
+   - Uses timing-safe comparison to prevent length-based timing attacks.
+   - Returns a `PublisherSession` (`{ publisherId, waId, fullName, publishingAs, type }`).
+
+### Resource ownership
+
+- **Publishers** can only read/write their own events. Endpoints enforce `doc.event.publisherId === session.publisherId`.
+- **Managers** (`session.type === 'manager'`) bypass the ownership check and can act on any event.
+
+### 401 handling on the client
+
+`composables/useAuthFetch.js` wraps `useFetch` with `server: false` (prevents SSR from making authenticated requests with a missing cookie) and an `onResponseError` hook that calls `authStore.logout()` and navigates to `/login` on any 401 response.
+
+---
+
+## Media upload security
+
+`POST /api/publisher/media` accepts a base64-encoded file (JSON body `{ file, mimetype, filename }`). Before uploading to Cloudinary:
+
+1. **MIME type whitelist** — Only `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `image/heic/heif`, `video/mp4`, `video/quicktime`, `video/webm`, and a few other video types.
+2. **Extension whitelist** — Only `jpg`, `jpeg`, `png`, `gif`, `webp`, `heic`, `heif`, `mp4`, `mov`, `avi`, `mkv`, `webm`, `m4v`. SVG is explicitly excluded (can contain embedded JavaScript).
+3. **Double-extension attack prevention** — `malware.php.jpg` is rejected (checks second-to-last extension against a dangerous-extensions list).
+4. **Size limit** — 20 MB maximum.
+5. **Magic byte validation** — For images, the first 12 bytes are checked against known signatures: JPEG (`FF D8 FF`), PNG (`89 50 4E 47`), GIF (`47 49 46 38`), WebP (`52 49 46 46 … 57 45 42 50`). HEIC/HEIF and video files skip this check.
+
+### HTML sanitization
+
+`server/utils/sanitizeEventFields.ts` is called before validation on all create/update requests:
+
+- Plain-text fields (`title`, `shortDescription`, location strings) — all HTML tags stripped.
+- `fullDescription` — only a safe whitelist of tags is kept (`p`, `br`, `strong`, `em`, `del`, `code`, `pre`, `blockquote`, `ul`, `ol`, `li`); all attributes are stripped; `<script>`, `<style>`, `<iframe>`, and similar dangerous tags are removed along with their content.
+- `safeUrl()` — used for `wazeNavLink`, `gmapsNavLink`, and `urls[].Url`: rejects anything whose URL scheme is not `http:` or `https:` (blocks `javascript:`, `data:`, etc.).
+
+---
+
 ## API secret (production)
 
 The Nuxt API routes `/api/whatsapp-messages` and `/api/whatsapp-media/[filename]` are protected by an API secret.

@@ -44,6 +44,7 @@ export const MAIN_MENU = {
   about: 'אודות',
   publishEvents: 'מארגנים אירועים בצפון?',
   termsOfService: 'תנאי שימוש',
+  sendFeedback: 'שלחו פידבק',
   contactUs: 'צרו קשר',
 }
 

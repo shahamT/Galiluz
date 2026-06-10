@@ -1,9 +1,11 @@
 <template>
   <nav class="PublisherNavTabs">
     <NuxtLink to="/publisher/dashboard" class="PublisherNavTabs-tab" :class="{ 'PublisherNavTabs-tab--active': isDashboard }">
+      <UiIcon name="dashboard" size="sm" class="PublisherNavTabs-tabIcon" />
       דשבורד
     </NuxtLink>
     <NuxtLink to="/publisher/events" class="PublisherNavTabs-tab" :class="{ 'PublisherNavTabs-tab--active': isEvents }">
+      <UiIcon name="event_note" size="sm" class="PublisherNavTabs-tabIcon" />
       האירועים שלי
     </NuxtLink>
   </nav>
@@ -14,7 +16,7 @@ defineOptions({ name: 'PublisherNavTabs' })
 
 const route = useRoute()
 const isDashboard = computed(() => route.path === '/publisher/dashboard' || route.path === '/publisher')
-const isEvents = computed(() => route.path === '/publisher/events')
+const isEvents = computed(() => route.path.startsWith('/publisher/events'))
 </script>
 
 <style lang="scss">
@@ -22,22 +24,38 @@ const isEvents = computed(() => route.path === '/publisher/events')
 
 .PublisherNavTabs {
   display: flex;
-  border-bottom: 2px solid var(--brand-dark-green-tint);
+  position: sticky;
+  top: var(--header-height);
+  z-index: 100;
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 0 var(--brand-dark-green-tint);
+  margin-top: calc(-1 * var(--spacing-xl));
   margin-bottom: var(--spacing-xl);
+  margin-inline: calc(-1 * var(--spacing-3xl) - max(0px, (100vw - var(--content-max-width)) / 2));
+  padding-top: var(--spacing-md);
+  padding-inline: calc(var(--spacing-3xl) + max(0px, (100vw - var(--content-max-width)) / 2));
+
+  @include mobile {
+    margin-top: calc(-1 * var(--spacing-md));
+    margin-inline: 0;
+    padding-inline: var(--spacing-md);
+  }
 
   &-tab {
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 0 var(--spacing-lg);
-    min-height: 2.75rem;
-    font-size: var(--font-size-base);
+    gap: var(--spacing-sm);
+    padding: 0 var(--spacing-xl);
+    min-height: 3.25rem;
+    font-size: var(--font-size-lg);
     font-weight: 600;
     color: var(--color-text-light);
     text-decoration: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-    transition: color 0.15s, border-color 0.15s;
+    border-bottom: 3px solid transparent;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    transition: color 0.15s, border-color 0.15s, background-color 0.15s;
     white-space: nowrap;
 
     &:hover {
@@ -45,16 +63,27 @@ const isEvents = computed(() => route.path === '/publisher/events')
     }
 
     &--active {
-      color: var(--brand-dark-green);
+      background-color: var(--brand-dark-green);
+      color: #fff;
       border-bottom-color: var(--brand-dark-green);
+
+      &:hover {
+        color: #fff;
+      }
     }
 
     @include mobile {
       flex: 1;
+      justify-content: center;
       min-height: 3rem;
       padding: 0 var(--spacing-md);
-      font-size: var(--font-size-sm);
+      font-size: var(--font-size-base);
     }
+  }
+
+  &-tabIcon {
+    color: inherit;
+    flex-shrink: 0;
   }
 }
 </style>

@@ -58,8 +58,30 @@
               <UiIcon name="description" size="md" class="MainMenu-itemIcon" />
               <span>{{ MAIN_MENU.termsOfService }}</span>
             </NuxtLink>
+            <template v-if="!isInstalled && (canInstall || isIOS)">
+              <div class="MainMenu-separator" aria-hidden="true" />
+              <button
+                type="button"
+                class="MainMenu-item"
+                @click="onInstallClick"
+              >
+                <UiIcon name="add_to_home_screen" size="md" class="MainMenu-itemIcon" />
+                <span>הוסף לדף הבית</span>
+              </button>
+              <UiInstallInstructions
+                v-if="showIOSInstructions"
+                @close="showIOSInstructions = false"
+              />
+            </template>
           </nav>
           <div class="MainMenu-footer">
+            <template v-if="feedbackEnabled">
+              <button type="button" class="MainMenu-item" @click="showFeedback = true; close()">
+                <UiIcon name="rate_review" size="md" class="MainMenu-itemIcon" />
+                <span>{{ MAIN_MENU.sendFeedback }}</span>
+              </button>
+              <div class="MainMenu-separator" aria-hidden="true" />
+            </template>
             <a
               :href="MAIN_MENU_CONTACT_LINK"
               target="_blank"
@@ -75,10 +97,12 @@
       </div>
     </Transition>
   </Teleport>
+  <UiFeedbackModal v-if="showFeedback" @close="showFeedback = false" />
 </template>
 
 <script setup>
 import { MAIN_MENU, MAIN_MENU_CONTACT_LINK } from '~/consts/ui.const'
+import { useInstallPrompt } from '~/composables/useInstallPrompt'
 
 defineOptions({ name: 'MainMenu' })
 
@@ -90,6 +114,30 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+const route = useRoute()
+const { canInstall, isIOS, isInstalled, triggerInstall } = useInstallPrompt()
+const showIOSInstructions = ref(false)
+const showFeedback = ref(false)
+const feedbackEnabled = ref(false)
+
+const FEEDBACK_FLAG_KEY = 'galiluz-dev-feedback'
+
+onMounted(() => {
+  if (route.query.feedback === '1') {
+    try { localStorage.setItem(FEEDBACK_FLAG_KEY, '1') } catch {}
+  }
+  try { feedbackEnabled.value = localStorage.getItem(FEEDBACK_FLAG_KEY) === '1' } catch {}
+})
+
+function onInstallClick() {
+  if (isIOS.value) {
+    showIOSInstructions.value = true
+  } else {
+    triggerInstall()
+    close()
+  }
+}
 
 watch(() => props.modelValue, (visible) => {
   if (import.meta.server) return
@@ -210,10 +258,14 @@ function close() {
     align-items: center;
     gap: var(--spacing-md);
     padding: var(--spacing-md) var(--spacing-lg);
+    border: none;
     border-radius: var(--radius-md);
+    background: transparent;
     color: var(--brand-dark-green);
     font-size: var(--font-size-base);
+    font-family: var(--font-family-body);
     text-decoration: none;
+    cursor: pointer;
     transition: background-color 0.2s ease;
 
     &:hover,

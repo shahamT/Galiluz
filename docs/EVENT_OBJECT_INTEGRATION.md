@@ -271,6 +271,26 @@ The API or frontend may expose this with different casing (e.g. `title` vs `Titl
 
 ---
 
+## 7b. Alternative path — Publisher Portal
+
+Events can also be created directly through the **publisher portal** (`POST /api/publisher/events`), bypassing the wa-bot pipeline entirely.
+
+Key differences from the wa-bot path:
+
+| | WA-bot pipeline | Publisher portal |
+|--|--|--|
+| Auth | API secret | Publisher session cookie (`requirePublisherAuth`) |
+| `isActive` | `false` (pending manager review) | `true` (immediately live) |
+| Time conversion | `convertOccurrenceTimes` (HH:MM → ISO UTC via Israel tz) | Same utility |
+| Validation | `normalizePublisherFormattedEvent` + `validatePublisherFormattedEvent` | Same functions |
+| HTML sanitization | Not needed (structured data from OpenAI) | `sanitizeEventFields.ts` strips/whitelists |
+| Media | Cloudinary URL attached during enrichment | Pre-uploaded via `POST /api/publisher/media` |
+| Audit log | `logEventCreation` with `action: 'event_created'` | Same |
+
+Updates via the portal use `PATCH /api/publisher/event/[id]` with ownership verification and `logEventEdit`. Deletes use `DELETE /api/publisher/event/[id]` with `logEventDeletion`.
+
+---
+
 ## 8. Failure and cleanup paths
 
 | Scenario | When | Action |

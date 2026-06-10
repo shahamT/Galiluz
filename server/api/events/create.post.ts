@@ -99,6 +99,7 @@ export default defineEventHandler(async (event) => {
   if (publisherId) formattedEvent.publisherId = publisherId
   const phone = typeof publisher?.phone === 'string' ? publisher.phone.replace(/\D/g, '').trim() : ''
   if (phone) formattedEvent.publisherPhone = phone
+  if (formattedEvent.multiDayEvent === undefined) formattedEvent.multiDayEvent = true
   const validation = validatePublisherFormattedEvent(formattedEvent)
   if (!validation.valid) {
     console.warn(LOG_PREFIX, correlationId, 'validation failed', JSON.stringify({ reason: validation.reason }))

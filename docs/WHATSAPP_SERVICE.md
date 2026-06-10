@@ -277,6 +277,17 @@ Messages are stored in MongoDB with the following structure:
 | `CLOUDINARY_API_KEY` | Cloudinary API key | (empty) | Yes (for media upload) |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret | (empty) | Yes (for media upload) |
 | `CLOUDINARY_FOLDER` | Cloudinary folder for uploads | `whatsapp-listener` | No |
+| `OPENAI_API_KEY` | OpenAI API key for event extraction | — | Yes |
+| `OPENAI_MODEL` | OpenAI model to use (e.g. `gpt-4o`) | — | Yes |
+| `OCR_ENABLED` | Enable Google Vision OCR for image messages | `false` | No |
+| `OCR_PROVIDER` | OCR provider (`google_vision`) | — | No |
+| `OCR_FALLBACK_OPENAI_VISION` | Fall back to OpenAI Vision if Google Vision fails | `false` | No |
+| `GOOGLE_CREDENTIALS_JSON` | Full Google service account key JSON (minified to one line) | — | Yes (if OCR enabled) |
+| `MONTHLY_OPENAI_CALL_LIMIT` | Max OpenAI calls per calendar month (`0` = no limit) | `0` | No |
+| `MONTHLY_GOOGLE_VISION_LIMIT` | Max Google Vision calls per calendar month (`0` = no limit) | `0` | No |
+| `WHATSAPP_TEST_PHONE_NUMBER_ID` | Meta Phone Number ID of the test WhatsApp number for dev forwarding | — | No |
+| `WHATSAPP_DEV_FORWARD_ENABLED` | Enable dev forwarding from production bot to local bot | `false` | No |
+| `WHATSAPP_DEV_FORWARD_URL` | ngrok URL to forward test messages to (e.g. `https://abc.ngrok-free.app`) | — | No |
 
 ### Google Vision OCR (dev and production)
 

@@ -31,7 +31,8 @@ defineProps({
     font-weight: 600;
     color: var(--color-text);
     display: flex;
-    align-items: center;
+    flex-wrap: wrap;
+    align-items: baseline;
     gap: var(--spacing-xs);
   }
 
@@ -43,6 +44,7 @@ defineProps({
     font-weight: 400;
     color: var(--color-text-light);
     font-size: var(--font-size-xs);
+    flex-basis: 100%;
   }
 
   &-error {

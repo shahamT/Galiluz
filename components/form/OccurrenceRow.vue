@@ -1,89 +1,110 @@
 <template>
-  <div class="OccurrenceRow">
-    <div class="OccurrenceRow-row">
+  <div class="OccurrenceRow" :class="{ 'OccurrenceRow--frozen': frozen }">
+    <div class="OccurrenceRow-layout">
 
-      <!-- Date -->
-      <div class="OccurrenceRow-dateWrap">
-        <FormField label="תאריך" :required="isFirst" :error="errors.date">
-          <input
-            v-model="local.date"
-            type="date"
-            class="FormInput OccurrenceRow-dateInput"
-            :min="minDate"
-            @change="emit('update:modelValue', local)"
-          />
-        </FormField>
-      </div>
-
-      <!-- Start time -->
-      <div class="OccurrenceRow-timeWrap">
-        <FormField label="התחלה" :error="errors.startTime">
-          <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': allDay }">
-            <select
-              :value="startH"
-              :disabled="allDay"
-              class="OccurrenceRow-timeSelect"
-              @change="onStartHChange"
-            >
-              <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
-            </select>
-            <span class="OccurrenceRow-timeSep">:</span>
-            <select
-              :value="startM"
-              :disabled="allDay"
-              class="OccurrenceRow-timeSelect"
-              @change="onStartMChange"
-            >
-              <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
-            </select>
+      <!-- Content: group1 + group2 wrap internally -->
+      <div class="OccurrenceRow-content">
+        <div class="OccurrenceRow-group1">
+          <div class="OccurrenceRow-dateWrap">
+            <FormField label="תאריך" required :error="errors.date">
+              <input
+                v-model="local.date"
+                type="date"
+                class="FormInput OccurrenceRow-dateInput"
+                :min="minDate"
+                :disabled="frozen"
+                @change="emit('update:modelValue', local)"
+              />
+            </FormField>
           </div>
-        </FormField>
-      </div>
-
-      <!-- End time -->
-      <div class="OccurrenceRow-timeWrap">
-        <FormField label="סיום">
-          <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': allDay }">
-            <select
-              :value="endH"
-              :disabled="allDay"
-              class="OccurrenceRow-timeSelect"
-              @change="onEndHChange"
-            >
-              <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
-            </select>
-            <span class="OccurrenceRow-timeSep">:</span>
-            <select
-              :value="endM"
-              :disabled="allDay"
-              class="OccurrenceRow-timeSelect"
-              @change="onEndMChange"
-            >
-              <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
-            </select>
+          <div class="OccurrenceRow-allDayWrap">
+            <span class="OccurrenceRow-allDayLabel">יום מלא</span>
+            <label class="OccurrenceRow-toggle" :class="{ 'OccurrenceRow-toggle--disabled': frozen }">
+              <input v-model="allDay" type="checkbox" class="OccurrenceRow-toggleInput" :disabled="frozen" @change="onAllDayChange" />
+              <span class="OccurrenceRow-toggleTrack" />
+            </label>
           </div>
-        </FormField>
+        </div>
+        <div v-if="!allDay" class="OccurrenceRow-group2">
+          <div class="OccurrenceRow-timeWrap OccurrenceRow-timeWrap--start">
+            <FormField label="התחלה" required :error="errors.startTime">
+              <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': frozen }">
+                <select :value="startH" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onStartHChange">
+                  <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
+                </select>
+                <span class="OccurrenceRow-timeSep">:</span>
+                <select :value="startM" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onStartMChange">
+                  <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
+                </select>
+              </div>
+            </FormField>
+          </div>
+          <div class="OccurrenceRow-timeWrap">
+            <span class="OccurrenceRow-endLabel">סיום</span>
+            <div class="OccurrenceRow-endUnit">
+              <label class="OccurrenceRow-toggle" :class="{ 'OccurrenceRow-toggle--disabled': frozen }">
+                <input v-model="hasEndTime" type="checkbox" class="OccurrenceRow-toggleInput" :disabled="frozen" @change="onHasEndTimeChange" />
+                <span class="OccurrenceRow-toggleTrack" />
+              </label>
+              <div v-if="hasEndTime" class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': frozen }">
+                <select :value="endH" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onEndHChange">
+                  <option v-for="h in endHoursFiltered" :key="h" :value="h">{{ h }}</option>
+                </select>
+                <span class="OccurrenceRow-timeSep">:</span>
+                <select :value="endM" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onEndMChange">
+                  <option v-for="m in endMinutesFiltered" :key="m" :value="m">{{ m }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- All day checkbox -->
-      <div class="OccurrenceRow-allDayWrap">
-        <label class="OccurrenceRow-allDay">
-          <input v-model="allDay" type="checkbox" @change="onAllDayChange" />
-          <span>יום מלא</span>
-        </label>
+      <!-- Action buttons -->
+      <div class="OccurrenceRow-actions" :class="{ 'OccurrenceRow-actions--first': isFirst }">
+        <button
+          type="button"
+          class="OccurrenceRow-duplicate"
+          aria-label="שכפל מועד"
+          @click="emit('duplicate')"
+        >
+          <UiIcon name="content_copy" size="sm" />
+        </button>
+
+        <button
+          v-if="!isFirst && !frozen"
+          type="button"
+          class="OccurrenceRow-remove"
+          aria-label="הסר מועד"
+          @click="handleRemove"
+        >
+          <UiIcon name="delete" size="sm" />
+        </button>
+        <div v-else class="OccurrenceRow-actionPlaceholder" aria-hidden="true" />
       </div>
 
-      <!-- Remove -->
-      <button
-        v-if="!isFirst"
-        type="button"
-        class="OccurrenceRow-remove"
-        aria-label="הסר מועד"
-        @click="emit('remove')"
-      >
-        <UiIcon name="close" size="sm" />
-      </button>
     </div>
+
+    <!-- Inline errors below the row -->
+    <div v-if="errors.date || errors.startTime" class="OccurrenceRow-errors">
+      <span v-if="errors.date" class="OccurrenceRow-errorText">{{ errors.date }}</span>
+      <span v-if="errors.startTime" class="OccurrenceRow-errorText">{{ errors.startTime }}</span>
+    </div>
+
+    <!-- Confirm delete modal -->
+    <Teleport to="body">
+      <Transition name="OccurrenceRow-modal">
+        <div v-if="showConfirm" class="OccurrenceRow-backdrop" @click.self="showConfirm = false">
+          <div class="OccurrenceRow-dialog" role="dialog" aria-modal="true">
+            <p class="OccurrenceRow-dialogText">למחוק את המועד הזה?</p>
+            <div class="OccurrenceRow-dialogActions">
+              <button type="button" class="OccurrenceRow-dialogCancel" @click="showConfirm = false">ביטול</button>
+              <button type="button" class="OccurrenceRow-dialogConfirm" @click="confirmRemove">מחק</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -93,16 +114,21 @@ defineOptions({ name: 'OccurrenceRow' })
 const props = defineProps({
   modelValue: { type: Object, required: true },
   isFirst: { type: Boolean, default: false },
+  frozen: { type: Boolean, default: false },
   errors: { type: Object, default: () => ({}) },
 })
 
-const emit = defineEmits(['update:modelValue', 'remove'])
+const emit = defineEmits(['update:modelValue', 'remove', 'duplicate'])
 
 const local = reactive({ ...props.modelValue })
-watch(() => props.modelValue, (val) => Object.assign(local, val))
+watch(() => props.modelValue, (val) => {
+  // Re-clone the full object to ensure all fields sync correctly
+  Object.assign(local, { ...val })
+}, { deep: true })
 
-const minDate = computed(() => new Date().toISOString().slice(0, 10))
+const minDate = computed(() => props.frozen ? undefined : new Date().toISOString().slice(0, 10))
 const allDay = ref(!local.hasTime)
+const hasEndTime = ref(!!local.endTime)
 
 const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
@@ -118,18 +144,83 @@ const startM = computed(() => parseTime(local.startTime).m)
 const endH = computed(() => parseTime(local.endTime).h)
 const endM = computed(() => parseTime(local.endTime).m)
 
-function setStart(h, m) { local.startTime = `${h}:${m}`; emit('update:modelValue', local) }
+// End time options filtered to be after start time
+const endHoursFiltered = computed(() => {
+  const sh = parseInt(startH.value, 10)
+  return hours.filter(h => parseInt(h, 10) >= sh)
+})
+
+const endMinutesFiltered = computed(() => {
+  const sh = parseInt(startH.value, 10)
+  const sm = parseInt(startM.value, 10)
+  const eh = parseInt(endH.value, 10)
+  if (eh === sh) return minutes.filter(m => parseInt(m, 10) > sm)
+  return minutes
+})
+
+function toMins(h, m) { return parseInt(h, 10) * 60 + parseInt(m, 10) }
+
+function autoAdjustEnd(newStartH, newStartM) {
+  if (!hasEndTime.value || !local.endTime) return
+  const startMins = toMins(newStartH, newStartM)
+  const endMins = toMins(endH.value, endM.value)
+  if (endMins <= startMins) {
+    const adjusted = startMins + 60
+    local.endTime = adjusted > 23 * 60 + 59
+      ? '23:59'
+      : `${String(Math.floor(adjusted / 60)).padStart(2, '0')}:${String(adjusted % 60).padStart(2, '0')}`
+  }
+}
+
+function setStart(h, m) {
+  local.startTime = `${h}:${m}`
+  autoAdjustEnd(h, m)
+  emit('update:modelValue', local)
+}
+
 function setEnd(h, m) { local.endTime = `${h}:${m}`; emit('update:modelValue', local) }
 
 function onStartHChange(e) { setStart(e.target.value, startM.value) }
 function onStartMChange(e) { setStart(startH.value, e.target.value) }
-function onEndHChange(e) { setEnd(e.target.value, endM.value) }
+
+function onEndHChange(e) {
+  const newH = e.target.value
+  const sh = parseInt(startH.value, 10)
+  const sm = parseInt(startM.value, 10)
+  const nh = parseInt(newH, 10)
+  const em = parseInt(endM.value, 10)
+  // If same hour as start, ensure minute is after start minute
+  const safeM = (nh === sh && em <= sm)
+    ? (minutes.find(m => parseInt(m, 10) > sm) || '59')
+    : endM.value
+  setEnd(newH, safeM)
+}
+
 function onEndMChange(e) { setEnd(endH.value, e.target.value) }
 
 function onAllDayChange() {
   local.hasTime = !allDay.value
-  if (allDay.value) { local.startTime = ''; local.endTime = '' }
   emit('update:modelValue', local)
+}
+
+function onHasEndTimeChange() {
+  emit('update:modelValue', local)
+}
+
+const showConfirm = ref(false)
+const isFilled = computed(() => !!(local.date || local.startTime || local.endTime))
+
+function handleRemove() {
+  if (isFilled.value) {
+    showConfirm.value = true
+  } else {
+    emit('remove')
+  }
+}
+
+function confirmRemove() {
+  showConfirm.value = false
+  emit('remove')
 }
 </script>
 
@@ -142,21 +233,74 @@ function onAllDayChange() {
   border-radius: var(--radius-md);
   border: 1px solid var(--brand-dark-green-tint);
 
-  &-row {
+  // Hide error text inside the row to prevent layout breakage — shown below instead
+  &-layout .FormField-error { display: none; }
+
+  &--frozen {
+    background: var(--color-surface, #f5f5f5);
+    border-color: var(--color-border);
+
+    .OccurrenceRow-content { opacity: 0.6; pointer-events: none; }
+    .OccurrenceRow-duplicate { pointer-events: all; }
+  }
+
+  &-errors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    padding-top: var(--spacing-xs);
+  }
+
+  &-errorText {
+    font-size: var(--font-size-xs);
+    color: var(--color-error);
+  }
+
+  &-layout {
     display: flex;
     align-items: flex-end;
     gap: var(--spacing-sm);
+    min-width: 0;
+  }
+
+  &-content {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
     flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--spacing-sm);
+  }
+
+  &-group1 {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--spacing-sm);
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  &-group2 {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--spacing-sm);
+    flex: 0 1 auto;
+    min-width: 0;
   }
 
   &-dateWrap {
     flex: 0 0 9rem;
-
-    @include mobile { flex: 1 1 100%; }
   }
 
   &-timeWrap {
     flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+
+    &--start {
+      margin-left: var(--spacing-sm);
+    }
 
     @include mobile { flex: 0 0 auto; }
   }
@@ -215,49 +359,198 @@ function onAllDayChange() {
 
   &-allDayWrap {
     flex: 0 0 auto;
-    padding-bottom: 4px;
-
-    @include mobile { flex: 0 0 auto; }
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-left: var(--spacing-md);
   }
 
-  &-allDay {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
+  &-allDayLabel {
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: 600;
     color: var(--color-text);
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
+  }
 
-    input[type='checkbox'] {
-      width: 1rem;
-      height: 1rem;
-      accent-color: var(--brand-dark-green);
-      cursor: pointer;
+  &-endLabel {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  &-endUnit {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: calc(var(--control-height) - 2px);
+  }
+
+  &-toggle {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    height: calc(var(--control-height) - 2px);
+
+    &--disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
   }
 
-  &-remove {
+  &-toggleInput {
+    display: none;
+
+    &:checked + .OccurrenceRow-toggleTrack {
+      background: var(--brand-dark-green);
+
+      &::after {
+        transform: translateX(-1.25rem);
+      }
+    }
+  }
+
+  &-toggleTrack {
+    position: relative;
+    width: 2.5rem;
+    height: 1.375rem;
+    background: var(--color-border);
+    border-radius: var(--radius-full);
+    transition: background 0.2s;
     flex-shrink: 0;
-    width: 2rem;
-    height: 2rem;
-    border: none;
-    background: none;
-    cursor: pointer;
-    color: var(--color-text-light);
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 1rem;
+      height: 1rem;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.2s;
+    }
+  }
+
+
+  &-actions {
+    flex-shrink: 0;
+    align-self: flex-end;
+    display: flex;
+    gap: var(--spacing-xs);
+    margin-right: var(--spacing-sm);
+    margin-bottom: 1.2px;
+
+    &--first .OccurrenceRow-duplicate { order: 1; }
+  }
+
+  &-actionPlaceholder {
+    width: 29px;
+    height: 29px;
+    visibility: hidden;
+  }
+
+  &-duplicate {
+    width: 29px;
+    height: 29px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--radius-sm);
-    margin-bottom: 2px;
-    transition: background 0.15s;
+    border: 1.5px dashed var(--brand-dark-green-tint);
+    border-radius: var(--radius-md);
+    background: var(--brand-dark-green-tint-light);
+    color: var(--brand-dark-green);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    padding: 0;
 
-    &:hover {
-      background: var(--color-border);
-      color: var(--color-error);
-    }
+    &:hover { background: var(--brand-dark-green-tint); border-style: solid; }
+  }
+
+  &-remove {
+    width: 29px;
+    height: 29px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px dashed var(--color-error-tint-border);
+    border-radius: var(--radius-md);
+    background: var(--color-error-tint-light);
+    color: var(--color-error);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    padding: 0;
+
+    &:hover { background: var(--color-error-tint); border-style: solid; }
+  }
+
+  &-backdrop {
+    position: fixed;
+    inset: 0;
+    background: var(--modal-backdrop-bg);
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &-dialog {
+    background: var(--color-background);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    min-width: 18rem;
+    max-width: 90vw;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+    box-shadow: var(--shadow-lg);
+  }
+
+  &-dialogText {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text);
+    text-align: center;
+  }
+
+  &-dialogActions {
+    display: flex;
+    gap: var(--spacing-sm);
+    justify-content: center;
+  }
+
+  &-dialogCancel {
+    flex: 1;
+    padding: var(--spacing-sm);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: transparent;
+    font-family: var(--font-family-body);
+    font-size: var(--font-size-base);
+    cursor: pointer;
+    color: var(--color-text);
+
+    &:hover { background: var(--color-surface); }
+  }
+
+  &-dialogConfirm {
+    flex: 1;
+    padding: var(--spacing-sm);
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--color-error);
+    font-family: var(--font-family-body);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: #fff;
+    cursor: pointer;
+
+    &:hover { opacity: 0.9; }
   }
 }
+
+.OccurrenceRow-modal-enter-active,
+.OccurrenceRow-modal-leave-active { transition: opacity 0.15s ease; }
+.OccurrenceRow-modal-enter-from,
+.OccurrenceRow-modal-leave-to { opacity: 0; }
 </style>

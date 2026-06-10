@@ -9,7 +9,7 @@
       @change-filters="filterNotifyStore.handleChangeFilters"
       @close="filterNotifyStore.handleClose"
     />
-    <UiWelcomeModal />
+    <UiWelcomeModal v-if="!isProtectedRoute" />
   </div>
 </template>
 

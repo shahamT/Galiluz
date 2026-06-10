@@ -182,6 +182,8 @@ async function handleResend() {
   }
 }
 
+const route = useRoute()
+
 async function handleVerifyOtp() {
   if (otpCode.value.length < 6 || loading.value) return
   error.value = ''
@@ -189,8 +191,14 @@ async function handleVerifyOtp() {
   try {
     await verifyOtp(phone.value, otpCode.value)
     state.value = 'success'
+    const returnTo = route.query.returnTo
     setTimeout(() => {
-      navigateTo(authStore.isManager ? '/admin' : '/publisher/dashboard')
+      const rt = String(returnTo || '')
+      if (rt.startsWith('/') && !rt.startsWith('//') && !rt.startsWith('/\\')) {
+        navigateTo(rt)
+      } else {
+        navigateTo(authStore.isManager ? '/admin' : '/publisher/dashboard')
+      }
     }, 800)
   } catch (err) {
     error.value = parseErrorMessage(err)
