@@ -125,9 +125,9 @@ const FEEDBACK_FLAG_KEY = 'galiluz-dev-feedback'
 
 onMounted(() => {
   if (route.query.feedback === '1') {
-    try { localStorage.setItem(FEEDBACK_FLAG_KEY, '1') } catch {}
+    try { sessionStorage.setItem(FEEDBACK_FLAG_KEY, '1') } catch {}
   }
-  try { feedbackEnabled.value = localStorage.getItem(FEEDBACK_FLAG_KEY) === '1' } catch {}
+  try { feedbackEnabled.value = sessionStorage.getItem(FEEDBACK_FLAG_KEY) === '1' } catch {}
 })
 
 function onInstallClick() {
