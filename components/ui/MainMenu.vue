@@ -58,6 +58,21 @@
               <UiIcon name="description" size="md" class="MainMenu-itemIcon" />
               <span>{{ MAIN_MENU.termsOfService }}</span>
             </NuxtLink>
+            <template v-if="!isInstalled && (canInstall || isIOS)">
+              <div class="MainMenu-separator" aria-hidden="true" />
+              <button
+                type="button"
+                class="MainMenu-item"
+                @click="onInstallClick"
+              >
+                <UiIcon name="add_to_home_screen" size="md" class="MainMenu-itemIcon" />
+                <span>הוסף לדף הבית</span>
+              </button>
+              <UiInstallInstructions
+                v-if="showIOSInstructions"
+                @close="showIOSInstructions = false"
+              />
+            </template>
           </nav>
           <div class="MainMenu-footer">
             <a
@@ -79,6 +94,7 @@
 
 <script setup>
 import { MAIN_MENU, MAIN_MENU_CONTACT_LINK } from '~/consts/ui.const'
+import { useInstallPrompt } from '~/composables/useInstallPrompt'
 
 defineOptions({ name: 'MainMenu' })
 
@@ -90,6 +106,18 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+const { canInstall, isIOS, isInstalled, triggerInstall } = useInstallPrompt()
+const showIOSInstructions = ref(false)
+
+function onInstallClick() {
+  if (isIOS.value) {
+    showIOSInstructions.value = true
+  } else {
+    triggerInstall()
+    close()
+  }
+}
 
 watch(() => props.modelValue, (visible) => {
   if (import.meta.server) return

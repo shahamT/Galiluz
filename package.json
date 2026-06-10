@@ -36,6 +36,7 @@
     "swiper": "^11.1.14"
   },
   "devDependencies": {
-    "sass": "^1.77.0"
+    "sass": "^1.77.0",
+    "sharp": "^0.34.5"
   }
 }

@@ -13,32 +13,16 @@
 
       <!-- Page header -->
       <div class="EventPage-header">
-        <NuxtLink to="/publisher/events" class="EventPage-back">
-          <UiIcon name="arrow_forward" size="sm" />
-          חזרה לאירועים שלי
-        </NuxtLink>
+        <div class="EventPage-backRow">
+          <NuxtLink to="/publisher/events" class="EventPage-back">
+            <UiIcon name="arrow_forward" size="sm" />
+            חזרה לאירועים שלי
+          </NuxtLink>
+          <span v-if="event && !event.isActive" class="EventPage-draftChip">טיוטה</span>
+        </div>
         <div class="EventPage-headerRow">
           <h1 v-if="event" class="EventPage-title">{{ event.title }}</h1>
           <div v-else class="EventPage-titleSkeleton" />
-        </div>
-        <div v-if="event" class="EventPage-actions">
-          <button type="button" class="EventPage-actionBtn EventPage-actionBtn--edit" @click="showEditForm = true">
-            <UiIcon name="edit" size="sm" />
-            עריכת אירוע
-          </button>
-          <button
-            type="button"
-            class="EventPage-actionBtn"
-            :class="event.isActive ? 'EventPage-actionBtn--warn' : 'EventPage-actionBtn--edit'"
-            @click="showStatusModal = true"
-          >
-            <UiIcon :name="event.isActive ? 'draft_orders' : 'publish'" size="sm" />
-            {{ event.isActive ? 'הפוך לטיוטה' : 'פרסם אירוע' }}
-          </button>
-          <button type="button" class="EventPage-actionBtn EventPage-actionBtn--delete" @click="showDeleteModal = true">
-            <UiIcon name="delete" size="sm" />
-            מחיקה
-          </button>
         </div>
       </div>
 
@@ -48,9 +32,94 @@
       </template>
 
       <template v-else-if="event">
+        <!-- Actions section -->
+        <h2 class="EventPage-sectionTitle">
+          <UiIcon name="tune" size="sm" />
+          פעולות
+        </h2>
+        <div class="EventPage-actionsCard">
+
+          <!-- Draft state -->
+          <template v-if="!event.isActive">
+            <p class="EventPage-draftNoticeText">האירוע שלכם שמור כטיוטה, על מנת לפרסם אותו, לחצו כאן:</p>
+            <button type="button" class="EventPage-actionBtn EventPage-actionBtn--publish" @click="showStatusModal = true">
+              <UiIcon name="publish" size="sm" />
+              פירסום אירוע
+            </button>
+            <div class="EventPage-actionsMore">
+              <span class="EventPage-actionsMoreLabel">פעולות נוספות</span>
+              <div class="EventPage-actionsRow">
+                <button type="button" class="EventPage-actionBtn EventPage-actionBtn--edit" @click="showEditForm = true">
+                  <UiIcon name="edit" size="sm" />
+                  עדכון פרטים
+                </button>
+                <button type="button" class="EventPage-actionBtn EventPage-actionBtn--ghost-delete" @click="showDeleteModal = true">
+                  <UiIcon name="delete" size="sm" />
+                  מחיקת אירוע
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Published state -->
+          <template v-else>
+            <button type="button" class="EventPage-actionBtn EventPage-actionBtn--edit" @click="showEditForm = true">
+              <UiIcon name="edit" size="sm" />
+              עדכון פרטים
+            </button>
+            <div class="EventPage-actionsMore">
+              <span class="EventPage-actionsMoreLabel">פעולות נוספות</span>
+              <div class="EventPage-actionsRow">
+                <button type="button" class="EventPage-actionBtn EventPage-actionBtn--ghost-delete" @click="showDeleteModal = true">
+                  <UiIcon name="delete" size="sm" />
+                  מחיקת אירוע
+                </button>
+                <button type="button" class="EventPage-actionBtn EventPage-actionBtn--ghost-draft" @click="showStatusModal = true">
+                  <UiIcon name="draft_orders" size="sm" />
+                  המרה לטיוטה
+                </button>
+              </div>
+            </div>
+          </template>
+
+        </div>
+
+        <!-- Preview section -->
+        <h2 class="EventPage-sectionTitle">
+          <UiIcon name="event" size="sm" />
+          תצוגת האירוע
+        </h2>
+        <div class="EventPage-linkBox">
+          <span class="EventPage-linkBoxTitle">לינק לאירוע</span>
+          <template v-if="!event.isActive">
+            <p class="EventPage-linkBoxMsg">האירוע מוגדר כטיוטה, על מנת לצפות בלינק לאירוע יש לפרסם אותו</p>
+            <button type="button" class="EventPage-actionBtn EventPage-actionBtn--publish" @click="showStatusModal = true">
+              <UiIcon name="publish" size="sm" />
+              פירסום אירוע
+            </button>
+          </template>
+          <template v-else-if="!firstFutureOccurrence">
+            <p class="EventPage-linkBoxMsg">לאירוע זה לא קיימים מופעים עתידיים</p>
+          </template>
+          <template v-else>
+            <div class="EventPage-linkRow">
+              <a class="EventPage-linkUrl" :href="eventScheduleUrl" target="_blank" rel="noopener noreferrer">{{ eventScheduleUrl }}</a>
+              <div class="EventPage-linkActions">
+                <button type="button" class="EventPage-linkBtn" @click="copyEventLink">
+                  <UiIcon :name="linkCopied ? 'check' : 'content_copy'" size="sm" />
+                  {{ linkCopied ? 'הועתק!' : 'העתקה' }}
+                </button>
+                <button v-if="canShare" type="button" class="EventPage-linkBtn" @click="shareEventLink">
+                  <UiIcon name="share" size="sm" />
+                  שיתוף
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
         <PublisherEventPreview :event="event" />
 
-        <!-- Statistics -->
+        <!-- Statistics section -->
         <h2 class="EventPage-sectionTitle">
           <UiIcon name="bar_chart" size="sm" />
           סטטיסטיקות
@@ -226,6 +295,33 @@ function formatOccurrenceDate(dateStr) {
   const [y, m, d] = dateStr.split('-')
   return `${parseInt(d)}/${m}/${y.slice(2)}`
 }
+
+const firstFutureOccurrence = computed(() => {
+  const occs = event.value?.occurrences || []
+  const today = new Date().toISOString().slice(0, 10)
+  return occs.find(o => o.date >= today) ?? null
+})
+
+const eventScheduleUrl = computed(() => {
+  if (!event.value?.isActive || !firstFutureOccurrence.value) return null
+  const origin = process.client ? window.location.origin : ''
+  return `${origin}/events/daily-view?date=${firstFutureOccurrence.value.date}&event=${event.value.id}`
+})
+
+const canShare = computed(() => process.client && !!navigator.share)
+const linkCopied = ref(false)
+
+async function copyEventLink() {
+  if (!eventScheduleUrl.value) return
+  await navigator.clipboard.writeText(eventScheduleUrl.value)
+  linkCopied.value = true
+  setTimeout(() => { linkCopied.value = false }, 2000)
+}
+
+async function shareEventLink() {
+  if (!eventScheduleUrl.value || !navigator.share) return
+  await navigator.share({ title: event.value?.title, url: eventScheduleUrl.value })
+}
 </script>
 
 <style lang="scss">
@@ -266,10 +362,27 @@ function formatOccurrenceDate(dateStr) {
     gap: var(--spacing-sm);
   }
 
+  &-backRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
   &-headerRow {
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
+  }
+
+  &-draftChip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    background: var(--color-border);
+    color: var(--color-text-light);
   }
 
   &-back {
@@ -300,11 +413,39 @@ function formatOccurrenceDate(dateStr) {
     background: var(--color-border);
   }
 
-  &-actions {
+  &-actionsCard {
+    background: var(--light-bg);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  &-draftNoticeText {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--color-text);
+  }
+
+  &-actionsMore {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
+  }
+
+  &-actionsMoreLabel {
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    color: var(--color-text-muted);
+  }
+
+  &-actionsRow {
     display: flex;
     gap: var(--spacing-sm);
-
-    .EventPage-actionBtn { flex: 1; }
   }
 
   &-actionBtn {
@@ -319,27 +460,38 @@ function formatOccurrenceDate(dateStr) {
     font-weight: 600;
     font-family: var(--font-family-body);
     cursor: pointer;
-    text-decoration: none;
-    background: transparent;
-    transition: background 0.15s, color 0.15s;
+    transition: opacity 0.15s, background 0.15s;
 
     &--edit {
-      border: 1.5px solid var(--brand-dark-green);
-      color: var(--brand-dark-green);
-      &:hover, &:visited, &:active { color: var(--brand-dark-green); }
-      &:hover { background: rgba(11,151,74,0.07); }
+      border: none;
+      background: var(--brand-dark-blue);
+      color: #fff;
+      align-self: flex-start;
+      &:hover { opacity: 0.88; }
     }
 
-    &--warn {
-      border: 1.5px solid #e65100;
-      color: #e65100;
-      &:hover { background: rgba(230,81,0,0.07); }
+    &--publish {
+      border: none;
+      background: var(--brand-dark-green);
+      color: #fff;
+      align-self: flex-start;
+      &:hover { opacity: 0.88; }
     }
 
-    &--delete {
-      border: 1.5px solid var(--color-error);
+    &--ghost-delete {
+      background: var(--color-background);
+      border: 1.5px solid var(--color-border);
       color: var(--color-error);
-      &:hover { background: rgba(211,47,47,0.07); }
+      align-self: flex-start;
+      &:hover { border-color: var(--color-text-muted); }
+    }
+
+    &--ghost-draft {
+      background: var(--color-background);
+      border: 1.5px solid var(--color-border);
+      color: var(--color-text);
+      align-self: flex-start;
+      &:hover { border-color: var(--color-text-muted); }
     }
   }
 
@@ -436,6 +588,74 @@ function formatOccurrenceDate(dateStr) {
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
     padding: var(--spacing-md) 0;
+  }
+
+  &-linkBox {
+    background: var(--light-bg);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md) var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  &-linkBoxTitle {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  &-linkBoxMsg {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+
+  &-linkRow {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    flex-wrap: wrap;
+  }
+
+  &-linkUrl {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--brand-dark-blue);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: ltr;
+    text-decoration: none;
+    &:hover { text-decoration: underline; }
+    @media (max-width: 768px) { width: 100%; flex: none; }
+  }
+
+  &-linkActions {
+    display: flex;
+    gap: var(--spacing-xs);
+    flex-shrink: 0;
+  }
+
+  &-linkBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    height: var(--control-height);
+    padding: 0 var(--spacing-md);
+    border-radius: var(--radius-md);
+    border: 1.5px solid var(--color-border);
+    background: var(--color-background);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: var(--font-family-body);
+    color: var(--color-text);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s;
+    &:hover { border-color: var(--color-text-muted); }
   }
 }
 </style>
