@@ -75,11 +75,13 @@
             </template>
           </nav>
           <div class="MainMenu-footer">
-            <button type="button" class="MainMenu-item" @click="showFeedback = true; close()">
-              <UiIcon name="rate_review" size="md" class="MainMenu-itemIcon" />
-              <span>{{ MAIN_MENU.sendFeedback }}</span>
-            </button>
-            <div class="MainMenu-separator" aria-hidden="true" />
+            <template v-if="feedbackEnabled">
+              <button type="button" class="MainMenu-item" @click="showFeedback = true; close()">
+                <UiIcon name="rate_review" size="md" class="MainMenu-itemIcon" />
+                <span>{{ MAIN_MENU.sendFeedback }}</span>
+              </button>
+              <div class="MainMenu-separator" aria-hidden="true" />
+            </template>
             <a
               :href="MAIN_MENU_CONTACT_LINK"
               target="_blank"
@@ -113,9 +115,20 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
+const route = useRoute()
 const { canInstall, isIOS, isInstalled, triggerInstall } = useInstallPrompt()
 const showIOSInstructions = ref(false)
 const showFeedback = ref(false)
+const feedbackEnabled = ref(false)
+
+const FEEDBACK_FLAG_KEY = 'galiluz-dev-feedback'
+
+onMounted(() => {
+  if (route.query.feedback === '1') {
+    try { localStorage.setItem(FEEDBACK_FLAG_KEY, '1') } catch {}
+  }
+  try { feedbackEnabled.value = localStorage.getItem(FEEDBACK_FLAG_KEY) === '1' } catch {}
+})
 
 function onInstallClick() {
   if (isIOS.value) {
