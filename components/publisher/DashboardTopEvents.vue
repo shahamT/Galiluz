@@ -17,18 +17,20 @@
     <div v-else-if="!events?.length" class="DashboardTopEvents-empty">אין נתוני צפיות עדיין</div>
     <ul v-else class="DashboardTopEvents-list">
       <li v-for="(ev, i) in events" :key="`${ev.eventId}-${ev.occurrenceDate || i}`" class="DashboardTopEvents-row">
-        <span class="DashboardTopEvents-rank">{{ i + 1 }}</span>
-        <div class="DashboardTopEvents-info">
-          <span class="DashboardTopEvents-name">{{ ev.title }}</span>
-          <span class="DashboardTopEvents-date">
-            <template v-if="ev.startDate && ev.endDate">{{ ev.startDate }} – {{ ev.endDate }}</template>
-            <template v-else-if="ev.occurrenceDate">{{ ev.occurrenceDate }}</template>
-          </span>
-        </div>
-        <div class="DashboardTopEvents-metrics">
-          <span class="DashboardTopEvents-views">{{ ev.views }}<span class="DashboardTopEvents-viewsLabel"> צפיות</span></span>
-          <span class="DashboardTopEvents-unique">{{ ev.uniqueViews }} ייחודיות</span>
-        </div>
+        <NuxtLink :to="`/publisher/events/${ev.eventId}`" class="DashboardTopEvents-link">
+          <span class="DashboardTopEvents-rank">{{ i + 1 }}</span>
+          <div class="DashboardTopEvents-info">
+            <span class="DashboardTopEvents-name">{{ ev.title }}</span>
+            <span class="DashboardTopEvents-date">
+              <template v-if="ev.startDate && ev.endDate">{{ ev.startDate }} – {{ ev.endDate }}</template>
+              <template v-else-if="ev.occurrenceDate">{{ ev.occurrenceDate }}</template>
+            </span>
+          </div>
+          <div class="DashboardTopEvents-metrics">
+            <span class="DashboardTopEvents-views">{{ ev.views }}<span class="DashboardTopEvents-viewsLabel"> צפיות</span></span>
+            <span class="DashboardTopEvents-unique">{{ ev.uniqueViews }} ייחודיות</span>
+          </div>
+        </NuxtLink>
       </li>
     </ul>
   </div>
@@ -75,11 +77,16 @@ defineProps({
   }
 
   &-row {
+    list-style: none;
+  }
+
+  &-link {
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
     padding: var(--spacing-sm) var(--spacing-xs);
     border-radius: var(--radius-sm);
+    text-decoration: none;
     transition: background 0.1s;
 
     &:hover { background: var(--light-bg); }

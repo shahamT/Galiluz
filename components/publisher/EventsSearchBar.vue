@@ -1,15 +1,5 @@
 <template>
   <div class="EventsSearchBar">
-    <div class="EventsSearchBar-search">
-      <UiIcon name="search" size="sm" class="EventsSearchBar-searchIcon" />
-      <input
-        :value="search"
-        type="search"
-        class="EventsSearchBar-input"
-        placeholder="חיפוש אירוע..."
-        @input="emit('update:search', $event.target.value)"
-      />
-    </div>
     <div class="EventsSearchBar-filters" role="group">
       <button
         v-for="opt in options"
@@ -22,6 +12,20 @@
         {{ opt.label }}
       </button>
     </div>
+    <div class="EventsSearchBar-search">
+      <UiIcon name="search" size="sm" class="EventsSearchBar-searchIcon" />
+      <input
+        :value="search"
+        type="search"
+        class="EventsSearchBar-input"
+        placeholder="חיפוש אירוע..."
+        @input="emit('update:search', $event.target.value)"
+      />
+    </div>
+    <button type="button" class="EventsSearchBar-addBtn" @click="emit('add-event')">
+      <UiIcon name="add" size="sm" />
+      אירוע חדש
+    </button>
   </div>
 </template>
 
@@ -31,7 +35,7 @@ defineProps({
   modelValue: { type: String, default: 'future' },
   search: { type: String, default: '' },
 })
-const emit = defineEmits(['update:modelValue', 'update:search'])
+const emit = defineEmits(['update:modelValue', 'update:search', 'add-event'])
 
 const options = [
   { value: 'past',   label: 'הסתיימו' },
@@ -50,16 +54,22 @@ const options = [
   margin-bottom: var(--spacing-lg);
 
   @include mobile {
-    flex-direction: column;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "search addBtn"
+      "filters filters";
     gap: var(--spacing-sm);
+    align-items: stretch;
   }
 
   &-search {
     position: relative;
     flex: 1;
 
-    @include mobile { width: 100%; }
+    @include mobile {
+      grid-area: search;
+    }
   }
 
   &-searchIcon {
@@ -108,11 +118,14 @@ const options = [
     height: var(--control-height);
     border-radius: var(--radius-md);
     overflow: hidden;
-    background: var(--light-bg);
+    background: rgba(255, 255, 255, 0.7);
     flex-shrink: 0;
+    padding: 2px;
+    gap: 1px;
 
     @include mobile {
-      height: var(--control-height);
+      grid-area: filters;
+      height: var(--section-header-height);
       width: 100%;
     }
   }
@@ -125,25 +138,55 @@ const options = [
     font-size: var(--font-size-sm);
     font-weight: 600;
     font-family: var(--font-family-body);
-    color: var(--brand-dark-green);
+    color: var(--color-text-light);
     background: transparent;
     border: none;
+    border-radius: calc(var(--radius-md) - 2px);
     cursor: pointer;
     white-space: nowrap;
-    transition: background 0.15s, color 0.15s;
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 
     &:hover:not(.EventsSearchBar-segment--active) {
-      background: var(--day-cell-hover-bg);
+      background: rgba(0, 0, 0, 0.05);
     }
 
     &--active {
-      background: var(--brand-dark-green);
-      color: var(--chip-text-white);
+      background: var(--color-background);
+      color: var(--brand-dark-green);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     }
 
     @include mobile {
       flex: 1;
       padding: 0 var(--spacing-sm);
+    }
+  }
+
+  &-addBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    height: var(--control-height);
+    padding: 0 var(--spacing-lg);
+    background: var(--brand-dark-green);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: var(--font-family-body);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: opacity 0.2s;
+
+    &:hover { opacity: 0.9; }
+
+    @include mobile {
+      grid-area: addBtn;
+      width: auto;
+      height: var(--section-header-height);
+      justify-content: center;
     }
   }
 }

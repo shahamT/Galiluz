@@ -5,13 +5,10 @@
     <div class="PublisherEvents-body">
       <div class="PublisherEvents-header">
         <h1 class="PublisherEvents-title">האירועים שלי</h1>
-        <button type="button" class="PublisherEvents-cta" @click="showEventForm = true">
-          <UiIcon name="add" size="sm" />
-          אירוע חדש
-        </button>
+        <p class="PublisherEvents-description">כאן תוכל/י לנהל, לערוך ולעקוב אחר כל האירועים שפרסמת.</p>
       </div>
 
-      <PublisherEventsSearchBar v-model="filter" v-model:search="search" />
+      <PublisherEventsSearchBar v-model="filter" v-model:search="search" @add-event="showEventForm = true" />
 
       <!-- Skeleton -->
       <template v-if="pending">
@@ -31,7 +28,7 @@
       <div v-else-if="!events?.length" class="PublisherEvents-empty">
         <UiIcon name="event" size="lg" class="PublisherEvents-emptyIcon" />
         <p>אין לך אירועים עדיין</p>
-        <button type="button" class="PublisherEvents-cta" @click="showEventForm = true">
+        <button type="button" class="PublisherEvents-emptyCta" @click="showEventForm = true">
           <UiIcon name="add" size="sm" />
           אירוע חדש
         </button>
@@ -105,46 +102,21 @@ const filteredEvents = computed(() => {
   }
 
   &-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
-
-    @include mobile {
-      align-items: center;
-    }
+    margin-bottom: var(--spacing-xl);
   }
 
   &-title {
-    margin: 0;
+    margin: 0 0 var(--spacing-xs);
     font-size: var(--font-size-2xl);
     font-weight: 700;
     color: var(--brand-dark-green);
   }
 
-  &-cta {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    height: var(--control-height);
-    padding: 0 var(--spacing-lg);
-    background: var(--brand-dark-green);
-    color: var(--chip-text-white);
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    font-family: var(--font-family-body);
-    cursor: pointer;
-    text-decoration: none;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition: opacity 0.2s;
-
-    &:hover, &:visited, &:active { color: var(--chip-text-white); }
-    &:hover { opacity: 0.9; }
-
+  &-description {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text-light);
+    line-height: 1.5;
   }
 
   &-skeleton {

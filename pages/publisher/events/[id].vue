@@ -26,6 +26,15 @@
             <UiIcon name="edit" size="sm" />
             עריכת אירוע
           </button>
+          <button
+            type="button"
+            class="EventPage-actionBtn"
+            :class="event.isActive ? 'EventPage-actionBtn--warn' : 'EventPage-actionBtn--edit'"
+            @click="showStatusModal = true"
+          >
+            <UiIcon :name="event.isActive ? 'draft_orders' : 'publish'" size="sm" />
+            {{ event.isActive ? 'הפוך לטיוטה' : 'פרסם אירוע' }}
+          </button>
           <button type="button" class="EventPage-actionBtn EventPage-actionBtn--delete" @click="showDeleteModal = true">
             <UiIcon name="delete" size="sm" />
             מחיקה
@@ -146,6 +155,14 @@
       @submitted="onEditSubmitted"
     />
 
+    <PublisherEventStatusModal
+      v-if="showStatusModal && event"
+      :event-id="event.id"
+      :is-active="event.isActive"
+      @close="showStatusModal = false"
+      @updated="() => { showStatusModal = false; refresh() }"
+    />
+
     <PublisherEventDeleteModal
       v-if="showDeleteModal && event"
       :event-title="event.title"
@@ -164,6 +181,7 @@ const route = useRoute()
 const router = useRouter()
 const showDeleteModal = ref(false)
 const showEditForm = ref(false)
+const showStatusModal = ref(false)
 
 const successBanner = ref('')
 onMounted(() => {
@@ -269,13 +287,10 @@ function formatOccurrenceDate(dateStr) {
   &-title {
     flex: 1;
     margin: 0;
-    font-size: var(--font-size-xl);
+    font-size: var(--font-size-2xl);
     font-weight: 700;
     color: var(--brand-dark-green);
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   &-titleSkeleton {
@@ -313,6 +328,12 @@ function formatOccurrenceDate(dateStr) {
       color: var(--brand-dark-green);
       &:hover, &:visited, &:active { color: var(--brand-dark-green); }
       &:hover { background: rgba(11,151,74,0.07); }
+    }
+
+    &--warn {
+      border: 1.5px solid #e65100;
+      color: #e65100;
+      &:hover { background: rgba(230,81,0,0.07); }
     }
 
     &--delete {

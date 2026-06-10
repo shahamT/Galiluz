@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
 
   const doc = {
     createdAt: new Date(),
-    isActive:  true,
+    isActive:  false,
     event:     eventObj,
     rawEvent:  { publisherId: session.publisherId, source: 'publisher_portal' },
   }

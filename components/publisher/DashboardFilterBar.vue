@@ -37,12 +37,14 @@ const options = [
   height: var(--control-height);
   border-radius: var(--radius-md);
   overflow: hidden;
-  background-color: var(--light-bg);
+  background-color: rgba(255, 255, 255, 0.7);
   width: fit-content;
   margin-bottom: var(--spacing-lg);
+  padding: 2px;
+  gap: 1px;
 
   @include mobile {
-    height: var(--control-height-mobile);
+    height: var(--section-header-height);
     width: 100%;
   }
 
@@ -54,20 +56,22 @@ const options = [
     font-size: var(--font-size-sm);
     font-weight: 600;
     font-family: var(--font-family-body);
-    color: var(--brand-dark-green);
+    color: var(--color-text-light);
     background-color: transparent;
     border: none;
+    border-radius: calc(var(--radius-md) - 2px);
     cursor: pointer;
     white-space: nowrap;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
 
     &:hover:not(.DashboardFilterBar-segment--active) {
-      background-color: var(--day-cell-hover-bg);
+      background-color: rgba(0, 0, 0, 0.05);
     }
 
     &--active {
-      background-color: var(--brand-dark-green);
-      color: var(--chip-text-white);
+      background-color: var(--color-background);
+      color: var(--brand-dark-green);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     }
 
     @include mobile {
