@@ -478,7 +478,7 @@ function validateLink(i, field) {
     } else if (link.type === 'phone' && !isValidPhone(link.url)) {
       e.url = 'מספר טלפון לא תקין'
     } else if (link.type === 'link' && !isValidUrl(link.url)) {
-      e.url = 'כתובת URL לא תקינה (יש להתחיל עם https://)'
+      e.url = 'כתובת URL לא תקינה'
     }
   }
   linkErrors.splice(i, 1, e)
@@ -534,8 +534,14 @@ function getTextLength(html) {
 function isValidPhone(val) {
   return (val.replace(/\D/g, '').length >= 7)
 }
+function normalizeUrl(val) {
+  const trimmed = val.trim()
+  if (!trimmed || /^https?:\/\//i.test(trimmed)) return trimmed
+  return `https://${trimmed}`
+}
+
 function isValidUrl(val) {
-  return /^https?:\/\/.+/.test(val.trim())
+  return /^(https?:\/\/)?[\w.-]+\.[a-zA-Z]{2,}(\/.*)?$/.test(val.trim())
 }
 
 // --- Validation ---
@@ -608,7 +614,7 @@ function validate() {
     } else if (link.type === 'phone' && !isValidPhone(link.url)) {
       e.url = 'מספר טלפון לא תקין'
     } else if (link.type === 'link' && !isValidUrl(link.url)) {
-      e.url = 'כתובת URL לא תקינה (יש להתחיל עם https://)'
+      e.url = 'כתובת URL לא תקינה'
     }
     if (Object.keys(e).length) { linkErrors[i] = e; ok = false }
     else linkErrors[i] = {}
@@ -654,7 +660,7 @@ function buildEventPayload(f, allMedia) {
       gmapsNavLink:  f.autoNav ? null : (f.gmapsLink || null),
     },
     price: f.price ?? null,
-    urls:  f.links.map(l => ({ Title: l.label, Url: l.url, type: l.type })),
+    urls:  f.links.map(l => ({ Title: l.label, Url: l.type === 'link' ? normalizeUrl(l.url) : l.url, type: l.type })),
     media: allMedia,
   }
 }

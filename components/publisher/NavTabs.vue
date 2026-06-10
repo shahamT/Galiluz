@@ -33,9 +33,9 @@ const isEvents = computed(() => route.path.startsWith('/publisher/events'))
   box-shadow: 0 2px 0 var(--brand-dark-green-tint);
   margin-top: calc(-1 * var(--spacing-xl));
   margin-bottom: var(--spacing-xl);
-  margin-inline: calc(-1 * var(--spacing-3xl));
+  margin-inline: calc(-1 * var(--spacing-3xl) - max(0px, (100vw - var(--content-max-width)) / 2));
   padding-top: var(--spacing-md);
-  padding-inline: var(--spacing-3xl);
+  padding-inline: calc(var(--spacing-3xl) + max(0px, (100vw - var(--content-max-width)) / 2));
 
   @include mobile {
     margin-top: calc(-1 * var(--spacing-md));

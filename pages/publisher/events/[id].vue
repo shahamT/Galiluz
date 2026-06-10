@@ -127,90 +127,121 @@
 
         <template v-if="event.multiDayEvent">
           <div class="EventPage-statCard">
-            <div class="EventPage-statGrid">
-              <div class="EventPage-stat EventPage-stat--views">
-                <UiIcon name="visibility" size="sm" />
-                <span class="EventPage-statLabel">צפיות</span>
-                <span class="EventPage-statValue">{{ event.stats.totalViews }}</span>
-              </div>
-              <div class="EventPage-stat EventPage-stat--unique">
-                <UiIcon name="person" size="sm" />
-                <span class="EventPage-statLabel">מבקרים ייחודיים</span>
-                <span class="EventPage-statValue">{{ event.stats.totalUniqueViews }}</span>
-              </div>
-              <div class="EventPage-stat EventPage-stat--blue">
-                <UiIcon name="share" size="sm" />
-                <span class="EventPage-statLabel">שיתופים</span>
-                <span class="EventPage-statValue">{{ event.stats.shares }}</span>
-              </div>
-              <div class="EventPage-stat EventPage-stat--blue">
-                <UiIcon name="navigation" size="sm" />
-                <span class="EventPage-statLabel">ניווט</span>
-                <span class="EventPage-statValue">{{ event.stats.navClicks }}</span>
-              </div>
-              <div class="EventPage-stat EventPage-stat--blue">
-                <UiIcon name="calendar_add_on" size="sm" />
-                <span class="EventPage-statLabel">הוספה ליומן</span>
-                <span class="EventPage-statValue">{{ event.stats.calendarAdds }}</span>
-              </div>
-              <div class="EventPage-stat EventPage-stat--blue">
-                <UiIcon name="contact_phone" size="sm" />
-                <span class="EventPage-statLabel">יצירת קשר</span>
-                <span class="EventPage-statValue">{{ event.stats.contactClicks }}</span>
+            <div class="EventPage-statSection">
+              <span class="EventPage-statSectionTitle">צפיות באירוע</span>
+              <div class="EventPage-statGrid EventPage-statGrid--entries">
+                <div class="EventPage-stat EventPage-stat--views">
+                  <UiIcon name="visibility" size="md" />
+                  <span class="EventPage-statLabel">צפיות באירוע</span>
+                  <span class="EventPage-statValue">{{ event.stats.totalViews }}</span>
+                </div>
+                <div class="EventPage-stat EventPage-stat--unique">
+                  <UiIcon name="person" size="md" />
+                  <span class="EventPage-statLabel">מבקרים ייחודיים</span>
+                  <span class="EventPage-statValue">{{ event.stats.totalUniqueViews }}</span>
+                </div>
               </div>
             </div>
-            <div v-if="linksWithClicks.length" class="EventPage-statLinksList">
-              <div v-for="link in linksWithClicks" :key="link.title" class="EventPage-linkBreakdown">
-                <span class="EventPage-linkBreakdownTitle">{{ link.title }}</span>
-                <span class="EventPage-linkBreakdownCount">{{ link.clicks }}</span>
+            <div class="EventPage-statSection">
+              <span class="EventPage-statSectionTitle">אינטרקציות</span>
+              <div class="EventPage-statList">
+                <div class="EventPage-statListItem">
+                  <UiIcon name="share" size="sm" class="EventPage-statListIcon" />
+                  <span class="EventPage-statListLabel">שיתופים</span>
+                  <span class="EventPage-statListCount">{{ event.stats.shares }}</span>
+                </div>
+                <div class="EventPage-statListItem">
+                  <UiIcon name="navigation" size="sm" class="EventPage-statListIcon" />
+                  <span class="EventPage-statListLabel">ניווט</span>
+                  <span class="EventPage-statListCount">{{ event.stats.navClicks }}</span>
+                </div>
+                <div class="EventPage-statListItem">
+                  <UiIcon name="calendar_add_on" size="sm" class="EventPage-statListIcon" />
+                  <span class="EventPage-statListLabel">הוספה ליומן</span>
+                  <span class="EventPage-statListCount">{{ event.stats.calendarAdds }}</span>
+                </div>
+                <div class="EventPage-statListItem">
+                  <UiIcon name="contact_phone" size="sm" class="EventPage-statListIcon" />
+                  <span class="EventPage-statListLabel">יצירת קשר</span>
+                  <span class="EventPage-statListCount">{{ event.stats.contactClicks }}</span>
+                </div>
               </div>
             </div>
-            <p v-if="isZeroStats" class="EventPage-statsEmpty">אין נתונים עדיין</p>
+            <div v-if="linksWithClicks.length" class="EventPage-statSection">
+              <span class="EventPage-statSectionTitle">לינקים</span>
+              <div class="EventPage-statList">
+                <div v-for="link in linksWithClicks" :key="link.title" class="EventPage-statListItem">
+                  <UiIcon :name="link.type === 'phone' ? 'phone' : 'link'" size="sm" class="EventPage-statListIcon" />
+                  <span class="EventPage-statListLabel">{{ link.title }}</span>
+                  <span class="EventPage-statListCount">{{ link.clicks }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </template>
 
         <template v-else>
-          <div v-for="occ in event.stats.occurrenceStats" :key="occ.date" class="EventPage-statCard">
-            <h4 class="EventPage-statCardDate">{{ formatOccurrenceDate(occ.date) }}</h4>
-            <div class="EventPage-statGrid">
-              <div class="EventPage-stat EventPage-stat--views">
-                <UiIcon name="visibility" size="sm" />
-                <span class="EventPage-statLabel">צפיות</span>
-                <span class="EventPage-statValue">{{ occ.views }}</span>
-              </div>
-              <div class="EventPage-stat EventPage-stat--unique">
-                <UiIcon name="person" size="sm" />
-                <span class="EventPage-statLabel">מבקרים ייחודיים</span>
-                <span class="EventPage-statValue">{{ occ.uniqueViews }}</span>
-              </div>
-              <div class="EventPage-stat EventPage-stat--blue">
-                <UiIcon name="calendar_add_on" size="sm" />
-                <span class="EventPage-statLabel">הוספה ליומן</span>
-                <span class="EventPage-statValue">{{ occ.calendarAdds }}</span>
-              </div>
-              <div class="EventPage-stat EventPage-stat--blue">
-                <UiIcon name="share" size="sm" />
-                <span class="EventPage-statLabel">שיתופים</span>
-                <span class="EventPage-statValue">{{ event.stats.shares }}</span>
-              </div>
-              <div class="EventPage-stat EventPage-stat--blue">
-                <UiIcon name="navigation" size="sm" />
-                <span class="EventPage-statLabel">ניווט</span>
-                <span class="EventPage-statValue">{{ event.stats.navClicks }}</span>
-              </div>
-              <div class="EventPage-stat EventPage-stat--blue">
-                <UiIcon name="contact_phone" size="sm" />
-                <span class="EventPage-statLabel">יצירת קשר</span>
-                <span class="EventPage-statValue">{{ event.stats.contactClicks }}</span>
+          <div class="EventPage-statCard">
+            <div class="EventPage-statDateRow">
+              <label class="EventPage-statDateLabel" for="stat-date-select">
+                בחרו את התאריך עבורו תרצו להציג סטטיסטיקות
+              </label>
+              <select id="stat-date-select" v-model="selectedStatDate" class="EventPage-statDateSelect">
+                <option v-for="occ in sortedOccurrenceStats" :key="occ.date" :value="occ.date">
+                  {{ formatStatLabel(occ.date) }}
+                </option>
+              </select>
+            </div>
+            <div class="EventPage-statSection">
+              <span class="EventPage-statSectionTitle">צפיות באירוע</span>
+              <div class="EventPage-statGrid EventPage-statGrid--entries">
+                <div class="EventPage-stat EventPage-stat--views">
+                  <UiIcon name="visibility" size="md" />
+                  <span class="EventPage-statLabel">צפיות באירוע</span>
+                  <span class="EventPage-statValue">{{ selectedOccStat?.views ?? 0 }}</span>
+                </div>
+                <div class="EventPage-stat EventPage-stat--unique">
+                  <UiIcon name="person" size="md" />
+                  <span class="EventPage-statLabel">מבקרים ייחודיים</span>
+                  <span class="EventPage-statValue">{{ selectedOccStat?.uniqueViews ?? 0 }}</span>
+                </div>
               </div>
             </div>
-            <div v-if="linksWithClicks.length" class="EventPage-statLinksList">
-              <div v-for="link in linksWithClicks" :key="link.title" class="EventPage-linkBreakdown">
-                <span class="EventPage-linkBreakdownTitle">{{ link.title }}</span>
-                <span class="EventPage-linkBreakdownCount">{{ link.clicks }}</span>
+            <div class="EventPage-statSection">
+              <span class="EventPage-statSectionTitle">אינטרקציות</span>
+              <div class="EventPage-statList">
+                <div class="EventPage-statListItem">
+                  <UiIcon name="share" size="sm" class="EventPage-statListIcon" />
+                  <span class="EventPage-statListLabel">שיתופים</span>
+                  <span class="EventPage-statListCount">{{ event.stats.shares }}</span>
+                </div>
+                <div class="EventPage-statListItem">
+                  <UiIcon name="navigation" size="sm" class="EventPage-statListIcon" />
+                  <span class="EventPage-statListLabel">ניווט</span>
+                  <span class="EventPage-statListCount">{{ event.stats.navClicks }}</span>
+                </div>
+                <div class="EventPage-statListItem">
+                  <UiIcon name="calendar_add_on" size="sm" class="EventPage-statListIcon" />
+                  <span class="EventPage-statListLabel">הוספה ליומן</span>
+                  <span class="EventPage-statListCount">{{ selectedOccStat?.calendarAdds ?? 0 }}</span>
+                </div>
+                <div class="EventPage-statListItem">
+                  <UiIcon name="contact_phone" size="sm" class="EventPage-statListIcon" />
+                  <span class="EventPage-statListLabel">יצירת קשר</span>
+                  <span class="EventPage-statListCount">{{ event.stats.contactClicks }}</span>
+                </div>
               </div>
             </div>
-            <p v-if="occ.views === 0 && occ.uniqueViews === 0 && event.stats.shares === 0 && event.stats.navClicks === 0" class="EventPage-statsEmpty">אין נתונים עדיין</p>
+            <div v-if="linksWithClicks.length" class="EventPage-statSection">
+              <span class="EventPage-statSectionTitle">לינקים</span>
+              <div class="EventPage-statList">
+                <div v-for="link in linksWithClicks" :key="link.title" class="EventPage-statListItem">
+                  <UiIcon :name="link.type === 'phone' ? 'phone' : 'link'" size="sm" class="EventPage-statListIcon" />
+                  <span class="EventPage-statListLabel">{{ link.title }}</span>
+                  <span class="EventPage-statListCount">{{ link.clicks }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </template>
       </template>
@@ -287,6 +318,7 @@ const linksWithClicks = computed(() => {
   const breakdownMap = new Map(breakdown.map(b => [b.title.toLowerCase().trim(), b.clicks]))
   return urls.map(u => ({
     title: u.Title,
+    type: u.type,
     clicks: breakdownMap.get((u.Title || '').toLowerCase().trim()) || 0,
   }))
 })
@@ -321,6 +353,38 @@ async function copyEventLink() {
 async function shareEventLink() {
   if (!eventScheduleUrl.value || !navigator.share) return
   await navigator.share({ title: event.value?.title, url: eventScheduleUrl.value })
+}
+
+const sortedOccurrenceStats = computed(() => {
+  const statsMap = new Map(
+    (event.value?.stats?.occurrenceStats || []).map(o => [o.date, o])
+  )
+  return [...(event.value?.occurrences || [])]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(occ => statsMap.get(occ.date) ?? { date: occ.date, views: 0, uniqueViews: 0, calendarAdds: 0 })
+})
+
+const selectedStatDate = ref(null)
+watch(sortedOccurrenceStats, (occs) => {
+  if (occs.length && !selectedStatDate.value) selectedStatDate.value = occs[0].date
+}, { immediate: true })
+
+const selectedOccStat = computed(() =>
+  sortedOccurrenceStats.value.find(o => o.date === selectedStatDate.value) ?? null
+)
+
+const isSelectedOccZero = computed(() => {
+  const o = selectedOccStat.value
+  const ev = event.value?.stats
+  return !o?.views && !o?.uniqueViews && !o?.calendarAdds &&
+         !ev?.shares && !ev?.navClicks && !ev?.contactClicks
+})
+
+function formatStatLabel(dateStr) {
+  const [y, m, d] = dateStr.split('-')
+  const dt = new Date(+y, +m - 1, +d)
+  const weekday = dt.toLocaleDateString('he-IL', { weekday: 'long' })
+  return `${weekday}, ${d.padStart(2,'0')}.${m.padStart(2,'0')}.${y}`
 }
 </script>
 
@@ -483,7 +547,7 @@ async function shareEventLink() {
       border: 1.5px solid var(--color-border);
       color: var(--color-error);
       align-self: flex-start;
-      &:hover { border-color: var(--color-text-muted); }
+      &:hover { background: var(--light-bg); }
     }
 
     &--ghost-draft {
@@ -491,7 +555,7 @@ async function shareEventLink() {
       border: 1.5px solid var(--color-border);
       color: var(--color-text);
       align-self: flex-start;
-      &:hover { border-color: var(--color-text-muted); }
+      &:hover { background: var(--light-bg); }
     }
   }
 
@@ -533,11 +597,86 @@ async function shareEventLink() {
     color: var(--brand-dark-green);
   }
 
+  &-statDateRow {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  &-statDateLabel {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  &-statDateSelect {
+    align-self: flex-start;
+    min-width: 14rem;
+    height: var(--control-height);
+    padding: 0 var(--spacing-md);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-background);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-body);
+    color: var(--color-text);
+    cursor: pointer;
+    &:focus { outline: none; border-color: var(--brand-dark-green); }
+    @include mobile {
+      height: var(--section-header-height);
+      width: 100%;
+      min-width: 0;
+      align-self: stretch;
+    }
+  }
+
+  &-statSection {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    & + & {
+      padding-top: var(--spacing-md);
+      border-top: 1px solid var(--color-border);
+    }
+  }
+
+  &-statSectionTitle {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  &-statList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    max-width: 28rem;
+    @include mobile { max-width: none; }
+  }
+
+  &-statListItem {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-md);
+    background: var(--color-background);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+  }
+
+  &-statListIcon { color: var(--color-text-muted); flex-shrink: 0; }
+  &-statListLabel { flex: 1; color: var(--color-text); }
+  &-statListCount { font-weight: 700; color: var(--brand-dark-blue); }
+
   &-statGrid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: var(--spacing-sm);
     @include mobile { grid-template-columns: repeat(2, 1fr); }
+    &--entries {
+      grid-template-columns: repeat(2, 1fr);
+      .EventPage-statValue { font-size: var(--font-size-3xl); }
+    }
   }
 
   &-stat {
@@ -556,8 +695,8 @@ async function shareEventLink() {
   }
 
   &-statLabel {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
   }
 
   &-statValue {
@@ -654,8 +793,8 @@ async function shareEventLink() {
     color: var(--color-text);
     cursor: pointer;
     white-space: nowrap;
-    transition: border-color 0.15s;
-    &:hover { border-color: var(--color-text-muted); }
+    transition: background 0.15s;
+    &:hover { background: var(--light-bg); }
   }
 }
 </style>

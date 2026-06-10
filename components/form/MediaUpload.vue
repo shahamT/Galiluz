@@ -11,7 +11,7 @@
       <input
         ref="fileInput"
         type="file"
-        accept="image/*,video/*"
+        accept=".jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.mp4,.mov,.avi,.mkv,.webm,.m4v"
         multiple
         class="MediaUpload-input"
         @change="onFileChange"
@@ -21,7 +21,7 @@
         <template v-if="isFull">הגעתם למקסימום (6 קבצים)</template>
         <template v-else>גררו קבצים לכאן או <strong>לחצו לבחירה</strong></template>
       </span>
-      <span class="MediaUpload-sub">תמונות וסרטונים, עד 6 קבצים, עד 20MB לקובץ</span>
+      <span class="MediaUpload-sub">JPG, PNG, GIF, WebP, HEIC · MP4, MOV, AVI, MKV, WebM · עד 6 קבצים, עד 20MB</span>
     </div>
 
     <div v-if="fileErrors.length" class="MediaUpload-errors">
@@ -129,6 +129,13 @@ const MAX_FILES = 6
 const MAX_SIZE_MB = 20
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 
+const ACCEPTED_TYPES = new Set([
+  'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+  'image/heic', 'image/heif',
+  'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska',
+  'video/webm', 'video/m4v',
+])
+
 // Cache object URLs to avoid creating new ones on every render
 const previewUrls = ref({})
 
@@ -168,12 +175,12 @@ function addFiles(files) {
   const valid = []
 
   for (const file of Array.from(files)) {
-    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-      errors.push(`"${file.name}" — סוג קובץ לא נתמך`)
+    if (!ACCEPTED_TYPES.has(file.type)) {
+      errors.push(`"${file.name}" — סוג קובץ לא נתמך (JPG, PNG, GIF, WebP, HEIC, MP4, MOV, AVI, MKV, WebM)`)
       continue
     }
     if (file.size > MAX_SIZE_BYTES) {
-      errors.push(`"${file.name}" — חורג מ-${MAX_SIZE_MB}MB`)
+      errors.push(`"${file.name}" — הקובץ חורג מ-${MAX_SIZE_MB}MB`)
       continue
     }
     valid.push(file)

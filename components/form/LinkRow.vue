@@ -17,7 +17,7 @@
             type="button"
             class="LinkRow-typeBtn"
             :class="{ 'LinkRow-typeBtn--active': modelValue.type === 'link' }"
-            @click="update({ type: 'link' })"
+            @click="changeType('link')"
           >
             <UiIcon name="link" size="sm" />
           </button>
@@ -25,7 +25,7 @@
             type="button"
             class="LinkRow-typeBtn"
             :class="{ 'LinkRow-typeBtn--active': modelValue.type === 'phone' }"
-            @click="update({ type: 'phone' })"
+            @click="changeType('phone')"
           >
             <UiIcon name="phone" size="sm" />
           </button>
@@ -35,7 +35,7 @@
           :type="modelValue.type === 'phone' ? 'tel' : 'url'"
           class="FormInput LinkRow-url"
           :class="{ 'LinkRow-inputError': errors.url }"
-          :placeholder="modelValue.type === 'phone' ? '050-0000000' : 'https://...'"
+          :placeholder="modelValue.type === 'phone' ? '050-0000000' : 'example.com'"
           @input="update({ url: $event.target.value })"
           @blur="emit('blur', 'url')"
         />
@@ -60,6 +60,11 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'remove', 'blur'])
 function update(patch) {
   emit('update:modelValue', { ...props.modelValue, ...patch })
+}
+function changeType(newType) {
+  const hasUrl = props.modelValue.url.trim()
+  update({ type: newType })
+  if (hasUrl) emit('blur', 'url')
 }
 </script>
 
