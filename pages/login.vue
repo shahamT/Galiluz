@@ -193,8 +193,9 @@ async function handleVerifyOtp() {
     state.value = 'success'
     const returnTo = route.query.returnTo
     setTimeout(() => {
-      if (returnTo && String(returnTo).startsWith('/')) {
-        navigateTo(returnTo)
+      const rt = String(returnTo || '')
+      if (rt.startsWith('/') && !rt.startsWith('//') && !rt.startsWith('/\\')) {
+        navigateTo(rt)
       } else {
         navigateTo(authStore.isManager ? '/admin' : '/publisher/dashboard')
       }
