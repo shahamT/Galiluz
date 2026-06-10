@@ -122,10 +122,7 @@ const dateParam = computed(() => {
   if (param && isValidRouteDate(String(param).trim())) return String(param).trim().slice(0, 10)
   return getTodayDateString()
 })
-const pageTitle = computed(() => {
-  const date = parseDateString(dateParam.value)
-  return `גלילו"ז - ${date.getDate()} ב${HEBREW_MONTHS[date.getMonth()]}`
-})
+const pageTitle = computed(() => 'גלילו"ז')
 const headerDate = computed(() => {
   const date = parseDateString(dateParam.value)
   return { year: date.getFullYear(), month: date.getMonth() + 1 }

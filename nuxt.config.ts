@@ -36,6 +36,10 @@ export default defineNuxtConfig({
         lang: 'he',
         dir: 'rtl',
       },
+      meta: [
+        { name: 'apple-mobile-web-app-title', content: 'גלילו"ז' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+      ],
       link: [
         { rel: 'manifest', href: '/manifest.webmanifest' },
         { rel: 'icon', type: 'image/svg+xml', href: '/logos/galiluz-icon.svg' },
