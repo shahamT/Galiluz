@@ -84,6 +84,7 @@
                   :frozen="!!occ._frozen"
                   :errors="occurrenceErrors[i] || {}"
                   @remove="removeOccurrence(i)"
+                  @duplicate="duplicateOccurrence(i)"
                 />
               </div>
 
@@ -462,6 +463,11 @@ function removeOtherCategory(id) {
 // --- Helpers ---
 function addOccurrence() { form.occurrences.push(freshOccurrence()) }
 function removeOccurrence(i) { form.occurrences.splice(i, 1) }
+function duplicateOccurrence(i) {
+  const src = form.occurrences[i]
+  const date = src._frozen ? todayLocal() : src.date
+  form.occurrences.splice(i + 1, 0, { _key: nextKey(), date, hasTime: src.hasTime, startTime: src.startTime, endTime: src.endTime })
+}
 function addLink() { form.links.push(freshLink()) }
 function removeLink(i) { form.links.splice(i, 1) }
 

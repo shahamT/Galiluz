@@ -25,15 +25,15 @@
             </label>
           </div>
         </div>
-        <div class="OccurrenceRow-group2">
+        <div v-if="!allDay" class="OccurrenceRow-group2">
           <div class="OccurrenceRow-timeWrap OccurrenceRow-timeWrap--start">
             <FormField label="התחלה" required :error="errors.startTime">
-              <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': allDay || frozen }">
-                <select :value="startH" :disabled="allDay || frozen" class="OccurrenceRow-timeSelect" @change="onStartHChange">
+              <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': frozen }">
+                <select :value="startH" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onStartHChange">
                   <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
                 </select>
                 <span class="OccurrenceRow-timeSep">:</span>
-                <select :value="startM" :disabled="allDay || frozen" class="OccurrenceRow-timeSelect" @change="onStartMChange">
+                <select :value="startM" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onStartMChange">
                   <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
                 </select>
               </div>
@@ -42,16 +42,16 @@
           <div class="OccurrenceRow-timeWrap">
             <span class="OccurrenceRow-endLabel">סיום</span>
             <div class="OccurrenceRow-endUnit">
-              <label class="OccurrenceRow-toggle" :class="{ 'OccurrenceRow-toggle--disabled': allDay || frozen }">
-                <input v-model="hasEndTime" type="checkbox" class="OccurrenceRow-toggleInput" :disabled="allDay || frozen" @change="onHasEndTimeChange" />
+              <label class="OccurrenceRow-toggle" :class="{ 'OccurrenceRow-toggle--disabled': frozen }">
+                <input v-model="hasEndTime" type="checkbox" class="OccurrenceRow-toggleInput" :disabled="frozen" @change="onHasEndTimeChange" />
                 <span class="OccurrenceRow-toggleTrack" />
               </label>
-              <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': !hasEndTime || allDay || frozen }">
-                <select :value="endH" :disabled="!hasEndTime || allDay || frozen" class="OccurrenceRow-timeSelect" @change="onEndHChange">
+              <div v-if="hasEndTime" class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': frozen }">
+                <select :value="endH" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onEndHChange">
                   <option v-for="h in endHoursFiltered" :key="h" :value="h">{{ h }}</option>
                 </select>
                 <span class="OccurrenceRow-timeSep">:</span>
-                <select :value="endM" :disabled="!hasEndTime || allDay || frozen" class="OccurrenceRow-timeSelect" @change="onEndMChange">
+                <select :value="endM" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onEndMChange">
                   <option v-for="m in endMinutesFiltered" :key="m" :value="m">{{ m }}</option>
                 </select>
               </div>
@@ -60,22 +60,30 @@
         </div>
       </div>
 
-      <!-- Delete button (or invisible placeholder on first row / frozen rows) -->
-      <button
-        v-if="!isFirst && !frozen"
-        type="button"
-        class="OccurrenceRow-remove"
-        aria-label="הסר מועד"
-        @click="handleRemove"
-      >
-        <UiIcon name="delete" size="sm" />
-      </button>
-      <div v-else class="OccurrenceRow-removePlaceholder" aria-hidden="true" />
+      <!-- Action buttons -->
+      <div class="OccurrenceRow-actions" :class="{ 'OccurrenceRow-actions--first': isFirst }">
+        <button
+          type="button"
+          class="OccurrenceRow-duplicate"
+          aria-label="שכפל מועד"
+          @click="emit('duplicate')"
+        >
+          <UiIcon name="content_copy" size="sm" />
+        </button>
+
+        <button
+          v-if="!isFirst && !frozen"
+          type="button"
+          class="OccurrenceRow-remove"
+          aria-label="הסר מועד"
+          @click="handleRemove"
+        >
+          <UiIcon name="delete" size="sm" />
+        </button>
+        <div v-else class="OccurrenceRow-actionPlaceholder" aria-hidden="true" />
+      </div>
 
     </div>
-
-    <!-- Past badge -->
-    <div v-if="frozen" class="OccurrenceRow-pastBadge">מועד שעבר</div>
 
     <!-- Inline errors below the row -->
     <div v-if="errors.date || errors.startTime" class="OccurrenceRow-errors">
@@ -110,7 +118,7 @@ const props = defineProps({
   errors: { type: Object, default: () => ({}) },
 })
 
-const emit = defineEmits(['update:modelValue', 'remove'])
+const emit = defineEmits(['update:modelValue', 'remove', 'duplicate'])
 
 const local = reactive({ ...props.modelValue })
 watch(() => props.modelValue, (val) => {
@@ -229,21 +237,11 @@ function confirmRemove() {
   &-layout .FormField-error { display: none; }
 
   &--frozen {
-    opacity: 0.6;
     background: var(--color-surface, #f5f5f5);
     border-color: var(--color-border);
-    pointer-events: none;
-  }
 
-  &-pastBadge {
-    margin-top: var(--spacing-xs);
-    display: inline-block;
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    color: var(--color-text-muted);
-    background: var(--color-border);
-    border-radius: var(--radius-full);
-    padding: 2px 10px;
+    .OccurrenceRow-content { opacity: 0.6; pointer-events: none; }
+    .OccurrenceRow-duplicate { pointer-events: all; }
   }
 
   &-errors {
@@ -433,36 +431,56 @@ function confirmRemove() {
     }
   }
 
-  &-removePlaceholder {
-    flex: 0 0 29px;
+
+  &-actions {
+    flex-shrink: 0;
+    align-self: flex-end;
+    display: flex;
+    gap: var(--spacing-xs);
+    margin-right: var(--spacing-sm);
+    margin-bottom: 1.2px;
+
+    &--first .OccurrenceRow-duplicate { order: 1; }
+  }
+
+  &-actionPlaceholder {
     width: 29px;
     height: 29px;
-    margin-bottom: 1.2px;
-    margin-right: var(--spacing-sm);
     visibility: hidden;
   }
 
-  &-remove {
-    flex: 0 0 29px;
-    align-self: flex-end;
+  &-duplicate {
     width: 29px;
     height: 29px;
-    margin-bottom: 1.2px;
-    margin-right: var(--spacing-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: var(--color-error);
-    color: #fff;
+    border: 1.5px dashed var(--brand-dark-green-tint);
+    border-radius: var(--radius-md);
+    background: var(--brand-dark-green-tint-light);
+    color: var(--brand-dark-green);
     cursor: pointer;
-    transition: opacity 0.15s;
+    transition: background 0.15s, border-color 0.15s;
     padding: 0;
 
-    &:hover {
-      opacity: 0.85;
-    }
+    &:hover { background: var(--brand-dark-green-tint); border-style: solid; }
+  }
+
+  &-remove {
+    width: 29px;
+    height: 29px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px dashed var(--color-error-tint-border);
+    border-radius: var(--radius-md);
+    background: var(--color-error-tint-light);
+    color: var(--color-error);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    padding: 0;
+
+    &:hover { background: var(--color-error-tint); border-style: solid; }
   }
 
   &-backdrop {
