@@ -251,7 +251,8 @@
       v-if="showEditForm && event"
       mode="edit"
       :initial-data="event"
-      @close="showEditForm = false"
+      :draft-key="route.query.draft || null"
+      @close="showEditForm = false; clearDraftFromUrl()"
       @submitted="onEditSubmitted"
     />
 
@@ -285,6 +286,8 @@ const showStatusModal = ref(false)
 
 const successBanner = ref('')
 onMounted(() => {
+  if (route.query.modal === 'edit') showEditForm.value = true
+
   const s = route.query.success
   if (s === 'created') successBanner.value = 'האירוע נוסף בהצלחה!'
   else if (s === 'updated') successBanner.value = 'האירוע עודכן בהצלחה!'
@@ -294,6 +297,10 @@ onMounted(() => {
     router.replace({ query: {} })
   }
 })
+
+function clearDraftFromUrl() {
+  if (route.query.modal || route.query.draft) router.replace({ query: {} })
+}
 
 // M4: await refresh before showing success banner
 async function onEditSubmitted() {

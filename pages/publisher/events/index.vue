@@ -51,7 +51,12 @@
       </div>
     </div>
 
-    <PublisherEventFormModal v-if="showEventForm" @close="showEventForm = false" @submitted="({ id }) => { showEventForm = false; if (id) navigateTo(`/publisher/events/${id}?success=created`) }" />
+    <PublisherEventFormModal
+      v-if="showEventForm"
+      :draft-key="route.query.draft || null"
+      @close="showEventForm = false; clearDraftFromUrl()"
+      @submitted="({ id }) => { showEventForm = false; if (id) navigateTo(`/publisher/events/${id}?success=created`) }"
+    />
   </LayoutProtectedShell>
 </template>
 
@@ -60,10 +65,20 @@ defineOptions({ name: 'PublisherEvents' })
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'האירועים שלי | גלילו"ז' })
 
+const route = useRoute()
+const router = useRouter()
 const filter = ref('future')
 const search = ref('')
 const debouncedSearch = useDebounce(search, 200)
 const showEventForm = ref(false)
+
+onMounted(() => {
+  if (route.query.modal === 'add') showEventForm.value = true
+})
+
+function clearDraftFromUrl() {
+  if (route.query.modal || route.query.draft) router.replace({ query: {} })
+}
 
 const { data: events, pending } = await useAuthFetch('/api/publisher/events')
 

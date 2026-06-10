@@ -313,6 +313,7 @@ defineOptions({ name: 'PublisherEventFormModal' })
 const props = defineProps({
   mode:        { type: String, default: 'add' },
   initialData: { type: Object, default: null },
+  draftKey:    { type: String, default: null },
 })
 const emit = defineEmits(['close', 'submitted'])
 
@@ -320,8 +321,14 @@ const bodyEl = ref(null)
 
 const existingMedia = ref([])
 
+const { saveDraft, loadDraft, clearDraft } = useEventDraft()
+
 onMounted(() => {
   document.body.style.overflow = 'hidden'
+  if (props.draftKey) {
+    const draft = loadDraft(props.draftKey)
+    if (draft) { restoreFromDraft(draft); return }
+  }
   if (props.initialData) initFromData(props.initialData)
 })
 onUnmounted(() => { document.body.style.overflow = '' })
@@ -536,6 +543,28 @@ function initFromData(data) {
   }
 }
 
+function restoreFromDraft(draft) {
+  const d = draft.form
+  form.title = d.title || ''
+  form.shortDescription = d.shortDescription || ''
+  form.description = d.description || ''
+  form.occurrences = (d.occurrences?.length ? d.occurrences : [freshOccurrence()]).map(o => ({ ...o, _key: nextKey() }))
+  form.multiDayEvent = d.multiDayEvent !== false
+  form.mainCategory = d.mainCategory || ''
+  form.categories = d.categories || []
+  form.locationName = d.locationName || ''
+  form.city = d.city || { cityId: '', customCity: undefined, region: '' }
+  form.addressLine1 = d.addressLine1 || ''
+  form.locationNotes = d.locationNotes || ''
+  form.autoNav = d.autoNav !== false
+  form.wazeLink = d.wazeLink || ''
+  form.gmapsLink = d.gmapsLink || ''
+  form.price = d.price ?? null
+  form.links = (d.links || []).map(l => ({ ...l, _key: nextKey() }))
+  form.media = []
+  existingMedia.value = draft.existingMedia || []
+}
+
 function getTextLength(html) {
   return (html || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length
 }
@@ -704,9 +733,18 @@ async function onSubmit() {
       const result = await $fetch('/api/publisher/events', { method: 'POST', body: payload })
       eventId = result.id
     }
+    if (props.draftKey) clearDraft(props.draftKey)
     emit('submitted', { id: eventId, mode: props.mode })
     emit('close')
   } catch (err) {
+    if (err?.response?.status === 401 || err?.status === 401 || err?.statusCode === 401) {
+      const key = saveDraft(props.mode, props.initialData?.id, form, existingMedia.value)
+      const returnTo = props.mode === 'edit'
+        ? `/publisher/events/${props.initialData?.id}?modal=edit&draft=${key}`
+        : `/publisher/events?modal=add&draft=${key}`
+      await navigateTo(`/login?returnTo=${encodeURIComponent(returnTo)}`)
+      return
+    }
     submitError.value = err?.data?.message || err?.message || 'אירעה שגיאה, נסו שנית'
   } finally {
     isSubmitting.value = false
