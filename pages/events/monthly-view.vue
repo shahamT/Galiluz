@@ -101,7 +101,7 @@ watch(isWelcomeModalShowing, (isOpen, wasOpen) => {
 // computed
 const currentYear = computed(() => currentDate.value?.year ?? getCurrentYearMonth().year)
 const currentMonth = computed(() => currentDate.value?.month ?? getCurrentYearMonth().month)
-const pageTitle = computed(() => `גלילו"ז - ${HEBREW_MONTHS[currentMonth.value - 1]}`)
+const pageTitle = computed(() => 'גלילו"ז')
 
 // SEO: event-specific meta when ?event=id (for social cards)
 const { data: eventMeta } = useEventMetaForSeo()
