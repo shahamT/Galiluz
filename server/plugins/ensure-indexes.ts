@@ -7,14 +7,22 @@ import { getMongoConnection } from '~/server/utils/mongodb'
  */
 export default defineNitroPlugin(() => {
   // Fire and forget — must not block startup; failures are logged, the app
-  // still works without indexes (just slower).
-  ensureIndexes().catch((err) => {
-    console.error('[Indexes] Failed to ensure indexes:', err instanceof Error ? err.message : err)
-  })
-  ensureSchemaValidation().catch((err) => {
-    console.error('[Schema] Failed to apply validators:', err instanceof Error ? err.message : err)
-  })
+  // still works without indexes (just slower). One delayed retry covers slow
+  // Atlas cold starts.
+  withRetry('Indexes', ensureIndexes)
+  withRetry('Schema', ensureSchemaValidation)
 })
+
+function withRetry(label: string, fn: () => Promise<void>, retryDelayMs = 10_000) {
+  fn().catch((err) => {
+    console.error(`[${label}] First attempt failed, retrying in ${retryDelayMs / 1000}s:`, err instanceof Error ? err.message : err)
+    setTimeout(() => {
+      fn().catch((err2) => {
+        console.error(`[${label}] Retry failed:`, err2 instanceof Error ? err2.message : err2)
+      })
+    }, retryDelayMs)
+  })
+}
 
 async function ensureIndexes() {
   const config = useRuntimeConfig() as Record<string, string>

@@ -28,7 +28,8 @@
 
 ## Ship-time checklist (next production deploy)
 
-1. Run `node scripts/migrate-starttime.js` (dry-run, then `--apply`) against production — normalizes `occurrences.startTime` to ISO strings. Afterwards, collapse the dual-format conditions in [eventsQuery.ts](../server/utils/eventsQuery.ts).
-2. Run `node scripts/cleanup-orphan-stats.js` against production — stamps stats orphaned by historical hard-deletes and sweeps soft-delete stragglers (idempotent; safe to re-run any time).
-3. Verify startup logs show `[Indexes] All indexes ensured` and `[Schema] Validators applied`.
-4. CI must be green (`.github/workflows/ci.yml`: unit tests + build).
+1. Data migrations run **automatically at first boot** via [one-time-migrations.ts](../server/plugins/one-time-migrations.ts) (startTime → ISO strings; orphaned/missed stats stamped). After the deploy, confirm the `[Migration] startTime: …` and `[Migration] stats: …` log lines, then **delete that plugin** and deploy again. Once the startTime migration has run, also collapse the dual-format conditions in [eventsQuery.ts](../server/utils/eventsQuery.ts).
+   (Standalone equivalents for ad-hoc runs: `scripts/migrate-starttime.js`, `scripts/cleanup-orphan-stats.js` — they read `.env` and are meant for local/dev use.)
+2. Verify startup logs show `[Indexes] All indexes ensured` and `[Schema] Validators applied`.
+3. CI must be green (`.github/workflows/ci.yml`: unit tests + build).
+4. Reminder: TTL retention starts deleting old `eventInteractions`/`authLogs`/`raw_messages` within minutes of first boot — `mongodump` those collections first if their history matters.

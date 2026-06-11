@@ -19,7 +19,7 @@ export async function getMongoConnection() {
   client = new MongoClient(uri, {
     maxPoolSize: 50,
     minPoolSize: 2,
-    serverSelectionTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 10000,
     socketTimeoutMS: 30000,
     retryWrites: true,
     retryReads: true,
