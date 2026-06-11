@@ -1,10 +1,13 @@
 /**
- * One-time migration: stamp deletedAt on orphaned stats data.
+ * Stats consistency sweep — safe to run any time (idempotent).
  *
- * Historical hard-deletes removed event documents but left their statistics behind
- * (eventStats / eventOccurrenceStats / eventInteractions). With soft delete in place,
- * stats of deleted events are excluded by a deletedAt stamp — this script applies that
- * stamp to all stats rows whose event no longer exists, instead of deleting them.
+ * Pass 1 (orphans): historical hard-deletes removed event documents but left their
+ * statistics behind. Stamps deletedAt + orphaned:true on stats rows whose event no
+ * longer exists.
+ *
+ * Pass 2 (sweep): enforces the soft-delete invariant — every stats row whose event
+ * has deletedAt must be stamped too. Catches rows missed when the stamp step failed
+ * mid-delete (see server/utils/eventStats.service.ts).
  *
  * Usage: node scripts/cleanup-orphan-stats.js
  * Reads MONGODB_URI / MONGODB_DB_NAME and collection names from .env at the repo root.
@@ -52,18 +55,31 @@ try {
   const db = client.db(dbName)
   console.log(`Connected to ${dbName} (events collection: ${eventsColName})`)
 
-  const eventIds = (await db.collection(eventsColName).find({}, { projection: { _id: 1 } }).toArray())
-    .map((d) => d._id.toString())
-  console.log(`${eventIds.length} event documents exist`)
+  const allEvents = await db.collection(eventsColName)
+    .find({}, { projection: { _id: 1, deletedAt: 1 } }).toArray()
+  const eventIds = allEvents.map((d) => d._id.toString())
+  const softDeletedIds = allEvents.filter((d) => d.deletedAt).map((d) => d._id.toString())
+  console.log(`${eventIds.length} event documents exist (${softDeletedIds.length} soft-deleted)`)
 
   const deletedAt = new Date()
   for (const colName of statsCollections) {
     const col = db.collection(colName)
-    const result = await col.updateMany(
+
+    // Pass 1: orphans — stats of events that no longer exist at all
+    const orphans = await col.updateMany(
       { eventId: { $nin: eventIds }, deletedAt: { $exists: false } },
       { $set: { deletedAt, orphaned: true } },
     )
-    console.log(`${colName}: stamped ${result.modifiedCount} orphaned docs`)
+
+    // Pass 2: consistency sweep — stats of soft-deleted events missing the stamp
+    const swept = softDeletedIds.length
+      ? await col.updateMany(
+          { eventId: { $in: softDeletedIds }, deletedAt: { $exists: false } },
+          { $set: { deletedAt } },
+        )
+      : { modifiedCount: 0 }
+
+    console.log(`${colName}: stamped ${orphans.modifiedCount} orphaned, swept ${swept.modifiedCount} missed docs`)
   }
   console.log('Done.')
 } finally {

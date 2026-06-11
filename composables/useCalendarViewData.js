@@ -15,7 +15,7 @@ export const useCalendarViewData = () => {
   const categoriesDataSource = nuxtApp.$categoriesData || useCategories()
 
   // Extract reactive refs
-  const { data: events, isLoading: eventsLoading, isError: eventsError } = eventsDataSource
+  const { data: events, isLoading: eventsLoading, isError: eventsError, ensureMonthLoaded } = eventsDataSource
   const {
     data: categories,
     isLoading: categoriesLoading,
@@ -31,5 +31,7 @@ export const useCalendarViewData = () => {
     categories,
     isLoading,
     isError,
+    /** Expand the events feed window to cover the given month (no-op when already covered). */
+    ensureMonthLoaded: ensureMonthLoaded || (() => {}),
   }
 }

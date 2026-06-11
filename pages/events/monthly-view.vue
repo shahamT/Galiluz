@@ -58,7 +58,7 @@ import { formatMonthYear, getCurrentYearMonth, getPrevMonth, getNextMonth } from
 defineOptions({ name: 'MonthlyView' })
 
 // data
-const { events, isLoading, isError, categories } = useCalendarViewData()
+const { events, isLoading, isError, categories, ensureMonthLoaded } = useCalendarViewData()
 const calendarStore = useCalendarStore()
 const uiStore = useUiStore()
 const filterNotifyStore = useFilterNotifyStore()
@@ -220,6 +220,8 @@ watch(currentDate, (c) => {
   const inWindow = visibleMonths.value.some((m) => m.year === c.year && m.month === c.month)
   if (!inWindow) windowCenter.value = { year: c.year, month: c.month }
 }, { deep: true })
+// Keep the events feed window covering the viewed month (expands on far-future navigation)
+watch(currentDate, (c) => { if (c?.year && c?.month) ensureMonthLoaded(c.year, c.month) }, { immediate: true, deep: true })
 
 const handleMonthYearSelect = ({ year, month }) => {
   calendarStore.setCurrentDate({ year, month })

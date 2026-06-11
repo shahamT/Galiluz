@@ -1,15 +1,18 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 
 /**
- * Creates all MongoDB indexes once at server startup (idempotent — createIndex
- * is a no-op when the index already exists). Replaces the previous ad-hoc
- * createIndex calls that ran on every interaction request.
+ * Creates all MongoDB indexes and schema validators once at server startup
+ * (idempotent). Replaces the previous ad-hoc createIndex calls that ran on
+ * every interaction request.
  */
 export default defineNitroPlugin(() => {
   // Fire and forget — must not block startup; failures are logged, the app
   // still works without indexes (just slower).
   ensureIndexes().catch((err) => {
     console.error('[Indexes] Failed to ensure indexes:', err instanceof Error ? err.message : err)
+  })
+  ensureSchemaValidation().catch((err) => {
+    console.error('[Schema] Failed to apply validators:', err instanceof Error ? err.message : err)
   })
 })
 
@@ -23,6 +26,10 @@ async function ensureIndexes() {
   const occStats = db.collection(config.mongodbCollectionEventOccurrenceStats || 'eventOccurrenceStats')
   const eventLogs = db.collection(config.mongodbCollectionEventLogs || 'eventLogs')
   const publishers = db.collection(config.mongodbCollectionPublishers || 'publishers')
+  const authLogs = db.collection(config.mongodbCollectionAuthLogs || 'authLogs')
+  const rawMessages = db.collection(config.mongodbCollectionRawMessages || 'raw_messages')
+
+  const DAY = 24 * 60 * 60
 
   await Promise.all([
     // Public events feed + portal queries
@@ -44,7 +51,82 @@ async function ensureIndexes() {
     // Activity / auth
     eventLogs.createIndex({ publisherId: 1, createdAt: -1 }),
     publishers.createIndex({ waId: 1 }, { unique: true }),
+
+    // Retention: raw logs are derivable/transient — bound their growth.
+    // (eventLogs and the stats aggregates are kept forever by design.)
+    interactions.createIndex({ timestamp: 1 }, { expireAfterSeconds: 90 * DAY }),
+    authLogs.createIndex({ timestamp: 1 }, { expireAfterSeconds: 30 * DAY }),
+    rawMessages.createIndex({ createdAt: 1 }, { expireAfterSeconds: 7 * DAY }),
   ])
 
   console.info('[Indexes] All indexes ensured')
+}
+
+/**
+ * Type-level guards on the core collections ($jsonSchema, validationLevel
+ * 'moderate': new inserts and updates to valid docs must conform; legacy
+ * documents stay writable). Deliberately permissive — full business
+ * validation lives in the app layer (eventValidation.ts); this is the
+ * backstop against structurally broken documents entering the DB.
+ */
+async function ensureSchemaValidation() {
+  const config = useRuntimeConfig() as Record<string, string>
+  const { db } = await getMongoConnection()
+
+  const eventsName = config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events'
+  const publishersName = config.mongodbCollectionPublishers || 'publishers'
+
+  await db.command({
+    collMod: eventsName,
+    validationLevel: 'moderate',
+    validationAction: 'error',
+    validator: {
+      $jsonSchema: {
+        bsonType: 'object',
+        properties: {
+          isActive: { bsonType: 'bool' },
+          deletedAt: { bsonType: 'date' },
+          event: {
+            bsonType: ['object', 'null'],
+            properties: {
+              Title: { bsonType: 'string' },
+              publisherId: { bsonType: 'string' },
+              occurrences: {
+                bsonType: 'array',
+                items: {
+                  bsonType: 'object',
+                  properties: {
+                    date: { bsonType: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}' },
+                    startTime: { bsonType: 'string' },
+                    endTime: { bsonType: ['string', 'null'] },
+                    hasTime: { bsonType: 'bool' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  await db.command({
+    collMod: publishersName,
+    validationLevel: 'moderate',
+    validationAction: 'error',
+    validator: {
+      $jsonSchema: {
+        bsonType: 'object',
+        required: ['waId'],
+        properties: {
+          waId: { bsonType: 'string' },
+          status: { bsonType: 'string' },
+          type: { bsonType: 'string' },
+          fullName: { bsonType: 'string' },
+        },
+      },
+    },
+  })
+
+  console.info('[Schema] Validators applied to events + publishers')
 }

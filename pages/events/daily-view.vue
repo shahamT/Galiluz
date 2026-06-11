@@ -59,7 +59,7 @@ defineOptions({ name: 'DailyView' })
 
 const route = useRoute()
 const router = useRouter()
-const { events, isLoading, isError, categories } = useCalendarViewData()
+const { events, isLoading, isError, categories, ensureMonthLoaded } = useCalendarViewData()
 const calendarStore = useCalendarStore()
 const uiStore = useUiStore()
 const filterNotifyStore = useFilterNotifyStore()
@@ -211,6 +211,8 @@ watch(dateParam, (date) => {
 watch(dateParam, (newDate) => {
   if (!visibleDays.value.includes(newDate)) windowCenter.value = newDate
 })
+// Keep the events feed window covering the viewed month (expands on far-future navigation)
+watch(headerDate, (h) => { ensureMonthLoaded(h.year, h.month) }, { immediate: true })
 </script>
 
 <style lang="scss">
