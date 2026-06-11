@@ -104,6 +104,7 @@ export default defineEventHandler(async (event) => {
       publisherId: session.publisherId,
       waId: session.waId,
       correlationId,
+      isManagerAction: session.type === 'manager' && doc.event?.publisherId !== session.publisherId,
     })
   }
 

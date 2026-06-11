@@ -4,6 +4,7 @@ import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { logEventDeletion } from '~/server/utils/eventLogs.service'
 import { softDeleteEventStatsData } from '~/server/utils/eventStats.service'
+import { deleteEventCloudinaryMedia } from '~/server/utils/eventMedia.service'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
@@ -41,6 +42,7 @@ export default defineEventHandler(async (event) => {
     publisherId: session.publisherId,
     waId:        typeof (rawEv?.publisher as any)?.waId === 'string' ? (rawEv!.publisher as any).waId : undefined,
     correlationId,
+    isManagerAction: session.type === 'manager' && doc.event?.publisherId !== session.publisherId,
   })
 
   // Soft delete: the event doc first (interact guard checks it), then stamp its stats
@@ -52,6 +54,7 @@ export default defineEventHandler(async (event) => {
   if (result.matchedCount === 0) throw createError({ statusCode: 500 })
 
   await softDeleteEventStatsData(id, deletedAt)
+  await deleteEventCloudinaryMedia(doc, correlationId)
 
   return { success: true, id }
 })

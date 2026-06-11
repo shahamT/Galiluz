@@ -107,6 +107,9 @@ export default defineEventHandler(async (event) => {
   const media = backendEvent.media || []
   const imageUrl = getFirstMediaUrl(media)
 
+  // Social-card meta changes only on edit — short shared cache is safe
+  setHeader(event, 'Cache-Control', 'public, max-age=60')
+
   return {
     title,
     shortDescription,

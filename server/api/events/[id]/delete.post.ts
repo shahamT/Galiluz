@@ -4,6 +4,7 @@ import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
 import { logEventDeletion } from '~/server/utils/eventLogs.service'
 import { softDeleteEventStatsData } from '~/server/utils/eventStats.service'
+import { deleteEventCloudinaryMedia } from '~/server/utils/eventMedia.service'
 
 const LOG_PREFIX = '[EventsAPI] Delete'
 
@@ -88,6 +89,7 @@ export default defineEventHandler(async (event) => {
   }
 
   await softDeleteEventStatsData(id, deletedAt)
+  await deleteEventCloudinaryMedia(doc, correlationId)
 
   console.info(LOG_PREFIX, correlationId, 'soft-deleted', JSON.stringify({ id, deletionType }))
   return { success: true, id }

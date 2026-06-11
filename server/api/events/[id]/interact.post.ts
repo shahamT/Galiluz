@@ -69,14 +69,7 @@ export default defineEventHandler(async (event) => {
   if (body.linkTitle) interaction.linkTitle = String(body.linkTitle).slice(0, 100)
   if (body.linkType) interaction.linkType = String(body.linkType).slice(0, 10)
 
-  // Ensure indexes
-  interactionsCol.createIndex({ eventId: 1, action: 1, timestamp: -1 }).catch(() => {})
-  interactionsCol.createIndex({ eventId: 1, action: 1, visitorId: 1 }).catch(() => {})
-  interactionsCol.createIndex({ publisherId: 1, timestamp: -1 }).catch(() => {})
-  statsCol.createIndex({ eventId: 1 }, { unique: true }).catch(() => {})
-  statsCol.createIndex({ publisherId: 1 }).catch(() => {})
-  occStatsCol.createIndex({ eventId: 1, occurrenceDate: 1 }, { unique: true }).catch(() => {})
-  occStatsCol.createIndex({ publisherId: 1, occurrenceDate: 1 }).catch(() => {})
+  // Indexes are ensured once at startup by server/plugins/ensure-indexes.ts
 
   await interactionsCol.insertOne(interaction)
 

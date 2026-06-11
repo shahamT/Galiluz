@@ -1,5 +1,6 @@
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { uploadBufferToCloudinary } from '~/server/utils/cloudinary'
+import { checkRateLimit } from '~/server/utils/rateLimit'
 
 const MAX_SIZE = 20 * 1024 * 1024 // 20 MB
 
@@ -31,6 +32,7 @@ function validateMagicBytes(buf: Buffer, mimetype: string): boolean {
 }
 
 export default defineEventHandler(async (event) => {
+  await checkRateLimit(event)
   await requirePublisherAuth(event)
 
   const body = await readBody<{ file: string; mimetype: string; filename: string }>(event)

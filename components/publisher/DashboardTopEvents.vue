@@ -18,7 +18,7 @@
       v-else-if="!events?.length"
       compact
       :show-button="false"
-      text="אין נתוני צפיות עדיין"
+      text="אין עדיין נתוני צפיות"
     />
     <ul v-else class="DashboardTopEvents-list">
       <li v-for="(ev, i) in events" :key="`${ev.eventId}-${ev.occurrenceDate || i}`" class="DashboardTopEvents-row">

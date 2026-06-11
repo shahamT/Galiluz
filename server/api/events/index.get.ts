@@ -57,6 +57,9 @@ export default defineEventHandler(async (event) => {
       })
       .filter((t): t is Record<string, unknown> => t !== null)
 
+    // Short shared cache: absorbs traffic spikes while keeping the feed fresh
+    setHeader(event, 'Cache-Control', 'public, max-age=60')
+
     return transformedEvents
   } catch (error) {
     console.error(
