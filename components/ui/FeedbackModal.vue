@@ -6,7 +6,7 @@
         <div class="FeedbackModal-header">
           <h2 class="FeedbackModal-title">שלחו פידבק</h2>
           <button type="button" class="FeedbackModal-close" aria-label="סגור" @click="emit('close')">
-            <UiIcon name="close" size="sm" />
+            <UiIcon name="close" size="md" />
           </button>
         </div>
 
@@ -78,7 +78,7 @@ const TOPICS = [
   { value: 'other',   label: 'אחר' },
 ]
 
-const topic = ref('')
+const topic = ref(TOPICS[0].value)
 const content = ref('')
 const contentError = ref('')
 const isSubmitting = ref(false)
@@ -142,7 +142,7 @@ async function handleSubmit() {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--spacing-lg);
+    padding: var(--spacing-md) var(--spacing-lg);
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
   }
@@ -150,7 +150,7 @@ async function handleSubmit() {
   &-title {
     margin: 0;
     font-size: var(--font-size-lg);
-    font-weight: 700;
+    font-weight: 600;
     color: var(--color-text);
   }
 
@@ -158,11 +158,18 @@ async function handleSubmit() {
     background: none;
     border: none;
     cursor: pointer;
-    color: var(--color-text-muted);
-    padding: 0;
+    color: var(--color-text);
+    padding: var(--spacing-xs);
     display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: opacity 0.2s ease;
 
-    &:hover { color: var(--color-text); }
+    &:hover {
+      opacity: 0.7;
+      background-color: var(--day-cell-hover-bg);
+    }
   }
 
   &-body {
@@ -211,6 +218,12 @@ async function handleSubmit() {
       color: var(--brand-dark-green);
       font-weight: 600;
     }
+
+    @include mobile {
+      height: var(--section-header-height);
+      font-size: var(--font-size-md);
+      padding: 0 var(--spacing-lg);
+    }
   }
 
   &-textarea {
@@ -231,6 +244,11 @@ async function handleSubmit() {
     &:focus { outline: none; border-color: var(--brand-dark-green); }
 
     &--error { border-color: var(--color-error) !important; }
+
+    @include mobile {
+      font-size: var(--font-size-md);
+      padding: var(--spacing-md);
+    }
   }
 
   &-error {
@@ -248,9 +266,10 @@ async function handleSubmit() {
   }
 
   &-submit {
+    flex: 1;
     height: var(--control-height);
     padding: 0 var(--spacing-xl);
-    border: none;
+    border: 2px solid var(--brand-dark-green);
     border-radius: var(--radius-md);
     background: var(--brand-dark-green);
     color: #fff;
@@ -260,11 +279,17 @@ async function handleSubmit() {
     cursor: pointer;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--spacing-xs);
     transition: opacity 0.15s;
 
     &:disabled { opacity: 0.4; cursor: not-allowed; }
-    &:not(:disabled):hover { opacity: 0.88; }
+    &:not(:disabled):hover { opacity: 0.9; }
+
+    @include mobile {
+      height: var(--section-header-height);
+      font-size: var(--font-size-md);
+    }
   }
 
   &-spinner {
