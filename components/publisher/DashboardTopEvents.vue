@@ -14,7 +14,12 @@
         </div>
       </li>
     </ul>
-    <div v-else-if="!events?.length" class="DashboardTopEvents-empty">אין נתוני צפיות עדיין</div>
+    <PublisherDashboardEmptyState
+      v-else-if="!events?.length"
+      compact
+      :show-button="false"
+      text="אין נתוני צפיות עדיין"
+    />
     <ul v-else class="DashboardTopEvents-list">
       <li v-for="(ev, i) in events" :key="`${ev.eventId}-${ev.occurrenceDate || i}`" class="DashboardTopEvents-row">
         <NuxtLink :to="`/publisher/events/${ev.eventId}`" class="DashboardTopEvents-link">
@@ -58,13 +63,6 @@ defineProps({
     font-size: var(--font-size-lg);
     font-weight: 600;
     color: var(--brand-dark-green);
-  }
-
-  &-empty {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
-    text-align: center;
-    padding: var(--spacing-lg) 0;
   }
 
   &-list {

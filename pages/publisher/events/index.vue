@@ -8,46 +8,53 @@
         <p class="PublisherEvents-description">כאן תוכל/י לנהל, לערוך ולעקוב אחר כל האירועים שפרסמת.</p>
       </div>
 
-      <PublisherEventsSearchBar v-model="filter" v-model:search="search" @add-event="showEventForm = true" />
+      <div class="PublisherEvents-container">
+        <PublisherEventsSearchBar v-model="filter" v-model:search="search" @add-event="showEventForm = true" />
 
-      <!-- Skeleton -->
-      <template v-if="pending">
-        <div v-for="i in 5" :key="i" class="PublisherEvents-skeleton" />
-      </template>
+        <!-- Skeleton -->
+        <template v-if="pending">
+          <div v-for="i in 5" :key="i" class="PublisherEvents-skeleton" />
+        </template>
 
-      <!-- List -->
-      <div v-else-if="filteredEvents.length" class="PublisherEvents-list">
-        <PublisherEventListItem
-          v-for="event in filteredEvents"
-          :key="event.id"
-          :event="event"
+        <!-- List -->
+        <div v-else-if="filteredEvents.length" class="PublisherEvents-list">
+          <PublisherEventListItem
+            v-for="event in filteredEvents"
+            :key="event.id"
+            :event="event"
+          />
+        </div>
+
+        <!-- No events at all -->
+        <PublisherDashboardEmptyState
+          v-else-if="!events?.length"
+          text="אין לכם עדיין אירועים"
+          button-label="הוסיפו את האירוע הראשון שלכם"
+          @action="showEventForm = true"
         />
-      </div>
 
-      <!-- No events at all -->
-      <div v-else-if="!events?.length" class="PublisherEvents-empty">
-        <UiIcon name="event" size="lg" class="PublisherEvents-emptyIcon" />
-        <p>אין לך אירועים עדיין</p>
-        <button type="button" class="PublisherEvents-emptyCta" @click="showEventForm = true">
-          <UiIcon name="add" size="sm" />
-          אירוע חדש
-        </button>
-      </div>
+        <!-- Search with no matches -->
+        <PublisherDashboardEmptyState
+          v-else-if="isSearching"
+          text="לא נמצאו אירועים מתאימים לחיפוש שלכם"
+          button-label="איפוס"
+          button-icon="close"
+          @action="search = ''"
+        />
 
-      <!-- Has events but no future ones -->
-      <div v-else-if="filter === 'future'" class="PublisherEvents-empty">
-        <UiIcon name="event_upcoming" size="lg" class="PublisherEvents-emptyIcon" />
-        <p>אין אירועים עתידיים</p>
-        <button type="button" class="PublisherEvents-emptyCta" @click="showEventForm = true">
-          <UiIcon name="add" size="sm" />
-          אירוע חדש
-        </button>
-      </div>
-
-      <!-- No results from filter / search -->
-      <div v-else class="PublisherEvents-empty">
-        <UiIcon name="search_off" size="lg" class="PublisherEvents-emptyIcon" />
-        <p>לא נמצאו אירועים</p>
+        <!-- Has events but none for the current filter -->
+        <PublisherDashboardEmptyState
+          v-else-if="filter === 'future'"
+          text="אין לכם אירועים עתידיים"
+          button-label="הוסיפו אירוע חדש"
+          @action="showEventForm = true"
+        />
+        <PublisherDashboardEmptyState
+          v-else
+          text="אין לכם אירועים שהסתיימו"
+          button-label="הוסיפו אירוע חדש"
+          @action="showEventForm = true"
+        />
       </div>
     </div>
 
@@ -84,6 +91,8 @@ const { data: events, pending } = await useAuthFetch('/api/publisher/events')
 
 const today = new Date().toISOString().slice(0, 10)
 
+const isSearching = computed(() => !!debouncedSearch.value.trim())
+
 const filteredEvents = computed(() => {
   let list = events.value || []
 
@@ -93,7 +102,7 @@ const filteredEvents = computed(() => {
     list = list.filter(e => e.occurrences.every(o => o.date < today))
   }
 
-  if (debouncedSearch.value.trim()) {
+  if (isSearching.value) {
     const q = debouncedSearch.value.trim().toLowerCase()
     list = list.filter(e => e.title.toLowerCase().includes(q))
   }
@@ -134,6 +143,18 @@ const filteredEvents = computed(() => {
     line-height: 1.5;
   }
 
+  &-container {
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+
+    @include mobile {
+      padding: var(--spacing-md);
+    }
+  }
+
   &-skeleton {
     height: 4.5rem;
     border-radius: var(--radius-lg);
@@ -146,43 +167,6 @@ const filteredEvents = computed(() => {
       0%   { background-position: 200% 0; }
       100% { background-position: -200% 0; }
     }
-  }
-
-  &-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-md);
-    padding: var(--spacing-3xl) 0;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-base);
-    text-align: center;
-
-    p { margin: 0; }
-  }
-
-  &-emptyIcon {
-    font-size: 3rem;
-    opacity: 0.4;
-  }
-
-  &-emptyCta {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    height: var(--control-height);
-    padding: 0 var(--spacing-lg);
-    border: 1.5px solid var(--brand-dark-green);
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--brand-dark-green);
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    font-family: var(--font-family-body);
-    cursor: pointer;
-    transition: background 0.15s;
-    &:hover { background: rgba(11,151,74,0.07); }
   }
 
   &-list {

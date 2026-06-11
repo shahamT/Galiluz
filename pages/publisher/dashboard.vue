@@ -8,10 +8,6 @@
       <p class="PublisherDashboard-greeting">ברוך/ה הבאה {{ authStore.user?.fullName }}, כאן תוכל/י לקבל מבט מלמעלה על כל האירועים שפרסמת!</p>
     </div>
 
-    <template v-if="data?.eventCounts?.total === 0">
-      <PublisherDashboardEmptyState />
-    </template>
-    <template v-else>
     <PublisherDashboardEventsOverview :counts="data?.eventCounts || { total: 0, future: 0, past: 0 }" @add-event="showEventForm = true" />
 
     <div class="PublisherDashboard-divider" />
@@ -54,7 +50,6 @@
       <PublisherDashboardTopEvents :events="data?.topEvents || []" :loading="pending" />
       <PublisherDashboardRecentLogs :logs="data?.recentLogs || []" :loading="pending" />
     </div>
-    </template>
     </div>
 
     <PublisherEventFormModal v-if="showEventForm" @close="showEventForm = false" @submitted="onEventSaved" />
