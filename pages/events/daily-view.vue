@@ -32,7 +32,6 @@
           </div>
           <div v-else class="DailyView-kanbanWrapper">
             <DailyKanbanCarousel
-              :key="dateParam"
               :visible-days="visibleDays"
               :events-by-date="eventsByDate"
               :current-date="dateParam"
@@ -40,6 +39,7 @@
               :slide-to-date-request="slideToDateRequest"
               :categories="categories"
               @date-change="handleDateChange"
+              @settled="handleSettled"
             />
           </div>
         </template>
@@ -126,8 +126,13 @@ const headerDate = computed(() => {
   return { year: date.getFullYear(), month: date.getMonth() + 1 }
 })
 const monthYearDisplay = computed(() => formatMonthYear(headerDate.value.year, headerDate.value.month))
+
+// The slide window is owned locally, decoupled from the route: route updates on every
+// swipe commit (mid-animation) while the window only re-centers after the slide settles,
+// so the carousel never remounts and never shifts under an in-flight animation.
+const windowCenter = ref(dateParam.value)
 const visibleDays = computed(() => {
-  const centerDate = parseDateString(dateParam.value)
+  const centerDate = parseDateString(windowCenter.value)
   const days = []
   for (let i = -DAILY_CAROUSEL_DAYS_RANGE; i <= DAILY_CAROUSEL_DAYS_RANGE; i++) {
     const date = new Date(centerDate)
@@ -178,9 +183,21 @@ const handleNextDay = () => {
 }
 const handleMonthYearSelect = ({ year, month }) => navigateToMonthInDailyView(year, month)
 const handleYearChange = ({ year }) => { calendarStore.setCurrentDate({ year, month: headerDate.value.month }) }
+// Swipe committed: sync the route immediately (replace — swipes must not pollute history)
 const handleDateChange = (newDate) => {
-  navigateToDay(newDate)
   slideToDateRequest.value = null
+  if (newDate === dateParam.value) return
+  router.replace({ path: ROUTE_DAILY_VIEW, query: { ...route.query, date: newDate } })
+}
+// Slide settled: re-center the window only when the active day nears its edge
+const WINDOW_EDGE_THRESHOLD = 2
+const handleSettled = (activeDate) => {
+  const days = visibleDays.value
+  const idx = days.indexOf(activeDate)
+  if (idx < 0) return
+  if (idx < WINDOW_EDGE_THRESHOLD || idx > days.length - 1 - WINDOW_EDGE_THRESHOLD) {
+    windowCenter.value = activeDate
+  }
 }
 const handleBackToMonthly = () => navigateToMonth(headerDate.value.year, headerDate.value.month)
 const handleViewChange = ({ view }) => { if (view === 'month') handleBackToMonthly() }
@@ -189,6 +206,11 @@ watch(headerDate, (newHeaderDate) => { calendarStore.setCurrentDate(newHeaderDat
 watch(dateParam, (date) => {
   if (date && isValidRouteDate(date)) calendarStore.setLastDailyViewDate(date)
 }, { immediate: true })
+// External date change (picker far jump, deep link, back/forward): rebuild the window around it.
+// In-window changes are handled by the carousel's currentDate watcher (animated slide).
+watch(dateParam, (newDate) => {
+  if (!visibleDays.value.includes(newDate)) windowCenter.value = newDate
+})
 </script>
 
 <style lang="scss">
