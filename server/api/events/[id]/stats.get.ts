@@ -1,6 +1,10 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
+import { requireApiSecret } from '~/server/utils/requireApiSecret'
 
+// Internal-only: no client or app currently consumes this publicly, and per-event
+// analytics must not be open to enumeration.
 export default defineEventHandler(async (event) => {
+  requireApiSecret(event)
   const id = getRouterParam(event, 'id')
   if (!id) throw createError({ statusCode: 400, message: 'id required' })
 
