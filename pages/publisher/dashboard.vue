@@ -62,11 +62,15 @@ definePageMeta({ middleware: 'auth' })
 useHead({ title: 'דשבורד | גלילו"ז' })
 
 const authStore = useAuthStore()
+const { capture } = usePosthog()
 const filter = ref('active')
 const showEventForm = ref(false)
 function onEventSaved({ id }) {
   showEventForm.value = false
-  if (id) navigateTo(`/publisher/events/${id}?success=created`)
+  if (id) {
+    capture('publisher_event_created', { eventId: id, source: 'dashboard' })
+    navigateTo(`/publisher/events/${id}?success=created`)
+  }
 }
 
 const { data, pending } = await useAuthFetch('/api/publisher/dashboard', {

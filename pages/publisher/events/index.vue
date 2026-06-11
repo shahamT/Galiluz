@@ -62,7 +62,7 @@
       v-if="showEventForm"
       :draft-key="route.query.draft || null"
       @close="showEventForm = false; clearDraftFromUrl()"
-      @submitted="({ id }) => { showEventForm = false; if (id) navigateTo(`/publisher/events/${id}?success=created`) }"
+      @submitted="onEventCreated"
     />
   </LayoutProtectedShell>
 </template>
@@ -74,10 +74,19 @@ useHead({ title: 'האירועים שלי | גלילו"ז' })
 
 const route = useRoute()
 const router = useRouter()
+const { capture } = usePosthog()
 const filter = ref('future')
 const search = ref('')
 const debouncedSearch = useDebounce(search, 200)
 const showEventForm = ref(false)
+
+function onEventCreated({ id }) {
+  showEventForm.value = false
+  if (id) {
+    capture('publisher_event_created', { eventId: id, source: 'events_list' })
+    navigateTo(`/publisher/events/${id}?success=created`)
+  }
+}
 
 onMounted(() => {
   if (route.query.modal === 'add') showEventForm.value = true
