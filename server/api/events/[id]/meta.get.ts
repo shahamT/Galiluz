@@ -89,7 +89,7 @@ export default defineEventHandler(async (event) => {
   const { db } = await getMongoConnection()
   const collection = db.collection(collectionName)
   const doc = await collection.findOne({ _id: objectId })
-  if (!doc) {
+  if (!doc || doc.deletedAt) {
     throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'event not found' })
   }
 
@@ -106,6 +106,9 @@ export default defineEventHandler(async (event) => {
   const shortDescription = backendEvent.shortDescription || ''
   const media = backendEvent.media || []
   const imageUrl = getFirstMediaUrl(media)
+
+  // Social-card meta changes only on edit — short shared cache is safe
+  setHeader(event, 'Cache-Control', 'public, max-age=60')
 
   return {
     title,

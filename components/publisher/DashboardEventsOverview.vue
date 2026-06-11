@@ -1,6 +1,7 @@
 <template>
   <div class="DashboardEventsOverview">
-    <div class="DashboardEventsOverview-stats">
+    <p v-if="isEmpty" class="DashboardEventsOverview-emptyText">אין לכם עדיין אירועים</p>
+    <div v-else class="DashboardEventsOverview-stats">
       <div class="DashboardEventsOverview-stat">
         <span class="DashboardEventsOverview-value DashboardEventsOverview-value--green">{{ counts.future }}</span>
         <span class="DashboardEventsOverview-label">אירועים פעילים</span>
@@ -13,15 +14,17 @@
     </div>
     <button type="button" class="DashboardEventsOverview-cta" @click="emit('add-event')">
       <UiIcon name="add" size="sm" />
-      אירוע חדש
+      {{ isEmpty ? 'פרסמו את האירוע הראשון שלכם!' : 'אירוע חדש' }}
     </button>
   </div>
 </template>
 
 <script setup>
 defineOptions({ name: 'DashboardEventsOverview' })
-defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, past: 0 }) } })
+const props = defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, past: 0 }) } })
 const emit = defineEmits(['add-event'])
+
+const isEmpty = computed(() => (props.counts?.total ?? 0) === 0)
 </script>
 
 <style lang="scss">
@@ -48,6 +51,14 @@ const emit = defineEmits(['add-event'])
     gap: var(--spacing-xl);
 
     @include mobile { justify-content: space-around; }
+  }
+
+  &-emptyText {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text-light);
+
+    @include mobile { text-align: center; }
   }
 
   &-divider {

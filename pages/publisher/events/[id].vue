@@ -261,7 +261,7 @@
       :event-id="event.id"
       :is-active="event.isActive"
       @close="showStatusModal = false"
-      @updated="() => { showStatusModal = false; refresh() }"
+      @updated="onStatusUpdated"
     />
 
     <PublisherEventDeleteModal
@@ -269,7 +269,7 @@
       :event-title="event.title"
       :event-id="event.id"
       @close="showDeleteModal = false"
-      @deleted="navigateTo('/publisher/events')"
+      @deleted="onDeleted"
     />
   </LayoutProtectedShell>
 </template>
@@ -302,11 +302,25 @@ function clearDraftFromUrl() {
   if (route.query.modal || route.query.draft) router.replace({ query: {} })
 }
 
+const { capture } = usePosthog()
+
 // M4: await refresh before showing success banner
 async function onEditSubmitted() {
   showEditForm.value = false
+  capture('publisher_event_edited', { eventId: route.params.id })
   await refresh()
   router.replace({ query: { success: 'updated' } })
+}
+
+async function onStatusUpdated() {
+  showStatusModal.value = false
+  capture('publisher_event_status_changed', { eventId: route.params.id, isActive: !event.value?.isActive })
+  refresh()
+}
+
+function onDeleted() {
+  capture('publisher_event_deleted', { eventId: route.params.id })
+  navigateTo('/publisher/events')
 }
 
 const { data: event, pending, refresh } = await useAuthFetch(`/api/publisher/event/${route.params.id}`)

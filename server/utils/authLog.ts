@@ -10,6 +10,7 @@ export type AuthAction =
   | 'auth_failed'
   | 'blocked'
   | 'otp_request_unregistered'
+  | 'publisher_rejected'
 
 export async function logAuthEvent(
   event: H3Event,

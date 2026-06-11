@@ -31,6 +31,8 @@ export interface EventLogEditPayload {
   publisherId?: string
   waId?: string
   correlationId?: string
+  /** true when a manager acted on another publisher's event */
+  isManagerAction?: boolean
 }
 
 export interface EventLogDeletionPayload {
@@ -42,6 +44,8 @@ export interface EventLogDeletionPayload {
   publisherId?: string
   waId?: string
   correlationId?: string
+  /** true when a manager acted on another publisher's event */
+  isManagerAction?: boolean
 }
 
 /**
@@ -99,6 +103,7 @@ export async function logEventEdit(payload: EventLogEditPayload): Promise<void> 
       ...(payload.publisherId !== undefined && { publisherId: payload.publisherId }),
       ...(payload.waId !== undefined && { waId: payload.waId }),
       ...(payload.correlationId !== undefined && { correlationId: payload.correlationId }),
+      ...(payload.isManagerAction && { isManagerAction: true }),
     }
     await collection.insertOne(doc)
   } catch (err) {
@@ -124,6 +129,7 @@ export async function logEventDeletion(payload: EventLogDeletionPayload): Promis
       ...(payload.publisherId !== undefined && { publisherId: payload.publisherId }),
       ...(payload.waId !== undefined && { waId: payload.waId }),
       ...(payload.correlationId !== undefined && { correlationId: payload.correlationId }),
+      ...(payload.isManagerAction && { isManagerAction: true }),
     }
     await collection.insertOne(doc)
   } catch (err) {

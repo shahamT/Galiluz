@@ -2,6 +2,9 @@ import { getIsraelDayUtcRange } from '~/server/utils/israelDateRange'
 
 const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/
 
+/** Filter fragment excluding soft-deleted documents (events and stats alike). */
+export const NOT_DELETED = { deletedAt: { $exists: false } }
+
 export function parseDatesParam(value: string | undefined): string[] {
   if (!value || typeof value !== 'string') return []
   const list = value
@@ -22,13 +25,19 @@ export function parseCategoriesParam(value: string | undefined): string[] {
 
 /**
  * Builds MongoDB query for events: active, with occurrences after cutoff, optional date and category filters.
+ * `until` (exclusive upper bound) limits the feed to a rolling window — events whose
+ * occurrences all start after it are excluded.
  */
 export function buildEventsQuery(
   cutoff: Date,
   dateStrings: string[],
   categoriesArray: string[],
   region?: string,
+  until?: Date,
 ): Record<string, unknown> {
+  // startTime is canonically an ISO 8601 string (enforced by validatePublisherFormattedEvent).
+  // The Date-typed condition is kept defensively for legacy production documents —
+  // collapse to strings-only after running scripts/migrate-starttime.js on production.
   const cutoffISO = cutoff.toISOString()
   const baseConditions: Record<string, unknown>[] = [
     { 'event.occurrences.startTime': { $gt: cutoff } },
@@ -37,9 +46,19 @@ export function buildEventsQuery(
 
   const andConditions: Record<string, unknown>[] = [
     { isActive: true },
+    { ...NOT_DELETED },
     { event: { $ne: null } },
     { $or: baseConditions },
   ]
+
+  if (until) {
+    andConditions.push({
+      $or: [
+        { 'event.occurrences.startTime': { $lte: until } },
+        { 'event.occurrences.startTime': { $lte: until.toISOString() } },
+      ],
+    })
+  }
 
   if (dateStrings.length > 0) {
     const dateRanges = dateStrings

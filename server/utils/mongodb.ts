@@ -16,7 +16,14 @@ export async function getMongoConnection() {
     throw new Error('MongoDB configuration missing: MONGODB_URI and MONGODB_DB_NAME are required')
   }
 
-  client = new MongoClient(uri)
+  client = new MongoClient(uri, {
+    maxPoolSize: 50,
+    minPoolSize: 2,
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 30000,
+    retryWrites: true,
+    retryReads: true,
+  })
   await client.connect()
   db = client.db(dbName)
 

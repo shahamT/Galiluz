@@ -10,7 +10,12 @@
         </div>
       </li>
     </ul>
-    <div v-else-if="!logs?.length" class="DashboardRecentLogs-empty">אין פעילות אחרונה</div>
+    <PublisherDashboardEmptyState
+      v-else-if="!logs?.length"
+      compact
+      :show-button="false"
+      text="אין פעילות אחרונה"
+    />
     <ul v-else class="DashboardRecentLogs-list">
       <li v-for="log in logs" :key="log.createdAt" class="DashboardRecentLogs-row">
         <span class="DashboardRecentLogs-icon" :class="`DashboardRecentLogs-icon--${log.action}`">
@@ -74,13 +79,6 @@ function relativeTime(iso) {
     font-size: var(--font-size-lg);
     font-weight: 600;
     color: var(--brand-dark-green);
-  }
-
-  &-empty {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
-    text-align: center;
-    padding: var(--spacing-lg) 0;
   }
 
   &-list {

@@ -1,8 +1,11 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
+import { checkRateLimit } from '~/server/utils/rateLimit'
 
 const VALID_TOPICS = ['bug', 'feature', 'content', 'general', 'other']
 
 export default defineEventHandler(async (event) => {
+  await checkRateLimit(event)
+
   const body = await readBody<{ topic?: string; content?: string }>(event)
   const topic = typeof body?.topic === 'string' ? body.topic.trim() : ''
   const content = typeof body?.content === 'string' ? body.content.trim() : ''

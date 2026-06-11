@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   const col = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
 
   const doc = await col.findOne({ _id: objectId })
-  if (!doc) throw createError({ statusCode: 404, message: 'event not found' })
+  if (!doc || doc.deletedAt) throw createError({ statusCode: 404, message: 'event not found' })
 
   // Ownership check
   if (session.type !== 'manager' && doc.event?.publisherId !== session.publisherId) {
@@ -104,6 +104,7 @@ export default defineEventHandler(async (event) => {
       publisherId: session.publisherId,
       waId: session.waId,
       correlationId,
+      isManagerAction: session.type === 'manager' && doc.event?.publisherId !== session.publisherId,
     })
   }
 

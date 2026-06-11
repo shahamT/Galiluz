@@ -3,6 +3,8 @@ import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { logEventDeletion } from '~/server/utils/eventLogs.service'
+import { softDeleteEventStatsData } from '~/server/utils/eventStats.service'
+import { deleteEventCloudinaryMedia } from '~/server/utils/eventMedia.service'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
@@ -25,6 +27,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'forbidden' })
   }
 
+  // Already soft-deleted: idempotent success
+  if (doc.deletedAt) return { success: true, id }
+
   const correlationId = randomBytes(4).toString('hex')
   const ev    = doc.event as Record<string, unknown> | null | undefined
   const rawEv = doc.rawEvent as Record<string, unknown> | null | undefined
@@ -37,10 +42,19 @@ export default defineEventHandler(async (event) => {
     publisherId: session.publisherId,
     waId:        typeof (rawEv?.publisher as any)?.waId === 'string' ? (rawEv!.publisher as any).waId : undefined,
     correlationId,
+    isManagerAction: session.type === 'manager' && doc.event?.publisherId !== session.publisherId,
   })
 
-  const result = await eventsCol.deleteOne({ _id: objectId })
-  if (result.deletedCount === 0) throw createError({ statusCode: 500 })
+  // Soft delete: the event doc first (interact guard checks it), then stamp its stats
+  const deletedAt = new Date()
+  const result = await eventsCol.updateOne(
+    { _id: objectId },
+    { $set: { deletedAt, isActive: false } },
+  )
+  if (result.matchedCount === 0) throw createError({ statusCode: 500 })
+
+  await softDeleteEventStatsData(id, deletedAt)
+  await deleteEventCloudinaryMedia(doc, correlationId)
 
   return { success: true, id }
 })

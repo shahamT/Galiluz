@@ -35,13 +35,23 @@ export default defineEventHandler(async (event) => {
   const categoriesArray = parseCategoriesParam(queryParams.categories as string | undefined)
   const region = typeof queryParams.region === 'string' ? queryParams.region.trim() : ''
 
+  // Optional rolling window bounds (YYYY-MM-DD). `from` overrides the default cutoff,
+  // `to` bounds the feed so clients can request a window instead of everything.
+  const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/
+  const fromParam = typeof queryParams.from === 'string' && YYYY_MM_DD.test(queryParams.from) ? queryParams.from : ''
+  const toParam = typeof queryParams.to === 'string' && YYYY_MM_DD.test(queryParams.to) ? queryParams.to : ''
+
   try {
     const { db } = await getMongoConnection()
     const collection = db.collection(collectionName)
-    const cutoff = getCutoffDate()
-    const query = buildEventsQuery(cutoff, dateStrings, categoriesArray, region || undefined)
+    const cutoff = fromParam ? new Date(`${fromParam}T00:00:00.000Z`) : getCutoffDate()
+    const until = toParam ? new Date(`${toParam}T23:59:59.999Z`) : undefined
+    const query = buildEventsQuery(cutoff, dateStrings, categoriesArray, region || undefined, until)
 
-    const documents = await collection.find(query).limit(EVENTS_QUERY_LIMIT).toArray()
+    const documents = await collection
+      .find(query, { projection: { rawEvent: 0 } })
+      .limit(EVENTS_QUERY_LIMIT)
+      .toArray()
 
     const transformedEvents = documents
       .map((doc) => {
@@ -56,6 +66,9 @@ export default defineEventHandler(async (event) => {
         }
       })
       .filter((t): t is Record<string, unknown> => t !== null)
+
+    // Short shared cache: absorbs traffic spikes while keeping the feed fresh
+    setHeader(event, 'Cache-Control', 'public, max-age=60')
 
     return transformedEvents
   } catch (error) {

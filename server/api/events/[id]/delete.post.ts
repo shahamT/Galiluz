@@ -3,6 +3,8 @@ import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
 import { logEventDeletion } from '~/server/utils/eventLogs.service'
+import { softDeleteEventStatsData } from '~/server/utils/eventStats.service'
+import { deleteEventCloudinaryMedia } from '~/server/utils/eventMedia.service'
 
 const LOG_PREFIX = '[EventsAPI] Delete'
 
@@ -54,6 +56,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'event not found' })
   }
 
+  // Already soft-deleted: idempotent success
+  if (doc.deletedAt) {
+    return { success: true, id }
+  }
+
   const ev = doc.event as Record<string, unknown> | null | undefined
   const rawEv = doc.rawEvent as Record<string, unknown> | null | undefined
   const title = ev && typeof ev.Title === 'string' ? ev.Title : undefined
@@ -71,10 +78,19 @@ export default defineEventHandler(async (event) => {
     correlationId,
   })
 
-  const deleteResult = await collection.deleteOne({ _id: objectId })
-  if (deleteResult.deletedCount === 0) {
+  // Soft delete: the event doc first (interact guard checks it), then stamp its stats
+  const deletedAt = new Date()
+  const deleteResult = await collection.updateOne(
+    { _id: objectId },
+    { $set: { deletedAt, isActive: false } },
+  )
+  if (deleteResult.matchedCount === 0) {
     throw createError({ statusCode: 500, statusMessage: 'Internal Server Error' })
   }
-  console.info(LOG_PREFIX, correlationId, 'deleted', JSON.stringify({ id }))
+
+  await softDeleteEventStatsData(id, deletedAt)
+  await deleteEventCloudinaryMedia(doc, correlationId)
+
+  console.info(LOG_PREFIX, correlationId, 'soft-deleted', JSON.stringify({ id, deletionType }))
   return { success: true, id }
 })

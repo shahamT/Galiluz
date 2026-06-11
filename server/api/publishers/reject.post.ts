@@ -1,5 +1,7 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
+import { softDeleteEventStatsData } from '~/server/utils/eventStats.service'
+import { logAuthEvent } from '~/server/utils/authLog'
 
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
@@ -40,11 +42,34 @@ export default defineEventHandler(async (event) => {
         message: 'Publisher not found',
       })
     }
+    // Cascade: soft-delete the publisher's events (published + drafts) so nothing is stranded
+    const eventsCol = db.collection(
+      (config.mongodbCollectionEventsWaBot as string) || (config.mongodbCollectionEvents as string) || 'events',
+    )
+    const publisherId = doc._id.toString()
+    const deletedAt = new Date()
+    const theirEvents = await eventsCol.find(
+      {
+        $or: [{ 'event.publisherId': publisherId }, { 'rawEvent.publisher.waId': waId }],
+        deletedAt: { $exists: false },
+      },
+      { projection: { _id: 1 } },
+    ).toArray()
+
+    for (const ev of theirEvents) {
+      const id = ev._id.toString()
+      await eventsCol.updateOne({ _id: ev._id }, { $set: { deletedAt, isActive: false } })
+      await softDeleteEventStatsData(id, deletedAt)
+    }
+
     if (doc.createdOnBehalf) {
       await collection.updateOne({ waId }, { $set: { status: 'ghost', updatedAt: new Date() } })
     } else {
       await collection.deleteOne({ waId })
     }
+
+    await logAuthEvent(event, 'publisher_rejected', waId, { cascadedEvents: theirEvents.length })
+
     return { success: true }
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'statusCode' in err) throw err

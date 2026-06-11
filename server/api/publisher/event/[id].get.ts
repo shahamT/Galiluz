@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
   const interactionsCol = db.collection(config.mongodbCollectionEventInteractions || 'eventInteractions')
 
   const doc = await eventsCol.findOne({ _id: objectId })
-  if (!doc) throw createError({ statusCode: 404, message: 'event not found' })
+  if (!doc || doc.deletedAt) throw createError({ statusCode: 404, message: 'event not found' })
 
   if (session.type !== 'manager' && doc.event?.publisherId !== session.publisherId) {
     throw createError({ statusCode: 403, message: 'forbidden' })

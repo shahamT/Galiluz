@@ -8,10 +8,6 @@
       <p class="PublisherDashboard-greeting">ברוך/ה הבאה {{ authStore.user?.fullName }}, כאן תוכל/י לקבל מבט מלמעלה על כל האירועים שפרסמת!</p>
     </div>
 
-    <template v-if="data?.eventCounts?.total === 0">
-      <PublisherDashboardEmptyState />
-    </template>
-    <template v-else>
     <PublisherDashboardEventsOverview :counts="data?.eventCounts || { total: 0, future: 0, past: 0 }" @add-event="showEventForm = true" />
 
     <div class="PublisherDashboard-divider" />
@@ -54,7 +50,6 @@
       <PublisherDashboardTopEvents :events="data?.topEvents || []" :loading="pending" />
       <PublisherDashboardRecentLogs :logs="data?.recentLogs || []" :loading="pending" />
     </div>
-    </template>
     </div>
 
     <PublisherEventFormModal v-if="showEventForm" @close="showEventForm = false" @submitted="onEventSaved" />
@@ -67,11 +62,15 @@ definePageMeta({ middleware: 'auth' })
 useHead({ title: 'דשבורד | גלילו"ז' })
 
 const authStore = useAuthStore()
+const { capture } = usePosthog()
 const filter = ref('active')
 const showEventForm = ref(false)
 function onEventSaved({ id }) {
   showEventForm.value = false
-  if (id) navigateTo(`/publisher/events/${id}?success=created`)
+  if (id) {
+    capture('publisher_event_created', { eventId: id, source: 'dashboard' })
+    navigateTo(`/publisher/events/${id}?success=created`)
+  }
 }
 
 const { data, pending } = await useAuthFetch('/api/publisher/dashboard', {
