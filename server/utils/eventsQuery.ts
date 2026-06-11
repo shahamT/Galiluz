@@ -2,6 +2,9 @@ import { getIsraelDayUtcRange } from '~/server/utils/israelDateRange'
 
 const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/
 
+/** Filter fragment excluding soft-deleted documents (events and stats alike). */
+export const NOT_DELETED = { deletedAt: { $exists: false } }
+
 export function parseDatesParam(value: string | undefined): string[] {
   if (!value || typeof value !== 'string') return []
   const list = value
@@ -37,6 +40,7 @@ export function buildEventsQuery(
 
   const andConditions: Record<string, unknown>[] = [
     { isActive: true },
+    { ...NOT_DELETED },
     { event: { $ne: null } },
     { $or: baseConditions },
   ]

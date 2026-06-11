@@ -26,14 +26,18 @@ export default defineEventHandler(async (event) => {
   const interactionsCol = db.collection(config.mongodbCollectionEventInteractions || 'eventInteractions')
   const logsCol = db.collection(config.mongodbCollectionEventLogs || 'eventLogs')
 
-  const pubFilter = session.type === 'manager' ? {} : { publisherId: session.publisherId }
+  // Stats filters always exclude soft-deleted events' data (stamped with deletedAt on delete)
+  const pubFilter = {
+    ...(session.type === 'manager' ? {} : { publisherId: session.publisherId }),
+    deletedAt: { $exists: false },
+  }
   const today = getTodayIsrael()
   const [yr, mo] = today.split('-')
   const monthPrefix = `${yr}-${mo}`
 
   // ── 1. Event counts (always all-time, no filter) ──────────────────────────
   const allEvents = await eventsCol.find(
-    { 'event.publisherId': session.publisherId, isActive: true, event: { $ne: null } },
+    { 'event.publisherId': session.publisherId, isActive: true, deletedAt: { $exists: false }, event: { $ne: null } },
     { projection: { 'event.occurrences': 1, 'event.Title': 1, 'event.multiDayEvent': 1, _id: 1 } },
   ).toArray()
 

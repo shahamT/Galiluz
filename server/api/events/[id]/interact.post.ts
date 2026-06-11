@@ -34,13 +34,20 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()
 
-  // Resolve publisherId from the event document
+  // Resolve publisherId from the event document; refuse interactions for missing/soft-deleted events
+  // so stale open tabs can't create stats data after deletion
   const eventsCol = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
   let publisherId = ''
   try {
-    const doc = await eventsCol.findOne({ _id: new ObjectId(id) }, { projection: { 'event.publisherId': 1 } })
+    const doc = await eventsCol.findOne(
+      { _id: new ObjectId(id) },
+      { projection: { 'event.publisherId': 1, deletedAt: 1 } },
+    )
+    if (!doc || doc.deletedAt) return { success: false }
     publisherId = doc?.event?.publisherId || ''
-  } catch {}
+  } catch {
+    return { success: false }
+  }
 
   const interactionsCol = db.collection(config.mongodbCollectionEventInteractions || 'eventInteractions')
   const statsCol = db.collection(config.mongodbCollectionEventStats || 'eventStats')

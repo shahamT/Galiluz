@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   const { db } = await getMongoConnection()
   const statsCol = db.collection((config as Record<string, string>).mongodbCollectionEventStats || 'eventStats')
 
-  const doc = await statsCol.findOne({ eventId: id }, {
+  const doc = await statsCol.findOne({ eventId: id, deletedAt: { $exists: false } }, {
     projection: { _id: 0, eventId: 0, publisherId: 0, lastInteractionAt: 0 },
   })
 

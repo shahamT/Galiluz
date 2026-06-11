@@ -59,6 +59,7 @@ export default defineEventHandler(async (event) => {
   const query = {
     'rawEvent.publisher.waId': waId.trim(),
     isActive: true,
+    deletedAt: { $exists: false },
     event: { $ne: null },
     $or: [
       { 'event.occurrences.startTime': { $gte: todayStart } },

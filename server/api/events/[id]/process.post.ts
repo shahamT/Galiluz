@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
   const { db } = await getMongoConnection()
   const collection = db.collection(eventsCollectionName)
   const doc = await collection.findOne({ _id: objectId })
-  if (!doc) {
+  if (!doc || doc.deletedAt) {
     throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'draft not found' })
   }
   if (doc.event != null) {

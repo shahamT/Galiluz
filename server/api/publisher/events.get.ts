@@ -1,5 +1,6 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
+import { NOT_DELETED } from '~/server/utils/eventsQuery'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
@@ -10,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const eventsCol = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
 
   const docs = await eventsCol
-    .find({ 'event.publisherId': session.publisherId })
+    .find({ 'event.publisherId': session.publisherId, ...NOT_DELETED })
     .project({
       _id: 1,
       isActive: 1,

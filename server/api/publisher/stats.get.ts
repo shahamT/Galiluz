@@ -11,8 +11,11 @@ export default defineEventHandler(async (event) => {
   const statsCol = db.collection((config as Record<string, string>).mongodbCollectionEventStats || 'eventStats')
   const eventsCol = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
 
-  // Get all stats for this publisher
-  const publisherQuery = session.type === 'manager' ? {} : { publisherId: session.publisherId }
+  // Get all stats for this publisher (excluding stats of soft-deleted events)
+  const publisherQuery = {
+    ...(session.type === 'manager' ? {} : { publisherId: session.publisherId }),
+    deletedAt: { $exists: false },
+  }
   const stats = await statsCol.find(publisherQuery, {
     sort: { views: -1 },
     limit: 100,
@@ -23,7 +26,7 @@ export default defineEventHandler(async (event) => {
   // Enrich with event titles
   const eventIds = stats.map((s) => { try { return new ObjectId(s.eventId) } catch { return null } }).filter(Boolean)
   const events = await eventsCol.find(
-    { _id: { $in: eventIds } },
+    { _id: { $in: eventIds }, deletedAt: { $exists: false } },
     { projection: { 'event.Title': 1, 'event.occurrences': 1 } },
   ).toArray()
 

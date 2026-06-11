@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const col = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
 
   const doc = await col.findOne({ _id: objectId })
-  if (!doc) throw createError({ statusCode: 404, message: 'event not found' })
+  if (!doc || doc.deletedAt) throw createError({ statusCode: 404, message: 'event not found' })
 
   if (session.type !== 'manager' && doc.event?.publisherId !== session.publisherId) {
     throw createError({ statusCode: 403, message: 'forbidden' })
