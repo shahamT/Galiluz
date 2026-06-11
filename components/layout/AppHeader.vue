@@ -1,6 +1,5 @@
 <template>
   <header class="AppHeader">
-    <UiInstallBanner />
     <div class="AppHeader-container">
       <NuxtLink to="/events" class="AppHeader-side AppHeader-side--logo">
         <ClientOnly>
