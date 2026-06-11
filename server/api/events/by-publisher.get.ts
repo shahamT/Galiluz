@@ -61,10 +61,8 @@ export default defineEventHandler(async (event) => {
     isActive: true,
     deletedAt: { $exists: false },
     event: { $ne: null },
-    $or: [
-      { 'event.occurrences.startTime': { $gte: todayStart } },
-      { 'event.occurrences.startTime': { $gte: todayStartISO } },
-    ],
+    // startTime is canonically an ISO string (migrated + write-enforced)
+    'event.occurrences.startTime': { $gte: todayStartISO },
   }
 
   try {
