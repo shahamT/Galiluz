@@ -1,5 +1,6 @@
 <template>
   <header class="AppHeader">
+    <UiInstallBanner />
     <div class="AppHeader-container">
       <NuxtLink to="/events" class="AppHeader-side AppHeader-side--logo">
         <ClientOnly>
@@ -56,7 +57,6 @@ const contactButtonAriaLabel = computed(() => `${CONTACT_WHATSAPP_CTA} בווא�
 .AppHeader {
   position: sticky;
   top: 0;
-  height: var(--header-height);
   background-color: var(--color-background);
   z-index: 1000;
   box-shadow: var(--shadow-header);
@@ -66,7 +66,7 @@ const contactButtonAriaLabel = computed(() => `${CONTACT_WHATSAPP_CTA} בווא�
     width: 100%;
     margin: 0 auto;
     padding-inline: var(--spacing-3xl);
-    height: 100%;
+    height: var(--header-height);
     display: grid;
     grid-template-columns: 1fr auto;
     grid-template-rows: 1fr;

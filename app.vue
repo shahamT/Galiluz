@@ -1,5 +1,6 @@
 <template>
   <div class="App">
+    <NuxtLoadingIndicator color="var(--brand-dark-green)" :height="3" />
     <NuxtPage />
     <EventModal v-if="isEventModalShowing && !isProtectedRoute" />
     <UiFilterNotifyBar

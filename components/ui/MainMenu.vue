@@ -112,8 +112,13 @@ const { canInstall, isIOS, isInstalled, showInstructions, triggerInstall } = use
 const showFeedback = ref(false)
 
 function onInstallClick() {
-  if (isIOS.value) { showInstructions.value = true; close() }
-  else { triggerInstall(); close() }
+  if (isIOS.value) {
+    showInstructions.value = true
+    close()
+  } else {
+    triggerInstall()
+    close()
+  }
 }
 
 watch(() => props.modelValue, (visible) => {
