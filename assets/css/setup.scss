@@ -8,9 +8,8 @@
 
 html {
   height: 100%;
-  direction: ltr;
-  overflow-x: hidden;
-  overflow-y: auto;
+  direction: rtl;
+  overflow: hidden;
 }
 
 /* Global scrollbar: green thumb and track for all scroll containers.
@@ -46,7 +45,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   direction: rtl;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 img,

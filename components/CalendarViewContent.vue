@@ -67,8 +67,7 @@ defineEmits(['prev', 'next'])
     min-width: 0;
     display: flex;
     flex-direction: column;
-    overflow-x: hidden;
-    overflow-y: visible;
+    overflow-x: clip;
     padding: 0;
   }
 

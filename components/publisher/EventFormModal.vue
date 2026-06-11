@@ -309,6 +309,8 @@
 import { EVENT_CATEGORIES } from '~/consts/events.const.js'
 import { CITIES } from '~/consts/regions.const.js'
 
+const FormRichTextEditor = defineAsyncComponent(() => import('~/components/form/RichTextEditor.vue'))
+
 defineOptions({ name: 'PublisherEventFormModal' })
 const props = defineProps({
   mode:        { type: String, default: 'add' },

@@ -1,7 +1,5 @@
 <template>
-  <div v-if="isLoading && !events?.length" class="ContentViewLoader">
-    <UiLoader size="md" />
-  </div>
+  <UiKanbanSkeleton v-if="isLoading && !events?.length" />
   <div v-else class="DailyView">
     <div class="DailyView-header">
       <ControlsCalendarViewHeader
@@ -232,7 +230,7 @@ watch(dateParam, (date) => {
 
   &-kanbanWrapper {
     @include mobile {
-      height: calc(100dvh - var(--header-height) - (2 * var(--spacing-md)) - var(--daily-view-header-height) - var(--spacing-md));
+      flex: 1;
       min-height: 0;
       display: flex;
       flex-direction: column;

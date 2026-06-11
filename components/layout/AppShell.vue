@@ -4,8 +4,10 @@
     <LayoutAppHeader @menu-click="isMainMenuOpen = true" />
     <UiMainMenu v-model="isMainMenuOpen" />
     <UiInstallInstructions v-if="showInstructions" @close="showInstructions = false" />
-    <div class="AppShell-content">
-      <slot />
+    <div class="AppShell-scroller">
+      <div class="AppShell-content">
+        <slot />
+      </div>
     </div>
   </div>
 </template>
@@ -21,7 +23,8 @@ const { showInstructions } = useInstallPrompt()
 @use '~/assets/css/breakpoints' as *;
 
 .AppShell {
-  min-height: 100vh;
+  height: 100vh; // fallback for browsers without dvh support
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background-color: var(--color-background);
@@ -31,15 +34,21 @@ const { showInstructions } = useInstallPrompt()
     var(--gradient-bg-end)
   );
 
-  &-content {
+  &-scroller {
     flex: 1;
     min-height: 0;
-    min-width: 0;
+    overflow-y: auto;
+    direction: ltr; // scrollbar at screen edge
+  }
+
+  &-content {
+    direction: rtl;
     max-width: var(--content-max-width);
     width: 100%;
     margin: 0 auto;
     padding: var(--spacing-xl);
     padding-inline: var(--spacing-3xl);
+    min-height: 100%;
     display: flex;
     flex-direction: column;
 
