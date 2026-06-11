@@ -25,7 +25,7 @@ const isEvents = computed(() => route.path.startsWith('/publisher/events'))
 .PublisherNavTabs {
   display: flex;
   position: sticky;
-  top: var(--header-height);
+  top: 0; // scroller starts below the header, so 0 = flush against it
   z-index: 100;
   background-color: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(8px);
