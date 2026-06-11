@@ -19,14 +19,11 @@ describe('buildEventsQuery', () => {
     expect(conditions).toContainEqual({ event: { $ne: null } })
   })
 
-  it('bounds the feed when until is provided (both storage formats)', () => {
+  it('bounds the feed when until is provided', () => {
     const until = new Date('2026-08-31T23:59:59.999Z')
     const conditions = andConditions(buildEventsQuery(CUTOFF, [], [], undefined, until))
     expect(conditions).toContainEqual({
-      $or: [
-        { 'event.occurrences.startTime': { $lte: until } },
-        { 'event.occurrences.startTime': { $lte: until.toISOString() } },
-      ],
+      'event.occurrences.startTime': { $lte: until.toISOString() },
     })
   })
 

@@ -35,12 +35,11 @@ export function buildEventsQuery(
   region?: string,
   until?: Date,
 ): Record<string, unknown> {
-  // startTime is canonically an ISO 8601 string (enforced by validatePublisherFormattedEvent).
-  // The Date-typed condition is kept defensively for legacy production documents —
-  // collapse to strings-only after running scripts/migrate-starttime.js on production.
+  // startTime is canonically an ISO 8601 string — enforced by
+  // validatePublisherFormattedEvent on writes and verified migrated on both
+  // dev and production DBs (one-time startup migration, 2026-06-12).
   const cutoffISO = cutoff.toISOString()
   const baseConditions: Record<string, unknown>[] = [
-    { 'event.occurrences.startTime': { $gt: cutoff } },
     { 'event.occurrences.startTime': { $gt: cutoffISO } },
   ]
 
@@ -52,12 +51,7 @@ export function buildEventsQuery(
   ]
 
   if (until) {
-    andConditions.push({
-      $or: [
-        { 'event.occurrences.startTime': { $lte: until } },
-        { 'event.occurrences.startTime': { $lte: until.toISOString() } },
-      ],
-    })
+    andConditions.push({ 'event.occurrences.startTime': { $lte: until.toISOString() } })
   }
 
   if (dateStrings.length > 0) {
@@ -65,16 +59,13 @@ export function buildEventsQuery(
       .map((ds) => getIsraelDayUtcRange(ds))
       .filter((r): r is { startUTC: Date; endUTC: Date } => r !== null)
     if (dateRanges.length > 0) {
-      const dateClauses = dateRanges.flatMap(({ startUTC, endUTC }) => [
-        { 'event.occurrences': { $elemMatch: { startTime: { $gte: startUTC, $lte: endUTC } } } },
-        {
-          'event.occurrences': {
-            $elemMatch: {
-              startTime: { $gte: startUTC.toISOString(), $lte: endUTC.toISOString() },
-            },
+      const dateClauses = dateRanges.map(({ startUTC, endUTC }) => ({
+        'event.occurrences': {
+          $elemMatch: {
+            startTime: { $gte: startUTC.toISOString(), $lte: endUTC.toISOString() },
           },
         },
-      ])
+      }))
       andConditions.push({ $or: dateClauses })
     }
   }
