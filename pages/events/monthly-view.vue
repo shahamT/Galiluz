@@ -36,11 +36,12 @@
             v-else
             :visible-months="visibleMonths"
             :current-date="currentDate"
-            :filtered-events="filteredEvents"
+            :events-by-month="eventsByMonth"
             :today-month="todayMonth"
             :slide-to-month-request="slideToMonthRequest"
             :categories="categories"
             @month-change="handleMonthChange"
+            @settled="handleSettled"
           />
         </template>
       </CalendarViewContent>
@@ -151,17 +152,29 @@ const isCurrentMonth = computed(() => {
   return date && date.year === now.getFullYear() && date.month === now.getMonth() + 1
 })
 const todayMonth = computed(() => getCurrentYearMonth())
+
+// The slide window is owned locally, decoupled from the store: the store updates on every
+// swipe commit (mid-animation) while the window only re-centers after the slide settles,
+// so slides never shift under an in-flight animation.
+const MONTH_CAROUSEL_RANGE = 2
+const windowCenter = ref(currentDate.value ?? getCurrentYearMonth())
 const visibleMonths = computed(() => {
-  const c = currentDate.value ?? getCurrentYearMonth()
+  const c = windowCenter.value ?? getCurrentYearMonth()
   if (!c?.year || !c?.month) return []
-  return [
-    getPrevMonth(c.year, c.month),
-    { year: c.year, month: c.month },
-    getNextMonth(c.year, c.month),
-  ]
+  const months = []
+  for (let off = -MONTH_CAROUSEL_RANGE; off <= MONTH_CAROUSEL_RANGE; off++) {
+    const d = new Date(c.year, c.month - 1 + off, 1)
+    months.push({ year: d.getFullYear(), month: d.getMonth() + 1 })
+  }
+  return months
 })
-const filteredEvents = computed(() => {
-  return getFilteredEventsForMonth(currentYear.value, currentMonth.value)
+// Each slide gets its own month's events so neighbor months render correctly during the swipe
+const eventsByMonth = computed(() => {
+  const map = {}
+  for (const m of visibleMonths.value) {
+    map[`${m.year}-${m.month}`] = getFilteredEventsForMonth(m.year, m.month)
+  }
+  return map
 })
 
 // methods
@@ -184,10 +197,29 @@ const handleNextMonth = () => {
   navigateMonth(getNextMonth(currentDate.value.year, currentDate.value.month))
 }
 
+// Swipe committed: sync the store immediately (header/URL update while the animation runs)
 const handleMonthChange = (payload) => {
   calendarStore.setCurrentDate(payload)
   slideToMonthRequest.value = null
 }
+
+// Slide settled: re-center the window only when the active month nears its edge
+const handleSettled = (activeMonth) => {
+  const months = visibleMonths.value
+  const idx = months.findIndex((m) => m.year === activeMonth.year && m.month === activeMonth.month)
+  if (idx < 0) return
+  if (idx < 2 || idx > months.length - 3) {
+    windowCenter.value = activeMonth
+  }
+}
+
+// External month change (picker far jump, deep link): rebuild the window around it.
+// In-window changes are handled by the carousel's currentDate watcher.
+watch(currentDate, (c) => {
+  if (!c?.year || !c?.month) return
+  const inWindow = visibleMonths.value.some((m) => m.year === c.year && m.month === c.month)
+  if (!inWindow) windowCenter.value = { year: c.year, month: c.month }
+}, { deep: true })
 
 const handleMonthYearSelect = ({ year, month }) => {
   calendarStore.setCurrentDate({ year, month })

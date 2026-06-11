@@ -1,16 +1,17 @@
 <template>
-  <section class="MonthCarousel">
+  <section class="MonthCarousel" :style="{ '--slide-count': visibleMonths.length }">
     <swiper
       ref="swiperRef"
       :slides-per-view="1"
       :space-between="0"
       :centered-slides="true"
-      :speed="600"
+      :speed="300"
+      :long-swipes-ms="150"
       :allow-touch-move="true"
       :resistance="true"
       :resistance-ratio="0"
       :dir="'rtl'"
-      :initial-slide="1"
+      :initial-slide="initialSlideIndex"
       :allow-slide-prev="canSlideToPast"
       :on="swiperEventHandlers"
       @swiper="onSwiperReady"
@@ -25,7 +26,7 @@
       >
         <MonthlyMonthCalendar
           :date="month"
-          :events="filteredEvents"
+          :events="eventsByMonth[`${month.year}-${month.month}`] || []"
           :categories="categories"
         />
       </swiper-slide>
@@ -48,9 +49,9 @@ const props = defineProps({
     type: Object,
     required: true,
   },
-  filteredEvents: {
-    type: Array,
-    default: () => [],
+  eventsByMonth: {
+    type: Object,
+    default: () => ({}),
   },
   todayMonth: {
     type: Object,
@@ -66,12 +67,18 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['month-change'])
+const emit = defineEmits(['month-change', 'settled'])
 
 const swiperRef = ref(null)
 const swiperInstance = ref(null)
-const activeIndexRef = ref(1)
 const isProgrammaticSlideRef = ref(false)
+
+const initialSlideIndex = computed(() => {
+  const index = props.visibleMonths.findIndex((m) => isSameMonth(m, props.currentDate))
+  return index >= 0 ? index : Math.floor(props.visibleMonths.length / 2)
+})
+
+const activeIndexRef = ref(initialSlideIndex.value)
 
 const firstValidIndex = computed(() => {
   return props.visibleMonths.findIndex((m) => !isMonthBefore(m, props.todayMonth))
@@ -83,6 +90,14 @@ const canSlideToPast = computed(() => {
 
 const swiperEventHandlers = {
   touchStart(swiper) {
+    // Grab mid-flight: freeze the wrapper at its current position so the new drag picks up from here
+    if (swiper.animating) {
+      swiper.setTranslate(swiper.getTranslate())
+      swiper.setTransition(0)
+      swiper.animating = false
+      swiper.updateActiveIndex()
+      swiper.updateSlidesClasses()
+    }
     const allow = firstValidIndex.value >= 0 && swiper.activeIndex > firstValidIndex.value
     swiper.allowSlidePrev = allow
     swiper.params.allowSlidePrev = allow
@@ -100,10 +115,12 @@ const onSwiperReady = (swiper) => {
 const handleSlideChange = (swiper) => {
   const activeIndex = swiper.activeIndex
   const activeMonth = props.visibleMonths[activeIndex]
+  const wasProgrammatic = isProgrammaticSlideRef.value
+  isProgrammaticSlideRef.value = false
 
   // Skip snap-back when slide was triggered by store update; only snap on user swipe
   if (
-    !isProgrammaticSlideRef.value &&
+    !wasProgrammatic &&
     activeMonth &&
     isMonthBefore(activeMonth, props.todayMonth) &&
     firstValidIndex.value >= 0
@@ -112,24 +129,25 @@ const handleSlideChange = (swiper) => {
     return
   }
 
+  activeIndexRef.value = activeIndex
+  // Emit immediately so header/store/URL update while the animation runs
+  if (activeMonth && !wasProgrammatic) {
+    emit('month-change', { year: activeMonth.year, month: activeMonth.month })
+  }
   const allow = firstValidIndex.value >= 0 && activeIndex > firstValidIndex.value
   swiper.allowSlidePrev = allow
   swiper.params.allowSlidePrev = allow
 }
 
+// Animation settled: let the parent decide whether to re-center the month window
 const handleSlideChangeTransitionEnd = (swiper) => {
   const activeIndex = swiper.activeIndex
   const activeMonth = props.visibleMonths[activeIndex]
-  const wasProgrammatic = isProgrammaticSlideRef.value
 
-  isProgrammaticSlideRef.value = false
   activeIndexRef.value = activeIndex
-
-  // Only emit on user swipe; store already has correct value for programmatic slides
-  if (activeMonth && !wasProgrammatic) {
-    emit('month-change', { year: activeMonth.year, month: activeMonth.month })
+  if (activeMonth) {
+    emit('settled', { year: activeMonth.year, month: activeMonth.month })
   }
-
   const allow = firstValidIndex.value >= 0 && activeIndex > firstValidIndex.value
   swiper.allowSlidePrev = allow
   swiper.params.allowSlidePrev = allow
@@ -157,6 +175,26 @@ watch(
     const index = props.visibleMonths.findIndex((m) => isSameMonth(m, requestedMonth))
     if (index >= 0 && index !== swiper.activeIndex) {
       swiper.slideTo(index)
+    }
+  }
+)
+
+// The month window was swapped (re-centered on settle, or rebuilt for a far jump):
+// restore the active month's position instantly, before the browser paints
+watch(
+  () => props.visibleMonths,
+  async (newMonths, oldMonths) => {
+    const swiper = swiperInstance.value
+    if (!swiper || !newMonths?.length) return
+    const activeMonth = oldMonths?.[swiper.activeIndex]
+    await nextTick()
+    const target = activeMonth && newMonths.some((m) => isSameMonth(m, activeMonth))
+      ? activeMonth
+      : props.currentDate
+    const newIndex = newMonths.findIndex((m) => isSameMonth(m, target))
+    if (newIndex >= 0 && newIndex !== swiper.activeIndex) {
+      isProgrammaticSlideRef.value = true
+      swiper.slideTo(newIndex, 0)
     }
   }
 )
@@ -188,13 +226,14 @@ watch(
     justify-content: stretch;
     min-width: 0;
     height: auto;
+    touch-action: pan-y; // vertical scroll stays native; Swiper owns horizontal
   }
 }
 
 // Constrain wrapper and slides so one month fills the container and layout does not break
 .MonthCarousel-swiper {
   .swiper-wrapper {
-    width: calc(3 * 100%) !important;
+    width: calc(var(--slide-count) * 100%) !important;
     align-items: flex-start;
     padding-bottom: var(--spacing-lg);
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
@@ -202,7 +241,7 @@ watch(
 
   .swiper-slide {
     height: auto;
-    width: calc(100% / 3) !important;
+    width: calc(100% / var(--slide-count)) !important;
     box-sizing: border-box;
     flex-shrink: 0;
 
