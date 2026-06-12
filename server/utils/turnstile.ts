@@ -12,6 +12,16 @@ let warnedUnconfigured = false
  * 403, and a siteverify outage is 503 rather than letting traffic through.
  */
 export async function verifyTurnstileToken(event: H3Event, token: unknown): Promise<void> {
+  // Dev is silently exempt — must mirror the client (useTurnstile renders no
+  // widget in dev, so no token exists to verify).
+  if (process.env.NODE_ENV !== 'production') {
+    if (!warnedUnconfigured) {
+      console.warn('[Turnstile] dev mode — captcha verification skipped')
+      warnedUnconfigured = true
+    }
+    return
+  }
+
   const config = useRuntimeConfig()
   const secret = (config as Record<string, string>).turnstileSecretKey || ''
 

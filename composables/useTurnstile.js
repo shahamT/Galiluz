@@ -26,7 +26,9 @@ function loadScript() {
 export function useTurnstile() {
   const config = useRuntimeConfig()
   const siteKey = config.public.turnstileSiteKey || ''
-  const enabled = !!siteKey && import.meta.client
+  // Dev is silently exempt (server skips verification there too) — the widget
+  // only runs in production builds with a configured site key.
+  const enabled = !!siteKey && import.meta.client && !import.meta.dev
 
   /**
    * Render the widget into el. Returns the widgetId (or null when disabled/failed).
