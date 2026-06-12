@@ -7,13 +7,17 @@
         <div class="OccurrenceRow-group1">
           <div class="OccurrenceRow-dateWrap">
             <FormField label="תאריך" required :error="errors.date">
-              <input
+              <VueDatePicker
                 v-model="local.date"
-                type="date"
-                class="FormInput OccurrenceRow-dateInput"
-                :min="minDate"
+                model-type="yyyy-MM-dd"
+                :enable-time-picker="false"
+                :rtl="true"
+                :auto-apply="true"
+                :min-date="minDate"
                 :disabled="frozen"
-                @change="emit('update:modelValue', local)"
+                teleport="body"
+                class="OccurrenceRow-datePicker"
+                @update:model-value="emit('update:modelValue', local)"
               />
             </FormField>
           </div>
@@ -28,15 +32,15 @@
         <div v-if="!allDay" class="OccurrenceRow-group2">
           <div class="OccurrenceRow-timeWrap OccurrenceRow-timeWrap--start">
             <FormField label="התחלה" required :error="errors.startTime">
-              <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': frozen }">
-                <select :value="startH" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onStartHChange">
-                  <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
-                </select>
-                <span class="OccurrenceRow-timeSep">:</span>
-                <select :value="startM" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onStartMChange">
-                  <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
-                </select>
-              </div>
+              <VueDatePicker
+                v-model="startTimeModel"
+                time-picker
+                :rtl="true"
+                :auto-apply="true"
+                :disabled="frozen"
+                teleport="body"
+                class="OccurrenceRow-timePicker"
+              />
             </FormField>
           </div>
           <div class="OccurrenceRow-timeWrap">
@@ -46,15 +50,17 @@
                 <input v-model="hasEndTime" type="checkbox" class="OccurrenceRow-toggleInput" :disabled="frozen" @change="onHasEndTimeChange" />
                 <span class="OccurrenceRow-toggleTrack" />
               </label>
-              <div v-if="hasEndTime" class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': frozen }">
-                <select :value="endH" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onEndHChange">
-                  <option v-for="h in endHoursFiltered" :key="h" :value="h">{{ h }}</option>
-                </select>
-                <span class="OccurrenceRow-timeSep">:</span>
-                <select :value="endM" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onEndMChange">
-                  <option v-for="m in endMinutesFiltered" :key="m" :value="m">{{ m }}</option>
-                </select>
-              </div>
+              <VueDatePicker
+                v-if="hasEndTime"
+                v-model="endTimeModel"
+                time-picker
+                :rtl="true"
+                :auto-apply="true"
+                :disabled="frozen"
+                :min-time="endTimeMin"
+                teleport="body"
+                class="OccurrenceRow-timePicker"
+              />
             </div>
           </div>
         </div>
@@ -107,6 +113,8 @@
 </template>
 
 <script setup>
+import VueDatePicker from '@vuepic/vue-datepicker'
+
 defineOptions({ name: 'OccurrenceRow' })
 
 const props = defineProps({
@@ -120,7 +128,6 @@ const emit = defineEmits(['update:modelValue', 'remove', 'duplicate'])
 
 const local = reactive({ ...props.modelValue })
 watch(() => props.modelValue, (val) => {
-  // Re-clone the full object to ensure all fields sync correctly
   Object.assign(local, { ...val })
 }, { deep: true })
 
@@ -128,73 +135,45 @@ const minDate = computed(() => props.frozen ? undefined : new Date().toISOString
 const allDay = ref(!local.hasTime)
 const hasEndTime = ref(!!local.endTime)
 
-const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
-const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
-
-function parseTime(t) {
-  if (!t) return { h: '08', m: '00' }
-  const [h = '08', m = '00'] = String(t).split(':')
-  return { h: h.padStart(2, '0'), m: m.padStart(2, '0') }
+function hhmm(h, m) {
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-const startH = computed(() => parseTime(local.startTime).h)
-const startM = computed(() => parseTime(local.startTime).m)
-const endH = computed(() => parseTime(local.endTime).h)
-const endM = computed(() => parseTime(local.endTime).m)
-
-// End time options filtered to be after start time
-const endHoursFiltered = computed(() => {
-  const sh = parseInt(startH.value, 10)
-  return hours.filter(h => parseInt(h, 10) >= sh)
+const startTimeModel = computed({
+  get: () => {
+    if (!local.startTime) return null
+    const [h, m] = local.startTime.split(':').map(Number)
+    return { hours: h, minutes: m }
+  },
+  set: (val) => {
+    if (!val) return
+    local.startTime = hhmm(val.hours, val.minutes)
+    if (hasEndTime.value && local.endTime && local.endTime <= local.startTime) {
+      const adj = val.hours * 60 + val.minutes + 60
+      local.endTime = adj > 23 * 60 + 59 ? '23:59' : hhmm(Math.floor(adj / 60), adj % 60)
+    }
+    emit('update:modelValue', local)
+  },
 })
 
-const endMinutesFiltered = computed(() => {
-  const sh = parseInt(startH.value, 10)
-  const sm = parseInt(startM.value, 10)
-  const eh = parseInt(endH.value, 10)
-  if (eh === sh) return minutes.filter(m => parseInt(m, 10) > sm)
-  return minutes
+const endTimeModel = computed({
+  get: () => {
+    if (!local.endTime) return null
+    const [h, m] = local.endTime.split(':').map(Number)
+    return { hours: h, minutes: m }
+  },
+  set: (val) => {
+    if (!val) return
+    local.endTime = hhmm(val.hours, val.minutes)
+    emit('update:modelValue', local)
+  },
 })
 
-function toMins(h, m) { return parseInt(h, 10) * 60 + parseInt(m, 10) }
-
-function autoAdjustEnd(newStartH, newStartM) {
-  if (!hasEndTime.value || !local.endTime) return
-  const startMins = toMins(newStartH, newStartM)
-  const endMins = toMins(endH.value, endM.value)
-  if (endMins <= startMins) {
-    const adjusted = startMins + 60
-    local.endTime = adjusted > 23 * 60 + 59
-      ? '23:59'
-      : `${String(Math.floor(adjusted / 60)).padStart(2, '0')}:${String(adjusted % 60).padStart(2, '0')}`
-  }
-}
-
-function setStart(h, m) {
-  local.startTime = `${h}:${m}`
-  autoAdjustEnd(h, m)
-  emit('update:modelValue', local)
-}
-
-function setEnd(h, m) { local.endTime = `${h}:${m}`; emit('update:modelValue', local) }
-
-function onStartHChange(e) { setStart(e.target.value, startM.value) }
-function onStartMChange(e) { setStart(startH.value, e.target.value) }
-
-function onEndHChange(e) {
-  const newH = e.target.value
-  const sh = parseInt(startH.value, 10)
-  const sm = parseInt(startM.value, 10)
-  const nh = parseInt(newH, 10)
-  const em = parseInt(endM.value, 10)
-  // If same hour as start, ensure minute is after start minute
-  const safeM = (nh === sh && em <= sm)
-    ? (minutes.find(m => parseInt(m, 10) > sm) || '59')
-    : endM.value
-  setEnd(newH, safeM)
-}
-
-function onEndMChange(e) { setEnd(endH.value, e.target.value) }
+const endTimeMin = computed(() => {
+  if (!local.startTime) return undefined
+  const [h, m] = local.startTime.split(':').map(Number)
+  return { hours: h, minutes: m }
+})
 
 function onAllDayChange() {
   local.hasTime = !allDay.value
@@ -204,11 +183,9 @@ function onAllDayChange() {
 function onHasEndTimeChange() {
   if (hasEndTime.value) {
     if (!local.endTime) {
-      const startMins = toMins(startH.value, startM.value)
-      const adjusted = startMins + 60
-      local.endTime = adjusted > 23 * 60 + 59
-        ? '23:59'
-        : `${String(Math.floor(adjusted / 60)).padStart(2, '0')}:${String(adjusted % 60).padStart(2, '0')}`
+      const [sh, sm] = (local.startTime || '00:00').split(':').map(Number)
+      const adj = sh * 60 + sm + 60
+      local.endTime = adj > 23 * 60 + 59 ? '23:59' : hhmm(Math.floor(adj / 60), adj % 60)
     }
   } else {
     local.endTime = ''
@@ -314,56 +291,35 @@ function confirmRemove() {
     @include mobile { flex: 0 0 auto; }
   }
 
-  &-dateInput {
-    font-size: var(--font-size-sm);
-    padding: var(--spacing-xs) var(--spacing-sm);
+  // VueDatePicker triggers — shared base styles
+  &-datePicker,
+  &-timePicker {
+    direction: ltr;
+
+    .dp__input_wrap .dp__input {
+      font-family: var(--font-family-body);
+      font-size: var(--font-size-sm);
+      border: 1.5px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-xs) var(--spacing-sm);
+      background: var(--color-background);
+      color: var(--color-text);
+      height: auto;
+      min-height: 0;
+      cursor: pointer;
+
+      &:hover { border-color: var(--brand-dark-green); }
+    }
+
+    .dp__input_icon { color: var(--color-text-muted); }
+  }
+
+  &-datePicker {
+    width: 9rem;
   }
 
   &-timePicker {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    direction: ltr;
-    border: 1.5px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-background);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    transition: border-color 0.15s;
-
-    &:focus-within {
-      border-color: var(--brand-dark-green);
-    }
-
-    &--disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-  }
-
-  &-timeSelect {
-    border: none;
-    outline: none;
-    background: transparent;
-    font-size: var(--font-size-sm);
-    font-family: var(--font-family-body);
-    color: var(--color-text);
-    cursor: pointer;
-    padding: 0;
-    width: 1.6rem;
-    text-align: center;
-    appearance: none;
-    -webkit-appearance: none;
-
-    &:disabled {
-      cursor: not-allowed;
-    }
-  }
-
-  &-timeSep {
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-text-muted);
-    line-height: 1;
+    width: 7.5rem;
   }
 
   &-allDayWrap {
