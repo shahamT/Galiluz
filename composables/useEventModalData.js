@@ -1,4 +1,4 @@
-import { formatEventTime, formatEventPrice } from '~/utils/events.helpers'
+import { formatEventTime, formatEventPrice, resolveCityName } from '~/utils/events.helpers'
 import { getDateInIsraelFromIso } from '~/utils/israelDate'
 import { formatEventDateAndDay } from '~/utils/date.helpers'
 import { isVideoUrl, getCloudinaryVideoThumbnailUrl } from '~/utils/media.helpers'
@@ -15,7 +15,8 @@ function buildAddressParts(loc) {
   if (loc.locationName) parts.push(loc.locationName)
   if (loc.addressLine1) parts.push(loc.addressLine1)
   if (loc.addressLine2) parts.push(loc.addressLine2)
-  if (loc.city) parts.push(loc.city)
+  const city = resolveCityName(loc.city)
+  if (city) parts.push(city)
   return parts
 }
 

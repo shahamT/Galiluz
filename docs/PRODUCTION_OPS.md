@@ -30,9 +30,11 @@
 ## Ship-time checklist (every production deploy)
 
 1. CI must be green before merging (`.github/workflows/ci.yml`: unit tests + build).
-2. After the deploy, verify the startup logs show `[Indexes] All indexes ensured` and `[Schema] Validators applied to events + publishers`, and that there is **no** `[Startup] FATAL: …` line (missing required env vars — [startup-checks.ts](../server/plugins/startup-checks.ts)).
+2. After the deploy, verify the startup logs show `[Indexes] All indexes ensured` and `[Schema] Validators applied to events + publishers + accounts`, and that there is **no** `[Startup] FATAL: …` line (missing required env vars — [startup-checks.ts](../server/plugins/startup-checks.ts)).
 3. TTL retention deletes old `eventInteractions`/`authLogs`/`raw_messages` continuously (windows in the Backups section) — no per-deploy action, but `mongodump` first if you are about to point the app at a database whose history matters.
 
-**Data-consistency sweeps (ad-hoc, not part of a deploy):** [scripts/cleanup-orphan-stats.js](../scripts/cleanup-orphan-stats.js) re-stamps `deletedAt` on any stats docs missed by a soft delete; [scripts/migrate-starttime.js](../scripts/migrate-starttime.js) normalizes any non-ISO `startTime` values. Both read `.env` and are meant to be run locally.
+**Data-consistency sweeps (ad-hoc, not part of a deploy):** [scripts/cleanup-orphan-stats.js](../scripts/cleanup-orphan-stats.js) re-stamps `deletedAt` on any stats docs missed by a soft delete; [scripts/migrate-starttime.js](../scripts/migrate-starttime.js) normalizes any non-ISO `startTime` values. Both read `.env` and are meant to be run locally. ([scripts/backfill-accounts.js](../scripts/backfill-accounts.js) is the equivalent local runner for the accounts backfill.)
+
+**Pending cleanup (accounts migration):** the one-time startup plugin [server/plugins/backfill-accounts-once.ts](../server/plugins/backfill-accounts-once.ts) backfills an account per existing publisher on boot (idempotent). After the deploy logs `[BackfillAccounts] backfilled accounts for N/N publisher(s)` (or `…nothing to do` on later boots), **delete the plugin** and redeploy — same as the 2026-06-12 startup migration below.
 
 **Done (history, do not redo):** the one-time startup migration ran on production on 2026-06-12 — 562 orphaned stats rows stamped, `startTime` verified 100% ISO across all 65 events — and the plugin was deleted afterwards. `startTime` is now treated as canonically ISO everywhere; the dual-format query conditions in [eventsQuery.ts](../server/utils/eventsQuery.ts) have been collapsed.

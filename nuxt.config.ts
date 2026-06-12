@@ -69,6 +69,7 @@ export default defineNuxtConfig({
     mongodbCollectionEventInteractions: process.env.MONGODB_COLLECTION_EVENT_INTERACTIONS || 'eventInteractions',
     mongodbCollectionEventStats: process.env.MONGODB_COLLECTION_EVENT_STATS || 'eventStats',
     mongodbCollectionEventOccurrenceStats: process.env.MONGODB_COLLECTION_EVENT_OCCURRENCE_STATS || 'eventOccurrenceStats',
+    mongodbCollectionAccounts: process.env.MONGODB_COLLECTION_ACCOUNTS || 'accounts',
     cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
     cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
     cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',

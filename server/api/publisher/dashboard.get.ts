@@ -1,5 +1,6 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
+import { getAccountPublisherIds } from '~/server/utils/accountScope'
 import { getTodayIsrael } from '~/server/utils/eventFirstOccurrence'
 
 const PUBLISHER_LOG_ACTIONS = ['event_created', 'event_activated', 'event_deactivated', 'event_edited', 'event_deleted']
@@ -26,9 +27,12 @@ export default defineEventHandler(async (event) => {
   const interactionsCol = db.collection(config.mongodbCollectionEventInteractions || 'eventInteractions')
   const logsCol = db.collection(config.mongodbCollectionEventLogs || 'eventLogs')
 
+  // Account-scoped: resolve the caller's account → its publisherIds (1:1 today).
+  const accountPublisherIds = await getAccountPublisherIds(session)
+
   // Stats filters always exclude soft-deleted events' data (stamped with deletedAt on delete)
   const pubFilter = {
-    ...(session.type === 'manager' ? {} : { publisherId: session.publisherId }),
+    ...(session.type === 'manager' ? {} : { publisherId: { $in: accountPublisherIds } }),
     deletedAt: { $exists: false },
   }
   const today = getTodayIsrael()
@@ -37,7 +41,7 @@ export default defineEventHandler(async (event) => {
 
   // ── 1. Event counts (always all-time, no filter) ──────────────────────────
   const allEvents = await eventsCol.find(
-    { 'event.publisherId': session.publisherId, deletedAt: { $exists: false }, event: { $ne: null } },
+    { 'event.publisherId': { $in: accountPublisherIds }, deletedAt: { $exists: false }, event: { $ne: null } },
     { projection: { 'event.occurrences': 1, 'event.Title': 1, 'event.multiDayEvent': 1, isActive: 1, _id: 1 } },
   ).toArray()
 
@@ -193,7 +197,7 @@ export default defineEventHandler(async (event) => {
 
   // ── 6. Recent logs ────────────────────────────────────────────────────────
   const rawLogs = await logsCol.find(
-    { publisherId: session.publisherId, action: { $in: PUBLISHER_LOG_ACTIONS } },
+    { publisherId: { $in: accountPublisherIds }, action: { $in: PUBLISHER_LOG_ACTIONS } },
     { sort: { createdAt: -1 }, limit: 6, projection: { action: 1, title: 1, rawTitle: 1, createdAt: 1 } },
   ).toArray()
 

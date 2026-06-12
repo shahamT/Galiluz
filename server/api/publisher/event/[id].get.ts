@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
+import { getAccountPublisherIds } from '~/server/utils/accountScope'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
@@ -23,7 +24,9 @@ export default defineEventHandler(async (event) => {
   const doc = await eventsCol.findOne({ _id: objectId })
   if (!doc || doc.deletedAt) throw createError({ statusCode: 404, message: 'event not found' })
 
-  if (session.type !== 'manager' && doc.event?.publisherId !== session.publisherId) {
+  // Account-scoped ownership: any publisher in the caller's account owns the event (1:1 today).
+  const ownsEvent = (await getAccountPublisherIds(session)).includes(doc.event?.publisherId)
+  if (session.type !== 'manager' && !ownsEvent) {
     throw createError({ statusCode: 403, message: 'forbidden' })
   }
 
@@ -52,6 +55,8 @@ export default defineEventHandler(async (event) => {
     categories:       doc.event?.categories || [],
     location: {
       city:          doc.event?.location?.city || '',
+      cityType:      doc.event?.location?.cityType || undefined,
+      region:        doc.event?.location?.region || '',
       locationName:  doc.event?.location?.locationName || '',
       addressLine1:  doc.event?.location?.addressLine1 || '',
       locationNotes: doc.event?.location?.locationDetails || doc.event?.location?.locationNotes || '',

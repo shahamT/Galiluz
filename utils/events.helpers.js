@@ -4,6 +4,7 @@
  */
 
 import { getTimeInIsraelFromIso } from '~/utils/israelDate'
+import { CITIES } from '~/consts/regions.const.js'
 
 const ALL_DAY_TEXT = 'כל היום'
 const FREE_TEXT = 'חינם'
@@ -54,6 +55,19 @@ export function formatEventPrice(event) {
 }
 
 /**
+ * Resolve a stored city value to its display title.
+ * Listed cities are stored as an English ID (e.g. "Gadot") → return the Hebrew title.
+ * Already-resolved titles and custom city names are returned as-is, so this is
+ * idempotent across both raw (publisher) and transformed (public feed) event data.
+ * @param {string} city
+ * @returns {string}
+ */
+export function resolveCityName(city) {
+  if (!city) return ''
+  return CITIES[city]?.title || city
+}
+
+/**
  * Format event location for display
  * @param {Object} event - Event object with location property
  * @returns {string} Formatted location string (venue, address, city) or empty string
@@ -65,7 +79,8 @@ export function formatEventLocation(event) {
   if (event.location.locationName) parts.push(event.location.locationName)
   if (event.location.addressLine1) parts.push(event.location.addressLine1)
   if (event.location.addressLine2) parts.push(event.location.addressLine2)
-  if (event.location.city) parts.push(event.location.city)
+  const city = resolveCityName(event.location.city)
+  if (city) parts.push(city)
 
   return parts.join(', ')
 }
@@ -78,7 +93,7 @@ export function formatEventLocation(event) {
 export function formatEventLocationForChip(event) {
   const loc = event?.location
   const name = (loc?.locationName || loc?.addressLine1)?.trim()
-  const city = loc?.city?.trim()
+  const city = resolveCityName(loc?.city)?.trim()
   if (name && city) return `${name} - ${city}`
   if (city) return city
   if (name) return name

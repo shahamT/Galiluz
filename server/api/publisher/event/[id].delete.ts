@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
+import { getAccountPublisherIds } from '~/server/utils/accountScope'
 import { logEventDeletion } from '~/server/utils/eventLogs.service'
 import { softDeleteEventStatsData } from '~/server/utils/eventStats.service'
 import { deleteEventCloudinaryMedia } from '~/server/utils/eventMedia.service'
@@ -23,7 +24,8 @@ export default defineEventHandler(async (event) => {
   const doc = await eventsCol.findOne({ _id: objectId })
   if (!doc) throw createError({ statusCode: 404, message: 'event not found' })
 
-  if (session.type !== 'manager' && doc.event?.publisherId !== session.publisherId) {
+  const ownsEvent = (await getAccountPublisherIds(session)).includes(doc.event?.publisherId)
+  if (session.type !== 'manager' && !ownsEvent) {
     throw createError({ statusCode: 403, message: 'forbidden' })
   }
 
@@ -42,7 +44,7 @@ export default defineEventHandler(async (event) => {
     publisherId: session.publisherId,
     waId:        typeof (rawEv?.publisher as any)?.waId === 'string' ? (rawEv!.publisher as any).waId : undefined,
     correlationId,
-    isManagerAction: session.type === 'manager' && doc.event?.publisherId !== session.publisherId,
+    isManagerAction: session.type === 'manager' && !ownsEvent,
   })
 
   // Soft delete: the event doc first (interact guard checks it), then stamp its stats

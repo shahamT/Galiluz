@@ -2,14 +2,23 @@ import { randomBytes } from 'node:crypto'
 import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
+import { getAccountPublisherIds } from '~/server/utils/accountScope'
 import { normalizePublisherFormattedEvent, validatePublisherFormattedEvent } from '~/server/utils/eventValidation'
 import { sanitizeEventFields } from '~/server/utils/sanitizeEventFields'
 import { logEventEdit } from '~/server/utils/eventLogs.service'
 import { EVENT_CATEGORIES } from '~/consts/events.const.js'
+import { CITIES } from '~/consts/regions.const.js'
 import { convertOccurrenceTimes } from '~/server/utils/convertOccurrenceTimes'
 
 const VALID_CATEGORY_IDS = Object.keys(EVENT_CATEGORIES)
 const TRACKABLE_FIELDS = ['Title', 'shortDescription', 'fullDescription', 'categories', 'mainCategory', 'occurrences', 'location', 'price', 'urls', 'media', 'multiDayEvent']
+
+/** Resolve cityType, trusting the incoming value, then the existing one, then deriving from CITIES. */
+function resolveCityType(loc: Record<string, unknown>, existingLoc: Record<string, unknown>): 'listed' | 'custom' {
+  if (loc.cityType === 'listed' || loc.cityType === 'custom') return loc.cityType
+  if (existingLoc.cityType === 'listed' || existingLoc.cityType === 'custom') return existingLoc.cityType
+  return CITIES[String(loc.city ?? existingLoc.city ?? '') as keyof typeof CITIES] ? 'listed' : 'custom'
+}
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
@@ -28,8 +37,9 @@ export default defineEventHandler(async (event) => {
   const doc = await col.findOne({ _id: objectId })
   if (!doc || doc.deletedAt) throw createError({ statusCode: 404, message: 'event not found' })
 
-  // Ownership check
-  if (session.type !== 'manager' && doc.event?.publisherId !== session.publisherId) {
+  // Ownership check (account-scoped: any publisher in the caller's account, 1:1 today)
+  const ownsEvent = (await getAccountPublisherIds(session)).includes(doc.event?.publisherId)
+  if (session.type !== 'manager' && !ownsEvent) {
     throw createError({ statusCode: 403, message: 'forbidden' })
   }
 
@@ -67,8 +77,18 @@ export default defineEventHandler(async (event) => {
 
   if (loc) {
     const existingLoc = (existing.location as Record<string, unknown>) || {}
+    const cityType = resolveCityType(loc, existingLoc)
+    // region only for custom cities (listed derives it from CITIES on read); keep it
+    // tied to cityType so switching listed<->custom on edit doesn't leave a stale region.
+    const region = cityType === 'custom'
+      ? (typeof loc.region === 'string' && loc.region.trim()
+          ? loc.region.trim()
+          : (typeof existingLoc.region === 'string' && existingLoc.region.trim() ? existingLoc.region.trim() : undefined))
+      : undefined
     updates.location = {
       city:            String(loc.city ?? existingLoc.city ?? ''),
+      cityType,
+      region,
       locationName:    String(loc.locationName ?? existingLoc.locationName ?? ''),
       addressLine1:    String(loc.addressLine1 ?? existingLoc.addressLine1 ?? ''),
       locationDetails: String(loc.locationNotes ?? existingLoc.locationDetails ?? ''),
@@ -104,7 +124,7 @@ export default defineEventHandler(async (event) => {
       publisherId: session.publisherId,
       waId: session.waId,
       correlationId,
-      isManagerAction: session.type === 'manager' && doc.event?.publisherId !== session.publisherId,
+      isManagerAction: session.type === 'manager' && !ownsEvent,
     })
   }
 

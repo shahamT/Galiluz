@@ -585,10 +585,14 @@ function initFromData(data) {
   form.links = (data.urls || []).filter(Boolean).map(u => ({ _key: nextKey(), type: u.type || 'link', label: u.Title || '', url: u.Url || '' }))
   existingMedia.value = data.media || []
   const cityKey = data.location?.city || ''
-  if (cityKey && CITIES[cityKey]) {
+  const cityType = data.location?.cityType
+  if (cityType === 'custom') {
+    form.city = { cityId: '', customCity: cityKey, region: data.location?.region || '' }
+  } else if (cityKey && CITIES[cityKey]) {
+    // Listed city (explicit cityType === 'listed', or legacy doc with a known city ID)
     form.city = { cityId: cityKey, customCity: undefined, region: CITIES[cityKey].region }
   } else if (cityKey) {
-    // Custom city — restore the region from the stored event data
+    // Legacy custom city without cityType — restore the region from the stored event data
     form.city = { cityId: '', customCity: cityKey, region: data.location?.region || '' }
   }
 }
@@ -782,6 +786,10 @@ function buildEventPayload(f, allMedia) {
     categories:       f.categories,
     location: {
       city:          f.city.cityId || f.city.customCity || '',
+      // Mirror the wa-bot contract: cityType is always set; region only for custom
+      // cities (listed cities derive their region from CITIES on read).
+      cityType:      f.city.cityId ? 'listed' : 'custom',
+      region:        f.city.cityId ? undefined : (f.city.region || undefined),
       locationName:  f.locationName,
       addressLine1:  f.addressLine1,
       locationNotes: f.locationNotes,

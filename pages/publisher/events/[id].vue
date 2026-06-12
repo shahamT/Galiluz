@@ -32,12 +32,10 @@
       </template>
 
       <template v-else-if="event">
-        <!-- Actions section -->
-        <h2 class="EventPage-sectionTitle">
-          <UiIcon name="tune" size="sm" />
-          פעולות
-        </h2>
-        <div class="EventPage-actionsCard">
+        <PublisherEventViewSwitch v-model="activeView" />
+
+        <!-- Actions view -->
+        <div v-if="activeView === 'actions'" class="EventPage-actionsCard">
 
           <!-- Draft state -->
           <template v-if="!event.isActive">
@@ -84,11 +82,8 @@
 
         </div>
 
-        <!-- Preview section -->
-        <h2 class="EventPage-sectionTitle">
-          <UiIcon name="event" size="sm" />
-          תצוגת האירוע
-        </h2>
+        <!-- Preview view -->
+        <template v-else-if="activeView === 'preview'">
         <div class="EventPage-linkBox">
           <span class="EventPage-linkBoxTitle">לינק לאירוע</span>
           <template v-if="!event.isActive">
@@ -118,12 +113,10 @@
           </template>
         </div>
         <PublisherEventPreview :event="event" />
+        </template>
 
-        <!-- Statistics section -->
-        <h2 class="EventPage-sectionTitle">
-          <UiIcon name="bar_chart" size="sm" />
-          סטטיסטיקות
-        </h2>
+        <!-- Statistics view -->
+        <template v-else>
 
         <template v-if="event.multiDayEvent">
           <div class="EventPage-statCard">
@@ -244,6 +237,7 @@
             </div>
           </div>
         </template>
+        </template>
       </template>
     </div>
 
@@ -290,6 +284,9 @@ const router = useRouter()
 const showDeleteModal = ref(false)
 const showEditForm = ref(false)
 const showStatusModal = ref(false)
+
+// Event page view switch: 'actions' | 'preview' | 'stats'
+const activeView = ref('actions')
 
 const successBanner = ref('')
 const showCreatedModal = ref(false)

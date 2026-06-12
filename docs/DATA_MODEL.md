@@ -20,6 +20,7 @@ For the routes that read/write these collections, see [API.md](./API.md).
 |---|---|---|---|---|
 | events | `events` | Core event documents (drafts + published; soft-deleted kept) | Forever | One doc per submitted event |
 | publishers | `publishers` | Publisher accounts + OTP/session auth state | Forever | Small (one doc per publisher) |
+| accounts | `accounts` | Business account grouping publishers (one account → many publishers) | Forever (soft-deleted kept) | Small (one doc per account; 1:1 with publishers today) |
 | eventStats | `eventStats` | Event-level engagement counters | Forever (stamped `deletedAt` on delete) | One doc per event with interactions |
 | eventOccurrenceStats | `eventOccurrenceStats` | Per-(event, date) view/calendar counters | Forever (stamped) | One doc per event-occurrence-date with interactions |
 | eventInteractions | `eventInteractions` | Raw interaction log (source for unique counting) | **TTL 90 days** | One doc per interaction — high volume |
@@ -114,6 +115,7 @@ Account, approval state, and all auth state in one doc.
 {
   _id: ObjectId,
   waId: String,                     // UNIQUE. Normalized Israeli phone: 972XXXXXXXXX
+  accountId: String,                // accounts._id.toString(); auto-created at approval, absent on legacy docs until backfilled
   status: 'pending' | 'approved' | 'ghost',   // only 'approved' can log in / receive OTP
   type: 'publisher' | 'manager',    // manager = cross-publisher portal rights
 
@@ -143,6 +145,24 @@ Account, approval state, and all auth state in one doc.
 ```
 
 `status: 'ghost'` means a placeholder record (publisher posts via a manager / was rejected after `createdOnBehalf` creation). [check.get.ts](../server/api/publishers/check.get.ts) reports ghosts as `not_found` to the wa-bot.
+
+## accounts
+
+Groups publishers under a business account: **one account → many publishers; each publisher → exactly one account** (`publishers.accountId`). Structural groundwork for a future multi-worker-per-business shift — **today the mapping is 1:1** (one account auto-created per publisher), so it does not change behavior.
+
+```js
+{
+  _id: ObjectId,
+  title: String,        // display name; seeded from publisher.publishingAs at creation
+  isActive: Boolean,    // default true; false = disabled
+  createdAt: Date,
+  deletedAt: Date,      // PRESENT only when soft-deleted (absent on live accounts, like events)
+}
+```
+
+- **Created** automatically when a publisher is approved ([approve.post.ts](../server/api/publishers/approve.post.ts) → `ensureAccountForPublisher` in [accountScope.ts](../server/utils/accountScope.ts)); existing publishers are backfilled by [scripts/backfill-accounts.js](../scripts/backfill-accounts.js).
+- **Released** (soft-deleted) when its last publisher is hard-deleted on reject ([reject.post.ts](../server/api/publishers/reject.post.ts)).
+- **Scoping is resolved at query time** — the portal dashboard, events list, stats, and event-ownership checks scope by the account's publisher set: `event.publisherId ∈ getAccountPublisherIds(session)` (resolves `account → its publisherIds`, falling back to the caller's own id when no account yet). `accountId` is **not** denormalized onto events/stats; the existing `publisherId` fields remain the source of truth for "who did it".
 
 ## eventStats
 
