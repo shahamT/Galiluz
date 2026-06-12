@@ -29,7 +29,7 @@
           <a :href="PUBLISH_EVENT_WHATSAPP_LINK" target="_blank" rel="noopener noreferrer" class="LoginCard-errorLink">לחצו כאן להרשמה דרך הבוט</a>
         </p>
 
-        <button class="LoginCard-btn" :disabled="loading || !phone.trim()" @click="handleSendOtp">
+        <button class="LoginCard-btn" :disabled="loading || !phone.trim() || waitingForCaptcha" @click="handleSendOtp">
           <span v-if="loading" class="LoginCard-spinner" />
           <template v-else>שלח קוד אימות</template>
         </button>
@@ -71,7 +71,7 @@
         <div class="LoginCard-actions">
           <button
             class="LoginCard-linkBtn"
-            :disabled="resendCountdown > 0"
+            :disabled="resendCountdown > 0 || waitingForCaptcha"
             @click="handleResend"
           >
             <template v-if="resendCountdown > 0">שלח שוב ({{ resendCountdown }}s)</template>
@@ -89,6 +89,9 @@
           <h1 class="LoginCard-title">ברוך הבא!</h1>
         </div>
       </template>
+
+      <!-- Turnstile lives outside the state blocks: both send and resend need a fresh token -->
+      <div v-show="turnstileEnabled && state !== 'success'" ref="turnstileEl" class="LoginCard-turnstile" />
     </div>
   </div>
 </template>
@@ -102,6 +105,7 @@ import { PUBLISH_EVENT_WHATSAPP_LINK } from '~/consts/ui.const'
 
 const { sendOtp, verifyOtp } = useAuth()
 const authStore = useAuthStore()
+const { enabled: turnstileEnabled, render: renderTurnstile, reset: resetTurnstile } = useTurnstile()
 
 const state = ref('phone') // 'phone' | 'otp' | 'success'
 const phone = ref('')
@@ -112,6 +116,25 @@ const error = ref('')
 const notRegistered = ref(false)
 const resendCountdown = ref(0)
 let countdownTimer = null
+
+// Cloudflare Turnstile: tokens are single-use — reset after every send attempt
+const turnstileEl = ref(null)
+const turnstileToken = ref('')
+let turnstileWidgetId = null
+const waitingForCaptcha = computed(() => turnstileEnabled && !turnstileToken.value)
+
+onMounted(async () => {
+  if (!turnstileEnabled) return
+  turnstileWidgetId = await renderTurnstile(turnstileEl.value, {
+    onToken: (token) => { turnstileToken.value = token },
+    onExpire: () => { turnstileToken.value = '' },
+  })
+})
+
+function refreshTurnstile() {
+  turnstileToken.value = ''
+  resetTurnstile(turnstileWidgetId)
+}
 
 const otpCode = computed(() => otpDigits.value.join(''))
 const displayPhone = computed(() => phone.value.replace(/^972/, '0'))
@@ -129,6 +152,8 @@ function parseErrorMessage(err) {
     const mins = msg.split(':')[1]
     return `שלחתם יותר מדי קודים. נסו שוב בעוד ${mins} דקות`
   }
+  if (msg === 'captcha_failed') return 'אימות האבטחה נכשל. נסו שוב'
+  if (msg === 'captcha_unavailable') return 'שירות האבטחה אינו זמין כרגע. נסו שוב בעוד רגע'
   if (msg === 'otp_expired') return 'הקוד פג תוקף. שלחו קוד חדש'
   if (msg.startsWith('invalid_otp:')) {
     const left = msg.split(':')[1]
@@ -148,11 +173,11 @@ function startResendCountdown(seconds = 60) {
 }
 
 async function handleSendOtp() {
-  if (!phone.value.trim() || loading.value) return
+  if (!phone.value.trim() || loading.value || waitingForCaptcha.value) return
   error.value = ''
   loading.value = true
   try {
-    await sendOtp(phone.value)
+    await sendOtp(phone.value, turnstileToken.value)
     state.value = 'otp'
     startResendCountdown()
     await nextTick()
@@ -161,16 +186,17 @@ async function handleSendOtp() {
     notRegistered.value = false
     error.value = parseErrorMessage(err)
   } finally {
+    refreshTurnstile()
     loading.value = false
   }
 }
 
 async function handleResend() {
-  if (resendCountdown.value > 0 || loading.value) return
+  if (resendCountdown.value > 0 || loading.value || waitingForCaptcha.value) return
   error.value = ''
   loading.value = true
   try {
-    await sendOtp(phone.value)
+    await sendOtp(phone.value, turnstileToken.value)
     otpDigits.value = Array(6).fill('')
     startResendCountdown()
     await nextTick()
@@ -178,6 +204,7 @@ async function handleResend() {
   } catch (err) {
     error.value = parseErrorMessage(err)
   } finally {
+    refreshTurnstile()
     loading.value = false
   }
 }
@@ -422,6 +449,15 @@ onUnmounted(() => clearInterval(countdownTimer))
     text-decoration: underline;
 
     &:disabled { opacity: 0.5; cursor: not-allowed; text-decoration: none; }
+  }
+
+  &-turnstile {
+    display: flex;
+    justify-content: center;
+    min-height: 0;
+
+    // Cloudflare renders a fixed-size iframe; keep it from overflowing the card
+    iframe { max-width: 100%; }
   }
 
   &-success {

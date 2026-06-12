@@ -49,7 +49,7 @@ The file store ([rateLimitFileStore.ts](../server/utils/rateLimitFileStore.ts)) 
 
 | Method | Path | Guard | Purpose |
 |---|---|---|---|
-| POST | `/api/auth/send-otp` | AuthRateLimit + per-phone + CSRF | Send 6-digit OTP via WhatsApp Cloud API. |
+| POST | `/api/auth/send-otp` | AuthRateLimit + per-phone + CSRF + Turnstile | Send 6-digit OTP via WhatsApp Cloud API. |
 | POST | `/api/auth/verify-otp` | AuthRateLimit + per-phone + CSRF | Verify OTP, issue session, set `galiluz_auth` cookie. |
 | GET | `/api/auth/me` | RateLimit + PublisherAuth | Current session `{ waId, fullName, publishingAs, type }`. |
 | POST | `/api/auth/logout` | PublisherAuth | Unset `authKey`/`authKeyExpiresAt`, delete cookie, log `logout`. |
@@ -103,7 +103,7 @@ OTP login for the publisher portal. Phone numbers are normalized to `972XXXXXXXX
 
 ### 1. `POST /api/auth/send-otp` — [send-otp.post.ts](../server/api/auth/send-otp.post.ts)
 
-1. `checkAuthRateLimit` (10/IP/5min) → CSRF origin check (prod) → normalize phone → `checkPhoneRateLimit` (10/phone/5min).
+1. `checkAuthRateLimit` (10/IP/5min) → CSRF origin check (prod) → Turnstile token verification ([turnstile.ts](../server/utils/turnstile.ts); skipped when `TURNSTILE_SECRET_KEY` unset; 403 `captcha_failed` / 503 `captcha_unavailable`, fail-closed) → normalize phone → `checkPhoneRateLimit` (10/phone/5min).
 2. Publisher must exist with `status: 'approved'` (else 404 `not_registered`).
 3. Reject if `otpBlockedUntil` is in the future (429 `blocked:<secondsLeft>`).
 4. Send-count window: max 5 OTPs per phone per rolling hour (`otpSentCount`/`otpSentWindowStart`; 429 `send_limit:<minutes>`).

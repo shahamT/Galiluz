@@ -87,12 +87,15 @@ export default defineNuxtConfig({
     smtpPass: process.env.SMTP_PASS || '',
     mailFrom: process.env.MAIL_FROM || '',
     mailTo: process.env.MAIL_TO || '',
+    // Cloudflare Turnstile (optional — login captcha disabled when unset)
+    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || '',
     // Public keys (exposed to client-side)
     public: {
       posthogPublicKey: process.env.NUXT_PUBLIC_POSTHOG_PUBLIC_KEY || '',
       posthogHost: process.env.NUXT_PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com',
       posthogDefaults: process.env.NUXT_PUBLIC_POSTHOG_DEFAULTS || '2026-01-30',
       posthogInDev: process.env.NUXT_PUBLIC_POSTHOG_IN_DEV === 'true',
+      turnstileSiteKey: process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY || '',
     },
   },
 
@@ -106,7 +109,7 @@ export default defineNuxtConfig({
           'Referrer-Policy': 'strict-origin-when-cross-origin',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
           'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://eu.i.posthog.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://eu.i.posthog.com; frame-ancestors 'none'; form-action 'self';",
+          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://eu.i.posthog.com https://fonts.googleapis.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://eu.i.posthog.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; form-action 'self';",
         },
       },
     },
