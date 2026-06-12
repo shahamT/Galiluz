@@ -52,6 +52,8 @@ export default defineEventHandler(async (event) => {
     categories:       doc.event?.categories || [],
     location: {
       city:          doc.event?.location?.city || '',
+      cityType:      doc.event?.location?.cityType || undefined,
+      region:        doc.event?.location?.region || '',
       locationName:  doc.event?.location?.locationName || '',
       addressLine1:  doc.event?.location?.addressLine1 || '',
       locationNotes: doc.event?.location?.locationDetails || doc.event?.location?.locationNotes || '',

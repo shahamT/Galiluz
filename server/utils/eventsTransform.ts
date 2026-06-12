@@ -20,6 +20,11 @@ function resolveLocationForFrontend(loc: Record<string, unknown> | null | undefi
     const region = typeof loc.region === 'string' && loc.region.trim() ? loc.region.trim() : undefined
     return { city: cityRaw, region }
   }
+  // cityType absent (legacy publisher docs): infer "listed" when the stored city is a
+  // known city ID, so display + region self-heal without a DB migration. Custom city
+  // names (Hebrew free text) never collide with a CITIES key (English IDs).
+  const entry = CITIES[cityRaw as keyof typeof CITIES]
+  if (entry) return { city: entry.title, region: entry.region }
   return { city: cityRaw, region: typeof loc.region === 'string' && loc.region.trim() ? loc.region.trim() : undefined }
 }
 

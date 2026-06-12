@@ -6,9 +6,16 @@ import { normalizePublisherFormattedEvent, validatePublisherFormattedEvent } fro
 import { sanitizeEventFields } from '~/server/utils/sanitizeEventFields'
 import { logEventCreation } from '~/server/utils/eventLogs.service'
 import { EVENT_CATEGORIES } from '~/consts/events.const.js'
+import { CITIES } from '~/consts/regions.const.js'
 import { convertOccurrenceTimes } from '~/server/utils/convertOccurrenceTimes'
 
 const VALID_CATEGORY_IDS = Object.keys(EVENT_CATEGORIES)
+
+/** Resolve a location's cityType, trusting the client value but deriving from CITIES as a fallback. */
+function resolveCityType(loc: Record<string, unknown>): 'listed' | 'custom' {
+  if (loc.cityType === 'listed' || loc.cityType === 'custom') return loc.cityType
+  return CITIES[String(loc.city || '') as keyof typeof CITIES] ? 'listed' : 'custom'
+}
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
@@ -40,6 +47,8 @@ export default defineEventHandler(async (event) => {
     occurrences,
     location: {
       city:            String(loc.city || ''),
+      cityType:        resolveCityType(loc),
+      region:          typeof loc.region === 'string' && loc.region.trim() ? loc.region.trim() : undefined,
       locationName:    String(loc.locationName || ''),
       addressLine1:    String(loc.addressLine1 || ''),
       locationDetails: String(loc.locationNotes || ''),
