@@ -1,7 +1,16 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { checkRateLimit } from '~/server/utils/rateLimit'
+import { sendNotificationMail } from '~/server/utils/mailer'
 
 const VALID_TOPICS = ['bug', 'feature', 'content', 'general', 'other']
+
+const TOPIC_LABELS: Record<string, string> = {
+  bug: 'תקלה טכנית',
+  feature: "בקשת פיצ'ר",
+  content: 'תוכן שגוי באירוע',
+  general: 'שאלה / הצעה',
+  other: 'אחר',
+}
 
 export default defineEventHandler(async (event) => {
   await checkRateLimit(event)
@@ -18,6 +27,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'content_too_long' })
 
   const { db } = await getMongoConnection()
-  await db.collection('feedback').insertOne({ topic, content, createdAt: new Date() })
+  const createdAt = new Date()
+  await db.collection('feedback').insertOne({ topic, content, createdAt })
+
+  // Fire-and-forget owner notification — must never affect the response
+  sendNotificationMail({
+    subject: `משוב חדש מהאתר — ${TOPIC_LABELS[topic] || topic}`,
+    text: `נושא: ${TOPIC_LABELS[topic] || topic}\nהתקבל: ${createdAt.toISOString()}\n\n${content}`,
+  }).catch(() => {})
+
   return { success: true }
 })

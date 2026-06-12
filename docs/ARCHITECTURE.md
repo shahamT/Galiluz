@@ -1,18 +1,64 @@
-# Galiluz – Frontend architecture
+# Galiluz – Architecture
 
-High-level map of the Nuxt frontend: main flows, where they start, and which files they touch.
+High-level map of the system and the main flows: where each flow starts and which files it touches. Depth lives in the focused docs — see the doc map below.
 
-## Directory layout
+## System overview
 
-- **pages/** – `index` (redirect), `monthly-view`, `daily-view`, `[...slug]` (404). **Publisher portal:** `publisher/index` (redirect → dashboard), `publisher/dashboard`, `publisher/events/index`, `publisher/events/[id]`, `publisher/events/edit/[id]`, `publisher/login`.
-- **components/** – `layout/` (AppShell, AppHeader, ProtectedShell), `controls/` (CalendarViewNav, CalendarViewHeader), `monthly/`, `daily/`, `ui/` (EventModal sub-parts, filters, pickers). Root: EventModal, CalendarViewContent. **Publisher:** `publisher/` (EventFormModal, EventPreview, EventListItem, EventsSearchBar, EventDeleteModal, NavTabs, Dashboard\*, etc.). **Form:** `form/` (RichTextEditor, CityPicker, OccurrenceRow, MediaUpload, LinkRow, CategorySelectDropdown, RegionSelectModal, FormField, etc.).
-- **composables/** – Data: useCalendarViewData, useEvents, useCategories. URL/state: useUrlState, useCalendarNavigation, useCalendarPageInit. Filtering: useEventFilters. Modal: useEventModalData, useEventModalGallery, useEventModalShare. Auth: **useAuthFetch** (authenticated fetch wrapper). Utils: useScreenWidth, useIconFontReady, usePosthog.
-- **stores/** – calendar.store (filters, currentDate, lastDailyViewDate), ui.store (event modal + URL sync), **auth.store** (user, authReady, isLoggedIn, isManager — publisher session state).
+```
+                       ┌───────────────┐
+                       │ Browser / PWA │
+                       └───────┬───────┘
+                               │ HTTPS
+                               ▼
+┌─────────────────────────────────────────┐   REST + X-API-Key   ┌─────────────────────────┐
+│ Nuxt web app — Render: galiluz-web      │◄─────────────────────│ apps/wa-bot             │
+│ pages/ (SSR + SPA) · server/api (Nitro) │                      │ Render: galiluz-wa-bot  │
+└──────┬──────────────┬───────────────┬───┘                      │ publisher/admin chat    │
+       │              │               │ OTP send                 └───────────┬─────────────┘
+       ▼              ▼               ▼                                      │ webhook + replies
+┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐                  │
+│ MongoDB     │ │ Cloudinary  │ │ Meta WhatsApp Cloud API │◄─────────────────┘
+│ Atlas       │ │ (media)     │ └─────────────────────────┘
+└──────▲──────┘ └──────▲──────┘
+       │ direct        │ media
+       │ inserts       │ uploads
+┌──────┴───────────────┴───────────────────┐
+│ apps/wa-listener — Render: galiluz-wa    │
+│ Baileys group ingestion → OpenAI extract │
+│ → event drafts written straight to Mongo │
+└──────────────────────────────────────────┘
+```
+
+- **Web app** (repo root) — Nuxt 3: public calendar (`pages/events/`), publisher portal (`pages/publisher/`), admin (`pages/admin.vue`), and the Nitro API under [server/api/](../server/api/). Render service `galiluz-web` ([render.yaml](../render.yaml)).
+- **MongoDB Atlas** — one cluster; dev/prod split by `MONGODB_DB_NAME`. Collections, indexes, validators, and the stored event shape: [DATA_MODEL.md](DATA_MODEL.md).
+- **Cloudinary** — all event media. Uploaded by the web app (`POST /api/publisher/media`), wa-listener, and wa-bot; destroyed when an event is deleted (Flow 8).
+- **apps/wa-listener** (Render worker `galiluz-wa`) — Baileys WhatsApp client that ingests configured groups, runs an OpenAI extraction pipeline, and inserts event drafts **directly into MongoDB** (no HTTP to the web app). Pipeline detail: [EVENT_OBJECT_INTEGRATION.md](EVENT_OBJECT_INTEGRATION.md); setup: [WHATSAPP_SERVICE.md](WHATSAPP_SERVICE.md).
+- **apps/wa-bot** (Render web service `galiluz-wa-bot`) — Meta WhatsApp Cloud API webhook receiver for publisher/admin chat flows (publish, edit, delete, approval). It calls the web app's server API over REST with the shared `X-API-Key` header (`API_SECRET`) and depends on the shared [@galiluz/event-format](../packages/event-format/README.md) package. Setup: [WA_BOT_SETUP.md](WA_BOT_SETUP.md).
+- **Meta WhatsApp Cloud API** — used by the web app server to send OTP login codes ([send-otp.post.ts](../server/api/auth/send-otp.post.ts)) and by wa-bot for all bot messaging. wa-listener does not use it (Baileys is a WhatsApp Web client).
+
+### Doc map
+
+| Doc | Owns |
+|-----|------|
+| [DATA_MODEL.md](DATA_MODEL.md) | Collections, indexes, TTL policies, validators, stored event shape |
+| [API.md](API.md) | Full endpoint inventory: methods, auth, params, responses |
+| [FRONTEND.md](FRONTEND.md) | Component-level frontend detail, form internals, code conventions |
+| [../composables/README.md](../composables/README.md) | Composables inventory |
+| [PRODUCTION_OPS.md](PRODUCTION_OPS.md) | Env vars, deploy checklist, backups, rate limiting |
+| [SECURITY_AND_BUDGET.md](SECURITY_AND_BUDGET.md) | OTP/auth detail, media validation, sanitization, API budget |
+| [EVENT_OBJECT_INTEGRATION.md](EVENT_OBJECT_INTEGRATION.md) | wa-listener message → event pipeline |
+| [../packages/event-format/README.md](../packages/event-format/README.md) | Shared formatted-event contract (wa-bot) |
+
+## Directory layout (web app)
+
+- **pages/** – public: `index` (redirect middleware), `events/monthly-view`, `events/daily-view`, `about`, `login`, `publish-events`, `terms-of-service`, `admin`, `[...slug]` (404). **Publisher portal:** `publisher/index` (redirect → dashboard), `publisher/dashboard`, `publisher/events/index`, `publisher/events/[id]`, edit/add-event pages.
+- **components/** – `layout/` (AppShell, AppHeader, ProtectedShell), `controls/` (CalendarViewNav, CalendarViewHeader), `monthly/`, `daily/`, `ui/` (EventModal sub-parts, filters, pickers), `publisher/` (EventFormModal, EventPreview, dashboards, lists), `form/` (form sub-components). Root: EventModal, CalendarViewContent. Full inventory: [FRONTEND.md](FRONTEND.md).
+- **composables/** – Data: useCalendarViewData, useEvents, useCategories. URL/state: useUrlState, useCalendarNavigation, useCalendarPageInit. Filtering: useEventFilters. Modal: useEventModalData, useEventModalGallery, useEventModalShare. Auth: **useAuthFetch**. Full list: [../composables/README.md](../composables/README.md).
+- **stores/** – calendar.store (filters, currentDate, lastDailyViewDate), ui.store (event modal + URL sync), **auth.store** (user, authReady, isLoggedIn, isManager).
 - **utils/** – events.service, events.helpers, calendar.helpers, calendar-display.helpers, date.helpers, validation.helpers, navigation.service, calendar.service, media.helpers, israelDate, logger.
 - **consts/** – events.const (EVENT_CATEGORIES, CATEGORY_GROUPS), calendar.const, ui.const, regions.const (CITIES, REGIONS).
-- **plugins/** – data-init.client (fetches events + categories once, provides to app).
-- **server/api/publisher/** – `dashboard.get`, `events.get`, `events.post`, `event/[id].get`, `event/[id].patch`, `event/[id].delete`, `media.post`.
-- **server/utils/** – requirePublisherAuth, sanitizeEventFields, convertOccurrenceTimes, eventValidation, eventLogs.service, cloudinary, mongodb.
+- **plugins/** – data-init.client (fetches events + categories once, provides to app), sw.client, posthog.client, polyfills.client.
+- **server/** – API routes under [server/api/](../server/api/) (see [API.md](API.md)), shared logic in [server/utils/](../server/utils/), startup plugins in [server/plugins/](../server/plugins/) (ensure-indexes, startup-checks, error-logging).
 
 ---
 
@@ -30,7 +76,7 @@ High-level map of the Nuxt frontend: main flows, where they start, and which fil
 ## Flow 2: Events data (API → monthly grid & daily columns)
 
 1. **Fetch** – Plugin data-init.client runs on client and calls useEvents() + useCategories(), provides as `$eventsData` / `$categoriesData`. useCalendarViewData() uses those when present, else calls useEvents/useCategories directly (e.g. SSR or EventModal).
-2. **useEvents** – useFetch('/api/events', server: false), then flattenEventsByOccurrence (events.service) → one item per occurrence (FlatEvent).
+2. **useEvents** – useFetch('/api/events', `server: true`, query `{ to: <window end> }`). On the server the request carries the `X-API-Key` header from runtime config; the client reuses the SSR payload via `getCachedData`, so the secret never reaches the browser. Results flattened with flattenEventsByOccurrence (events.service) → one item per occurrence (FlatEvent). The `to` bound is the rolling feed window — see Flow 7.
 3. **useCategories** – useFetch('/api/categories', server: false) → categories object.
 4. **Monthly** – Page gets events from useCalendarViewData, getFilteredEventsForMonth from useEventFilters(events) → filteredEvents → MonthCarousel → MonthCalendar. MonthCalendar uses getEventsByDate + generateCalendarDays → calendarDays with day.events → DayCell.
 5. **Daily** – Same events; getFilteredEventsByDate(visibleDays) from useEventFilters(events) → eventsByDate (date → transformed cards) → KanbanCarousel → KanbanColumn → KanbanEventCard.
@@ -81,45 +127,66 @@ High-level map of the Nuxt frontend: main flows, where they start, and which fil
 4. `LayoutProtectedShell` wraps protected pages in `<ClientOnly>` so SSR renders a spinner and the real content mounts only after the auth check resolves (`authStore.authReady`).
 5. **useAuthFetch** — wraps `useFetch` with `server: false` (skip SSR to avoid cookie mismatch) and an `onResponseError` hook: on 401, calls `authStore.logout()` and navigates to `/login`.
 
+Auth internals (hashing, timing-safe checks, rate limits): [SECURITY_AND_BUDGET.md](SECURITY_AND_BUDGET.md).
+
 **Files:** `pages/login.vue`, `server/api/auth/`, `middleware/auth.ts`, `composables/useAuth.js`, `composables/useAuthFetch.js`, `stores/auth.store.js`, `server/utils/requirePublisherAuth.ts`, `components/layout/ProtectedShell.vue`.
 
 ### 6.2 Publisher dashboard
 
-1. `pages/publisher/dashboard.vue` calls `useAuthFetch(‘/api/publisher/dashboard?filter=...’)`.
-2. API aggregates: event counts (total/future/past), KPI totals (views, unique visitors, interactions), top 5 events by views, 6 most recent audit log entries.
+1. `pages/publisher/dashboard.vue` calls `useAuthFetch('/api/publisher/dashboard?filter=...')`.
+2. API aggregates: event counts (total/future/past), KPI totals (views, unique visitors, interactions), top 5 events by views, 6 most recent audit log entries. Stats queries exclude soft-deleted events' data (Flow 8).
 3. Filter bar (כל האירועים / אירועים עתידיים / אירועים החודש) triggers re-fetch via `watch: [filter]`.
 4. Dashboard KPI cards show brand-colored stats with skeleton loaders while pending.
 
 ### 6.3 Events list + event detail
 
 1. `pages/publisher/events/index.vue` fetches all publisher events; filters client-side by future/past/all + text search (debounced 200ms).
-2. `pages/publisher/events/[id].vue` fetches single event with stats (`GET /api/publisher/event/[id]`). Embeds `EventPreview` (the public event modal rendered inline, close button hidden, actions bar de-fixed on mobile). Statistics section shows per-occurrence stats for recurring events or aggregate for multi-day.
+2. `pages/publisher/events/[id].vue` fetches single event with stats (`GET /api/publisher/event/[id]`). Embeds `EventPreview` (the public event modal rendered inline). Statistics section shows per-occurrence stats for recurring events or aggregate for multi-day.
 3. Edit button opens `EventFormModal` in `mode="edit"` pre-filled via `initFromData()`. On submit: `PATCH /api/publisher/event/[id]` → closes modal → refreshes data → shows success banner.
-4. Delete button opens `EventDeleteModal` (user must type event name to confirm) → `DELETE /api/publisher/event/[id]` → navigate to events list.
+4. Delete button opens `EventDeleteModal` (user must type event name to confirm) → `DELETE /api/publisher/event/[id]` → soft delete (Flow 8) → navigate to events list.
 
 ### 6.4 Create / edit event form (EventFormModal)
 
-`components/publisher/EventFormModal.vue` — full-screen modal (Teleport, mobile-native). Sections:
+`components/publisher/EventFormModal.vue` — full-screen modal (Teleport, mobile-native) with sections for details (title, descriptions, rich text), schedule (OccurrenceRow instances, multiDay toggle), category (main + up to 3 extra), location (place, city, region), price, links (up to 5), and media (client-side validation, Cloudinary upload via `POST /api/publisher/media` before submit).
 
-1. **Details** — title, short description (max 150 chars), full description (Tiptap rich text editor with emoji picker, min 70 chars, no links allowed, HTML sanitized server-side)
-2. **Schedule** — OccurrenceRow instances (date + all-day toggle + start/end time pickers); multiDay toggle appears when ≥2 occurrences
-3. **Category** — main category (CategorySelectDropdown, single select) + additional categories (max 3 extra = 4 total)
-4. **Location** — place name, address, city (CityPicker with search dropdown), region (RegionSelectModal using the area map); auto-nav toggle
-5. **Price** — number input (0 = free, blurs to null)
-6. **Links** — up to 5 link/phone rows with per-field blur validation
-7. **Media** — drag-and-drop with MIME/size/magic-byte validation client-side; video thumbnails generated via canvas; uploaded to Cloudinary via `POST /api/publisher/media` before form submit
+On submit: media files uploaded in parallel → event payload built → `POST /api/publisher/events` (create) or `PATCH /api/publisher/event/[id]` (edit) → emit `submitted` → parent navigates to `/publisher/events/:id?success=created`.
 
-On submit: media files uploaded in parallel (snapshotted to avoid mid-upload mutations) → event payload built → `POST /api/publisher/events` (create) or `PATCH` (edit) → emit `submitted` → parent navigates to `/publisher/events/:id?success=created`.
-
-**Files:** `components/publisher/EventFormModal.vue`, `components/form/RichTextEditor.vue`, `components/form/CityPicker.vue`, `components/form/OccurrenceRow.vue`, `components/form/MediaUpload.vue`, `components/form/LinkRow.vue`, `components/form/CategorySelectDropdown.vue`, `components/form/RegionSelectModal.vue`, `server/api/publisher/events.post.ts`, `server/api/publisher/event/[id].patch.ts`, `server/api/publisher/media.post.ts`, `server/utils/sanitizeEventFields.ts`, `server/utils/convertOccurrenceTimes.ts`, `server/utils/eventValidation.ts`.
+Form internals (per-field validation, sub-components): [FRONTEND.md](FRONTEND.md). Server-side validation/sanitization and endpoint contracts: [API.md](API.md).
 
 ---
 
-## Conventions
+## Flow 7: Events feed windowing (rolling window)
 
-- **Composables:** Prefer composables for reusable, scoped logic; Pinia for global shared state (calendar filters, modal state, auth).
-- **URL state:** useUrlState centralizes reading query → store and watching store → URL + localStorage. useCalendarPageInit wraps that plus modal-from-URL; both calendar pages call runPageInit() in onMounted. Route paths are in consts/calendar.const (ROUTE_MONTHLY_VIEW, ROUTE_DAILY_VIEW).
-- **Data:** Events and categories are fetched once in the plugin and consumed via useCalendarViewData so components don’t re-fetch. EventModal also uses useCalendarViewData for the same source.
-- **Authenticated fetching:** Use `useAuthFetch` (not `useFetch`) for all publisher API calls. It sets `server: false` and handles 401 redirects automatically.
-- **Script order (components):** defineOptions → defineProps → defineEmits → data (composables, refs) → lifecycle → computed → methods → watchers. Import order: NPM → project (consts, utils) → components, with blank lines between groups.
-- **CSS:** BEM naming under the component root class (`.ComponentName`, `.ComponentName-element`, `.ComponentName--modifier`). No `style scoped`. Breakpoints via `@include mobile` from `~/assets/css/breakpoints`.
+The public feed is never "everything" — the client requests a bounded window and grows it on navigation.
+
+1. **Server bounds** – `GET /api/events` ([index.get.ts](../server/api/events/index.get.ts)) accepts optional `from` / `to` (YYYY-MM-DD). The lower cutoff defaults to the first day of the current month minus 5 days (`from` overrides it); `to` caps the feed — events whose occurrences all start after end-of-day `to` are excluded ([buildEventsQuery](../server/utils/eventsQuery.ts)). Hard limit 500 documents, `rawEvent` excluded from the projection, `Cache-Control: public, max-age=60`.
+2. **Client window** – [useEvents](../composables/useEvents.js) keeps `windowEnd` in `useState('events-window-end')`: initially the current month + 2 (`WINDOW_MONTHS_AHEAD`), or the deep-linked month + 2 if further (read from `?date=` / `?year=&month=`). The fetch query is `{ to: lastDayOfMonth(windowEnd) }`.
+3. **Expansion on far navigation** – both calendar pages watch their displayed month (monthly: `currentDate`; daily: `headerDate`) and call `ensureMonthLoaded(year, month)` (exposed through useCalendarViewData). It bumps `windowEnd` to `month + 2` when needed; since the query is reactive, useFetch refetches `/api/events` with the new `to`.
+4. **Monotonic** – the window only ever grows, so events already on screen never disappear when navigating back.
+
+**Files:** server/api/events/index.get.ts, server/utils/eventsQuery.ts, composables/useEvents.js, composables/useCalendarViewData.js, pages/events/monthly-view.vue, pages/events/daily-view.vue.
+
+---
+
+## Flow 8: Soft delete (deletedAt everywhere)
+
+Events are never hard-deleted by user action; they are stamped with `deletedAt` and every read filters them out.
+
+1. **Entry points** – publisher portal `DELETE /api/publisher/event/[id]` ([\[id\].delete.ts](../server/api/publisher/event/%5Bid%5D.delete.ts), session auth + ownership/manager check) and wa-bot `POST /api/events/[id]/delete` ([delete.post.ts](../server/api/events/%5Bid%5D/delete.post.ts), `X-API-Key`, `deletionType: 'kill' | 'user_deleted'`). Both are idempotent: an already-deleted event returns success.
+2. **Write order** – deletion is logged to `eventLogs` first (logEventDeletion, with `isManagerAction` when a manager deletes someone else's event), then the event doc is stamped `{ deletedAt, isActive: false }`, then [softDeleteEventStatsData](../server/utils/eventStats.service.ts) stamps the same `deletedAt` on all the event's `eventStats`, `eventOccurrenceStats`, and `eventInteractions` docs (retried once; [scripts/cleanup-orphan-stats.js](../scripts/cleanup-orphan-stats.js) is the consistency sweep for anything missed). Finally Cloudinary media is destroyed (deleteEventCloudinaryMedia).
+3. **eventLogs are NOT stamped** – intentionally, so the dashboard's recent-activity feed keeps showing deletions.
+4. **Reads** – every read path excludes deleted data: the public feed and publisher events list use the `NOT_DELETED` fragment (`{ deletedAt: { $exists: false } }` in [eventsQuery.ts](../server/utils/eventsQuery.ts)); dashboard stats aggregations filter `deletedAt: { $exists: false }`; single-event GET returns 404 when `deletedAt` is set; the interaction tracker refuses to record against deleted events.
+5. **Rule for agents** – any new query over events or stats collections must include `NOT_DELETED` (import it from `server/utils/eventsQuery.ts`) unless it deliberately targets deleted docs.
+
+**Files:** server/api/publisher/event/[id].delete.ts, server/api/events/[id]/delete.post.ts, server/utils/eventStats.service.ts, server/utils/eventsQuery.ts, server/api/publisher/dashboard.get.ts, server/api/events/[id]/interact.post.ts, scripts/cleanup-orphan-stats.js.
+
+---
+
+## Conventions (flow-level)
+
+- **Composables vs stores:** composables for reusable, scoped logic; Pinia for global shared state (calendar filters, modal state, auth).
+- **URL state:** useUrlState centralizes reading query → store and watching store → URL + localStorage. useCalendarPageInit wraps that plus modal-from-URL; both calendar pages call runPageInit() in onMounted. Route paths live in consts/calendar.const.
+- **Data:** events and categories are fetched once (plugin) and consumed via useCalendarViewData so components don't re-fetch. EventModal uses the same source.
+- **Authenticated fetching:** use `useAuthFetch` (not `useFetch`) for all publisher API calls — it sets `server: false` and handles 401 redirects automatically. Direct `$fetch()` calls do NOT get automatic 401 handling.
+
+Component code conventions (script section order, import order, SCSS BEM): [FRONTEND.md](FRONTEND.md).

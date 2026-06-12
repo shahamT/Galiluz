@@ -10,6 +10,7 @@
 ## Error visibility
 
 - Unhandled 5xx errors are logged as single-line JSON (route, status, correlationId, trimmed stack) by [error-logging.ts](../server/plugins/error-logging.ts) — searchable in Render logs.
+- **Email alerts** (env-gated by the `SMTP_*`/`MAIL_*` vars — see [.env.example](../.env.example)): 5xx errors and feedback submissions email the site owner via Zoho SMTP ([mailer.ts](../server/utils/mailer.ts)). Error emails are storm-protected: one per error signature per 15 min, max 10/hour, suppressed count carried into the next email. Unset vars = silently disabled.
 - Every request gets an `X-Correlation-Id` (honored when sent by the WA apps) via [correlation-id.ts](../server/middleware/correlation-id.ts); eventLogs entries carry correlation ids through the event lifecycle.
 - **Sentry (when ready):** create a project, set `SENTRY_DSN`, then install `@sentry/nuxt` per their Nuxt guide. Deliberately not pre-installed — without a DSN it is dead weight in the bundle.
 
@@ -26,10 +27,12 @@
 
 - In-memory per instance by default; set `RATE_LIMIT_FILE_PATH` to persist across restarts. If the app ever runs multi-instance, move the store to Redis — the file store is single-instance only.
 
-## Ship-time checklist (next production deploy)
+## Ship-time checklist (every production deploy)
 
-1. Data migrations run **automatically at first boot** via [one-time-migrations.ts](../server/plugins/one-time-migrations.ts) (startTime → ISO strings; orphaned/missed stats stamped). After the deploy, confirm the `[Migration] startTime: …` and `[Migration] stats: …` log lines, then **delete that plugin** and deploy again. Once the startTime migration has run, also collapse the dual-format conditions in [eventsQuery.ts](../server/utils/eventsQuery.ts).
-   (Standalone equivalents for ad-hoc runs: `scripts/migrate-starttime.js`, `scripts/cleanup-orphan-stats.js` — they read `.env` and are meant for local/dev use.)
-2. Verify startup logs show `[Indexes] All indexes ensured` and `[Schema] Validators applied`.
-3. CI must be green (`.github/workflows/ci.yml`: unit tests + build).
-4. Reminder: TTL retention starts deleting old `eventInteractions`/`authLogs`/`raw_messages` within minutes of first boot — `mongodump` those collections first if their history matters.
+1. CI must be green before merging (`.github/workflows/ci.yml`: unit tests + build).
+2. After the deploy, verify the startup logs show `[Indexes] All indexes ensured` and `[Schema] Validators applied to events + publishers`, and that there is **no** `[Startup] FATAL: …` line (missing required env vars — [startup-checks.ts](../server/plugins/startup-checks.ts)).
+3. TTL retention deletes old `eventInteractions`/`authLogs`/`raw_messages` continuously (windows in the Backups section) — no per-deploy action, but `mongodump` first if you are about to point the app at a database whose history matters.
+
+**Data-consistency sweeps (ad-hoc, not part of a deploy):** [scripts/cleanup-orphan-stats.js](../scripts/cleanup-orphan-stats.js) re-stamps `deletedAt` on any stats docs missed by a soft delete; [scripts/migrate-starttime.js](../scripts/migrate-starttime.js) normalizes any non-ISO `startTime` values. Both read `.env` and are meant to be run locally.
+
+**Done (history, do not redo):** the one-time startup migration ran on production on 2026-06-12 — 562 orphaned stats rows stamped, `startTime` verified 100% ISO across all 65 events — and the plugin was deleted afterwards. `startTime` is now treated as canonically ISO everywhere; the dual-format query conditions in [eventsQuery.ts](../server/utils/eventsQuery.ts) have been collapsed.
