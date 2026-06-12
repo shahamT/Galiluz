@@ -34,6 +34,7 @@ async function ensureIndexes() {
   const occStats = db.collection(config.mongodbCollectionEventOccurrenceStats || 'eventOccurrenceStats')
   const eventLogs = db.collection(config.mongodbCollectionEventLogs || 'eventLogs')
   const publishers = db.collection(config.mongodbCollectionPublishers || 'publishers')
+  const accounts = db.collection(config.mongodbCollectionAccounts || 'accounts')
   const authLogs = db.collection(config.mongodbCollectionAuthLogs || 'authLogs')
   const rawMessages = db.collection(config.mongodbCollectionRawMessages || 'raw_messages')
 
@@ -60,6 +61,10 @@ async function ensureIndexes() {
     eventLogs.createIndex({ publisherId: 1, createdAt: -1 }),
     publishers.createIndex({ waId: 1 }, { unique: true }),
 
+    // Accounts (publisher → account grouping); fast resolution of an account's publishers
+    publishers.createIndex({ accountId: 1 }),
+    accounts.createIndex({ isActive: 1, deletedAt: 1 }),
+
     // Retention: raw logs are derivable/transient — bound their growth.
     // (eventLogs and the stats aggregates are kept forever by design.)
     interactions.createIndex({ timestamp: 1 }, { expireAfterSeconds: 90 * DAY }),
@@ -83,6 +88,7 @@ async function ensureSchemaValidation() {
 
   const eventsName = config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events'
   const publishersName = config.mongodbCollectionPublishers || 'publishers'
+  const accountsName = config.mongodbCollectionAccounts || 'accounts'
 
   await db.command({
     collMod: eventsName,
@@ -131,10 +137,36 @@ async function ensureSchemaValidation() {
           status: { bsonType: 'string' },
           type: { bsonType: 'string' },
           fullName: { bsonType: 'string' },
+          accountId: { bsonType: 'string' },
         },
       },
     },
   })
 
-  console.info('[Schema] Validators applied to events + publishers')
+  // accounts: created automatically (collection may not exist yet — createIndex in
+  // ensureIndexes creates it). collMod requires the collection to exist; ignore the
+  // "namespace not found" race on a brand-new DB (next startup applies it).
+  try {
+    await db.command({
+      collMod: accountsName,
+      validationLevel: 'moderate',
+      validationAction: 'error',
+      validator: {
+        $jsonSchema: {
+          bsonType: 'object',
+          required: ['title'],
+          properties: {
+            title: { bsonType: 'string' },
+            isActive: { bsonType: 'bool' },
+            deletedAt: { bsonType: 'date' },
+            createdAt: { bsonType: 'date' },
+          },
+        },
+      },
+    })
+  } catch (err) {
+    console.warn('[Schema] accounts validator skipped (collection not created yet):', err instanceof Error ? err.message : err)
+  }
+
+  console.info('[Schema] Validators applied to events + publishers + accounts')
 }

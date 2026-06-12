@@ -1,3 +1,4 @@
+import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
 import { softDeleteEventStatsData } from '~/server/utils/eventStats.service'
@@ -66,6 +67,23 @@ export default defineEventHandler(async (event) => {
       await collection.updateOne({ waId }, { $set: { status: 'ghost', updatedAt: new Date() } })
     } else {
       await collection.deleteOne({ waId })
+
+      // Release the publisher's account if no other publishers remain in it
+      // (ghost records keep their publisher, so this only runs on hard delete).
+      if (doc.accountId) {
+        const remaining = await collection.countDocuments({ accountId: doc.accountId })
+        if (remaining === 0) {
+          try {
+            const accountsCol = db.collection((config.mongodbCollectionAccounts as string) || 'accounts')
+            await accountsCol.updateOne(
+              { _id: new ObjectId(String(doc.accountId)) },
+              { $set: { deletedAt: new Date(), isActive: false } },
+            )
+          } catch (e) {
+            console.warn('[PublishersAPI] Reject: could not release account', doc.accountId, e instanceof Error ? e.message : e)
+          }
+        }
+      }
     }
 
     await logAuthEvent(event, 'publisher_rejected', waId, { cascadedEvents: theirEvents.length })

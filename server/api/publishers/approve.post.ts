@@ -1,5 +1,6 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
+import { ensureAccountForPublisher } from '~/server/utils/accountScope'
 
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
@@ -44,6 +45,11 @@ export default defineEventHandler(async (event) => {
         message: 'Publisher not found',
       })
     }
+
+    // Every approved publisher belongs to an account (auto-created, idempotent).
+    const pubDoc = await collection.findOne({ waId })
+    if (pubDoc) await ensureAccountForPublisher(pubDoc as Parameters<typeof ensureAccountForPublisher>[0])
+
     return { success: true }
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'statusCode' in err) throw err

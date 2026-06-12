@@ -1,5 +1,6 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
+import { getAccountPublisherIds } from '~/server/utils/accountScope'
 import { ObjectId } from 'mongodb'
 
 export default defineEventHandler(async (event) => {
@@ -11,9 +12,9 @@ export default defineEventHandler(async (event) => {
   const statsCol = db.collection((config as Record<string, string>).mongodbCollectionEventStats || 'eventStats')
   const eventsCol = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
 
-  // Get all stats for this publisher (excluding stats of soft-deleted events)
+  // Account-scoped (excluding stats of soft-deleted events). Managers see all.
   const publisherQuery = {
-    ...(session.type === 'manager' ? {} : { publisherId: session.publisherId }),
+    ...(session.type === 'manager' ? {} : { publisherId: { $in: await getAccountPublisherIds(session) } }),
     deletedAt: { $exists: false },
   }
   const stats = await statsCol.find(publisherQuery, {
