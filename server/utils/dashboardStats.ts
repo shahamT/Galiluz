@@ -1,0 +1,243 @@
+import { getMongoConnection } from '~/server/utils/mongodb'
+import { getTodayIsrael } from '~/server/utils/eventFirstOccurrence'
+
+const PUBLISHER_LOG_ACTIONS = ['event_created', 'event_activated', 'event_deactivated', 'event_edited', 'event_deleted']
+
+// Dev-only diagnostic logging — stripped from the production build via `import.meta.dev`.
+const DASH_LOG = '[Dashboard][DEV]'
+function devLog(message: string, data?: unknown) {
+  if (import.meta.dev) console.info(DASH_LOG, message, data !== undefined ? JSON.stringify(data) : '')
+}
+
+function formatDate(d: string) {
+  // YYYY-MM-DD → D.M
+  if (!d) return ''
+  const [, m, day] = d.split('-')
+  return `${parseInt(day)}.${parseInt(m)}`
+}
+
+export interface DashboardScope {
+  /** Publisher scope for the stats collections (occStats / interactions / eventStats).
+   *  `{}` = platform-wide; `{ publisherId: { $in: ids } }` = scoped. Merged with deletedAt-absent. */
+  statsPubFilter: Record<string, unknown>
+  /** Publisher scope for the events collection (used for counts + top-event metadata).
+   *  `{}` = all events (incl. ghost-publisher events); `{ 'event.publisherId': { $in: ids } }` = scoped. */
+  eventsPubFilter: Record<string, unknown>
+  /** Filter for the recent-activity logs (who performed the action), e.g.
+   *  `{ publisherId: x }` (a single actor) or `{ publisherId: { $in: ids } }`. */
+  logsPubFilter: Record<string, unknown>
+  /** 'all' | 'active' | 'month' — date scope for the filtered stats. */
+  filter: string
+}
+
+/**
+ * Computes the dashboard payload — event counts, totals, active count, top events, and
+ * recent activity — for a given scope. Shared by the publisher dashboard (account-scoped)
+ * and the admin dashboard (platform-wide). The three `*PubFilter` args are the only
+ * scoping inputs; the date/deletedAt logic and aggregation shape are identical for both.
+ */
+export async function computeDashboard(scope: DashboardScope) {
+  const { statsPubFilter, eventsPubFilter, logsPubFilter, filter } = scope
+
+  const config = useRuntimeConfig() as Record<string, string>
+  const { db } = await getMongoConnection()
+
+  const eventsCol = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
+  const occStatsCol = db.collection(config.mongodbCollectionEventOccurrenceStats || 'eventOccurrenceStats')
+  const statsCol = db.collection(config.mongodbCollectionEventStats || 'eventStats')
+  const interactionsCol = db.collection(config.mongodbCollectionEventInteractions || 'eventInteractions')
+  const logsCol = db.collection(config.mongodbCollectionEventLogs || 'eventLogs')
+
+  // Stats filters always exclude soft-deleted events' data (stamped with deletedAt on delete)
+  const pubFilter = {
+    ...statsPubFilter,
+    deletedAt: { $exists: false },
+  }
+  devLog('computeDashboard scope', { statsPubFilter, eventsPubFilter, logsPubFilter, filter, pubFilter })
+  const today = getTodayIsrael()
+  const [yr, mo] = today.split('-')
+  const monthPrefix = `${yr}-${mo}`
+
+  // ── 1. Event counts (always all-time, no filter) ──────────────────────────
+  const allEvents = await eventsCol.find(
+    { ...eventsPubFilter, deletedAt: { $exists: false }, event: { $ne: null } },
+    { projection: { 'event.occurrences': 1, 'event.Title': 1, 'event.multiDayEvent': 1, isActive: 1, _id: 1 } },
+  ).toArray()
+
+  const activeEvents = allEvents.filter((e) => e.isActive === true)
+  const draftsCount = allEvents.length - activeEvents.length
+
+  const futureEventIds = new Set<string>()
+  activeEvents.forEach((e) => {
+    const hasFuture = (e.event?.occurrences || []).some((occ: any) => (occ.date || '') >= today)
+    if (hasFuture) futureEventIds.add(e._id.toString())
+  })
+
+  const eventCounts = {
+    total: activeEvents.length,
+    future: futureEventIds.size,
+    past: activeEvents.length - futureEventIds.size,
+    drafts: draftsCount,
+  }
+
+  // ── 2. Determine date scope for filtered stats ────────────────────────────
+  let occDateFilter: Record<string, unknown> = {}
+  if (filter === 'active') occDateFilter = { occurrenceDate: { $gte: today } }
+  else if (filter === 'month') occDateFilter = { occurrenceDate: { $regex: `^${monthPrefix}` } }
+
+  // ── 3. Occurrence-level totals (views, uniqueViews, calendarAdds) ─────────
+  if (import.meta.dev) {
+    const occTotalDocs = await occStatsCol.countDocuments({})
+    const occMatchedDocs = await occStatsCol.countDocuments({ ...pubFilter, ...occDateFilter })
+    const statsTotalDocs = await statsCol.countDocuments({})
+    const statsMatchedDocs = await statsCol.countDocuments(pubFilter)
+    devLog('collection doc counts', {
+      eventOccurrenceStats: { total: occTotalDocs, matchedByFilter: occMatchedDocs },
+      eventStats: { total: statsTotalDocs, matchedByFilter: statsMatchedDocs },
+      occDateFilter,
+    })
+  }
+
+  const [occTotals] = await occStatsCol.aggregate([
+    { $match: { ...pubFilter, ...occDateFilter } },
+    { $group: { _id: null, views: { $sum: '$views' }, uniqueViews: { $sum: '$uniqueViews' }, calendarAdds: { $sum: '$calendarAdds' } } },
+  ]).toArray()
+
+  // ── 4. Event-level totals (shares, nav, links, contact) ───────────────────
+  let eventLevelTotals = { shares: 0, navClicks: 0, linkClicks: 0, contactClicks: 0 }
+
+  if (filter === 'month') {
+    const monthStart = new Date(`${monthPrefix}-01T00:00:00.000Z`)
+    const nextMo = parseInt(mo) === 12 ? `${parseInt(yr) + 1}-01` : `${yr}-${String(parseInt(mo) + 1).padStart(2, '0')}`
+    const monthEnd = new Date(`${nextMo}-01T00:00:00.000Z`)
+    const groups = await interactionsCol.aggregate([
+      { $match: { ...pubFilter, action: { $in: ['share', 'nav', 'link', 'contact'] }, timestamp: { $gte: monthStart, $lt: monthEnd } } },
+      { $group: { _id: '$action', count: { $sum: 1 } } },
+    ]).toArray()
+    groups.forEach((g: any) => {
+      if (g._id === 'share') eventLevelTotals.shares = g.count
+      else if (g._id === 'nav') eventLevelTotals.navClicks = g.count
+      else if (g._id === 'link') eventLevelTotals.linkClicks = g.count
+      else if (g._id === 'contact') eventLevelTotals.contactClicks = g.count
+    })
+  } else {
+    const statsMatchFilter = filter === 'active'
+      ? { ...pubFilter, eventId: { $in: Array.from(futureEventIds) } }
+      : pubFilter
+    const [sr] = await statsCol.aggregate([
+      { $match: statsMatchFilter },
+      { $group: { _id: null, shares: { $sum: '$shares' }, navClicks: { $sum: '$navClicks' }, linkClicks: { $sum: '$linkClicks' }, contactClicks: { $sum: '$contactClicks' } } },
+    ]).toArray()
+    if (sr) eventLevelTotals = { shares: sr.shares || 0, navClicks: sr.navClicks || 0, linkClicks: sr.linkClicks || 0, contactClicks: sr.contactClicks || 0 }
+  }
+
+  const totals = {
+    views: occTotals?.views || 0,
+    uniqueViews: occTotals?.uniqueViews || 0,
+    calendarAdds: occTotals?.calendarAdds || 0,
+    ...eventLevelTotals,
+  }
+  devLog('computed totals', { eventCounts, totals, activeEventsCount: futureEventIds.size })
+
+  const activeEventsCount = futureEventIds.size
+
+  // ── 5. Top events ─────────────────────────────────────────────────────────
+  const topOccRows = await occStatsCol.find({ ...pubFilter, ...occDateFilter }, { sort: { views: -1 }, limit: 20 }).toArray()
+
+  // Build a lookup of event metadata
+  const eventIdSet = [...new Set(topOccRows.map((r: any) => r.eventId))]
+  const eventMeta: Record<string, { title: string; multiDayEvent: boolean }> = {}
+  allEvents.forEach((e) => {
+    const id = e._id.toString()
+    if (eventIdSet.includes(id)) {
+      eventMeta[id] = {
+        title: e.event?.Title || '',
+        multiDayEvent: e.event?.multiDayEvent !== false,
+      }
+    }
+  })
+
+  // Group or keep separate based on multiDayEvent
+  const topEventsMap = new Map<string, any>()
+  topOccRows.forEach((row: any) => {
+    const meta = eventMeta[row.eventId] || { title: '', multiDayEvent: true }
+    if (meta.multiDayEvent) {
+      // Group all occurrences under the eventId
+      const existing = topEventsMap.get(row.eventId)
+      if (existing) {
+        existing.views += row.views || 0
+        existing.uniqueViews += row.uniqueViews || 0
+        if (row.occurrenceDate < existing.startDate) existing.startDate = row.occurrenceDate
+        if (row.occurrenceDate > existing.endDate) existing.endDate = row.occurrenceDate
+        existing.occurrenceDates.push(row.occurrenceDate)
+      } else {
+        topEventsMap.set(row.eventId, {
+          eventId: row.eventId,
+          title: meta.title,
+          multiDayEvent: true,
+          views: row.views || 0,
+          uniqueViews: row.uniqueViews || 0,
+          startDate: row.occurrenceDate,
+          endDate: row.occurrenceDate,
+          occurrenceDates: [row.occurrenceDate],
+        })
+      }
+    } else {
+      // Keep each occurrence as a separate row
+      const key = `${row.eventId}::${row.occurrenceDate}`
+      topEventsMap.set(key, {
+        eventId: row.eventId,
+        title: meta.title,
+        multiDayEvent: false,
+        views: row.views || 0,
+        uniqueViews: row.uniqueViews || 0,
+        occurrenceDate: row.occurrenceDate,
+        startDate: null,
+        endDate: null,
+      })
+    }
+  })
+
+  const topEvents = Array.from(topEventsMap.values())
+    .sort((a, b) => b.views - a.views)
+    .slice(0, 5)
+    .map((e) => {
+      if (e.multiDayEvent) {
+        const isSingle = e.occurrenceDates.length === 1
+        return {
+          eventId: e.eventId,
+          title: e.title,
+          multiDayEvent: true,
+          views: e.views,
+          uniqueViews: e.uniqueViews,
+          occurrenceDate: isSingle ? formatDate(e.startDate) : null,
+          startDate: isSingle ? null : formatDate(e.startDate),
+          endDate: isSingle ? null : formatDate(e.endDate),
+        }
+      }
+      return {
+        eventId: e.eventId,
+        title: e.title,
+        multiDayEvent: false,
+        views: e.views,
+        uniqueViews: e.uniqueViews,
+        occurrenceDate: formatDate(e.occurrenceDate),
+        startDate: null,
+        endDate: null,
+      }
+    })
+
+  // ── 6. Recent logs ────────────────────────────────────────────────────────
+  const rawLogs = await logsCol.find(
+    { ...logsPubFilter, action: { $in: PUBLISHER_LOG_ACTIONS } },
+    { sort: { createdAt: -1 }, limit: 6, projection: { action: 1, title: 1, rawTitle: 1, createdAt: 1 } },
+  ).toArray()
+
+  const recentLogs = rawLogs.map((l: any) => ({
+    action: l.action,
+    title: l.title || l.rawTitle || '',
+    createdAt: l.createdAt instanceof Date ? l.createdAt.toISOString() : (l.createdAt || ''),
+  }))
+
+  return { eventCounts, totals, activeEventsCount, topEvents, recentLogs }
+}
