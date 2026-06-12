@@ -109,7 +109,7 @@ export default defineNuxtConfig({
           'Referrer-Policy': 'strict-origin-when-cross-origin',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
           'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://eu.i.posthog.com https://fonts.googleapis.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://eu.i.posthog.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; form-action 'self';",
+          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.posthog.com https://fonts.googleapis.com https://*.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.posthog.com https://*.cloudflare.com; frame-src 'self' https://*.cloudflare.com; frame-ancestors 'none'; form-action 'self';",
         },
       },
     },
