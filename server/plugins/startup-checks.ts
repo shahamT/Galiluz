@@ -14,6 +14,17 @@ export default defineNitroPlugin(() => {
     if (!config.waCloudAccessToken) missing.push('WA_CLOUD_ACCESS_TOKEN')
     if (!config.waPhoneNumberId) missing.push('WA_PHONE_NUMBER_ID')
 
+    // Turnstile must be all-or-nothing: half-configured means either a broken
+    // login (site key without server verification secret never passes) or a
+    // silently unprotected endpoint (secret without a widget to issue tokens).
+    const siteKey = (config.public as Record<string, string>).turnstileSiteKey
+    const secretKey = config.turnstileSecretKey
+    if (!!siteKey !== !!secretKey) {
+      missing.push('TURNSTILE_SECRET_KEY + NUXT_PUBLIC_TURNSTILE_SITE_KEY (set both or neither)')
+    } else if (!siteKey && !secretKey) {
+      console.warn('[Startup] Turnstile not configured — login captcha disabled')
+    }
+
     if (missing.length > 0) {
       const msg = `[Startup] FATAL: Required environment variables missing: ${missing.join(', ')}. Server will not function correctly.`
       console.error(msg)

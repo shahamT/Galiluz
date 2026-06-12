@@ -1,8 +1,8 @@
 export function useAuth() {
   const authStore = useAuthStore()
 
-  async function sendOtp(phone) {
-    return $fetch('/api/auth/send-otp', { method: 'POST', body: { phone } })
+  async function sendOtp(phone, turnstileToken = '') {
+    return $fetch('/api/auth/send-otp', { method: 'POST', body: { phone, turnstileToken } })
   }
 
   async function verifyOtp(phone, otp) {

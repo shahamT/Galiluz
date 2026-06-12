@@ -2,6 +2,7 @@ import { createHmac, randomInt } from 'node:crypto'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { checkAuthRateLimit, checkPhoneRateLimit } from '~/server/utils/rateLimit'
 import { logAuthEvent } from '~/server/utils/authLog'
+import { verifyTurnstileToken } from '~/server/utils/turnstile'
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000       // 10 minutes
 const OTP_SEND_LIMIT = 5                    // max OTPs per phone per hour
@@ -29,7 +30,11 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const body = await readBody<{ phone?: string }>(event)
+  const body = await readBody<{ phone?: string; turnstileToken?: string }>(event)
+
+  // Bot gate before any DB work — this endpoint triggers paid WhatsApp messages
+  await verifyTurnstileToken(event, body?.turnstileToken)
+
   const raw = typeof body?.phone === 'string' ? body.phone.trim() : ''
   const waId = normaliseIsraeliPhone(raw)
 

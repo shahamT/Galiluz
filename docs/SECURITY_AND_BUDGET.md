@@ -25,6 +25,8 @@ Publishers log in via WhatsApp OTP. The session is stored in a secure cookie.
 
 `composables/useAuthFetch.js` wraps `useFetch` with `server: false` (prevents SSR from making authenticated requests with a missing cookie) and an `onResponseError` hook that calls `authStore.logout()` and navigates to `/login` on any 401 response.
 
+**Bot protection (Cloudflare Turnstile):** `send-otp` requires a Turnstile token when `TURNSTILE_SECRET_KEY` + `NUXT_PUBLIC_TURNSTILE_SITE_KEY` are set (env-gated; both-or-neither enforced at startup in production). The login page renders a Managed widget ([useTurnstile.js](../composables/useTurnstile.js)); the server verifies tokens against Cloudflare siteverify **fail-closed** ([turnstile.ts](../server/utils/turnstile.ts)) — this endpoint triggers paid WhatsApp messages, so a missing/invalid token is 403 and a siteverify outage is 503. Tokens are single-use; the widget resets after every send attempt. `verify-otp` is intentionally not gated — it is already brute-force-hardened (5 attempts → 30-min block).
+
 ---
 
 ## Media upload security
