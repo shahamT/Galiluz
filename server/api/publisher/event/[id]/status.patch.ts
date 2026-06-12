@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
-import { logEventEdit } from '~/server/utils/eventLogs.service'
+import { logEventStatusChange } from '~/server/utils/eventLogs.service'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
@@ -36,12 +36,10 @@ export default defineEventHandler(async (event) => {
   )
 
   if (doc.isActive !== body.isActive) {
-    await logEventEdit({
+    await logEventStatusChange({
       eventId: id,
-      changedFields: ['isActive'],
-      previous: { raw: { isActive: doc.isActive ?? false }, final: { isActive: doc.isActive ?? false } },
-      new:      { raw: { isActive: body.isActive }, final: { isActive: body.isActive } },
-      editSource: 'publisher_portal',
+      isActive: body.isActive,
+      title: typeof doc.event?.Title === 'string' ? doc.event.Title : undefined,
       publisherId: session.publisherId,
       waId: session.waId,
       correlationId: randomBytes(4).toString('hex'),

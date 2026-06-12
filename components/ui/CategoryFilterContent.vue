@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { CATEGORY_GROUPS } from '~/consts/events.const'
+import { getAvailableCategoryGroups } from '~/consts/events.const'
 
 defineOptions({ name: 'CategoryFilterContent' })
 
@@ -57,7 +57,7 @@ const categoriesList = computed(() => props.categories ?? {})
 
 const categoriesByGroup = computed(() => {
   const categories = categoriesList.value
-  return CATEGORY_GROUPS.map((group) => ({
+  return getAvailableCategoryGroups(getTodayDateString()).map((group) => ({
     id: group.id,
     label: group.label,
     categories: group.categoryIds

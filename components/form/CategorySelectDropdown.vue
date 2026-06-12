@@ -33,7 +33,7 @@
 </template>
 
 <script setup>
-import { EVENT_CATEGORIES, CATEGORY_GROUPS } from '~/consts/events.const.js'
+import { EVENT_CATEGORIES, getAvailableCategoryGroups } from '~/consts/events.const.js'
 
 defineOptions({ name: 'FormCategorySelectDropdown' })
 
@@ -43,8 +43,9 @@ const props = defineProps({
 })
 const emit = defineEmits(['select', 'close'])
 
+// Only categories selectable today (time-windowed ones like mundial drop out of range)
 const visibleGroups = computed(() =>
-  CATEGORY_GROUPS.map(g => ({
+  getAvailableCategoryGroups(getTodayDateString()).map(g => ({
     ...g,
     categoryIds: g.categoryIds.filter(id => !props.excludeIds.includes(id)),
   })).filter(g => g.categoryIds.length > 0)

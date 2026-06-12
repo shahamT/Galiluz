@@ -2,6 +2,14 @@
   <div class="DashboardEventsOverview">
     <p v-if="isEmpty" class="DashboardEventsOverview-emptyText">אין לכם עדיין אירועים</p>
     <div v-else class="DashboardEventsOverview-stats">
+      <!-- First in DOM = rightmost in RTL -->
+      <template v-if="(counts.drafts || 0) > 0">
+        <div class="DashboardEventsOverview-stat">
+          <span class="DashboardEventsOverview-value DashboardEventsOverview-value--gray">{{ counts.drafts }}</span>
+          <span class="DashboardEventsOverview-label">טיוטות</span>
+        </div>
+        <div class="DashboardEventsOverview-divider" />
+      </template>
       <div class="DashboardEventsOverview-stat">
         <span class="DashboardEventsOverview-value DashboardEventsOverview-value--green">{{ counts.future }}</span>
         <span class="DashboardEventsOverview-label">אירועים פעילים</span>
@@ -21,10 +29,11 @@
 
 <script setup>
 defineOptions({ name: 'DashboardEventsOverview' })
-const props = defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, past: 0 }) } })
+const props = defineProps({ counts: { type: Object, default: () => ({ total: 0, future: 0, past: 0, drafts: 0 }) } })
 const emit = defineEmits(['add-event'])
 
-const isEmpty = computed(() => (props.counts?.total ?? 0) === 0)
+// Empty only when there is truly nothing — drafts count as "has events"
+const isEmpty = computed(() => (props.counts?.total ?? 0) === 0 && (props.counts?.drafts ?? 0) === 0)
 </script>
 
 <style lang="scss">
@@ -50,7 +59,11 @@ const isEmpty = computed(() => (props.counts?.total ?? 0) === 0)
     align-items: center;
     gap: var(--spacing-xl);
 
-    @include mobile { justify-content: space-around; }
+    @include mobile {
+      justify-content: space-around;
+      align-items: flex-start; // labels wrap to varying line counts — keep numbers on one line
+      gap: var(--spacing-sm);
+    }
   }
 
   &-emptyText {
@@ -66,6 +79,11 @@ const isEmpty = computed(() => (props.counts?.total ?? 0) === 0)
     height: 2rem;
     background: var(--brand-light-green);
     flex-shrink: 0;
+
+    @include mobile {
+      height: auto;
+      align-self: stretch; // span the full row height (top-aligned stats with wrapped labels)
+    }
   }
 
   &-stat {
@@ -73,6 +91,11 @@ const isEmpty = computed(() => (props.counts?.total ?? 0) === 0)
     flex-direction: column;
     align-items: center;
     gap: var(--spacing-2xs);
+
+    @include mobile {
+      flex: 1 1 0; // equal width for all stats regardless of label length
+      min-width: 0;
+    }
   }
 
   &-value {
@@ -83,12 +106,21 @@ const isEmpty = computed(() => (props.counts?.total ?? 0) === 0)
 
     &--green { color: var(--brand-dark-green); }
     &--light-green { color: var(--brand-light-green); }
+    &--gray { color: var(--color-text-muted); }
   }
 
   &-label {
     font-size: var(--font-size-sm);
     color: var(--color-text-light);
     white-space: nowrap;
+
+    @include mobile {
+      // Three stats side by side — break every word to its own line
+      white-space: normal;
+      word-spacing: 100vw;
+      text-align: center;
+      line-height: 1.3;
+    }
   }
 
   &-cta {

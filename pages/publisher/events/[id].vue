@@ -271,6 +271,13 @@
       @close="showDeleteModal = false"
       @deleted="onDeleted"
     />
+
+    <PublisherEventCreatedModal
+      v-if="showCreatedModal && event"
+      :event-id="event.id"
+      @close="showCreatedModal = false"
+      @published="onCreatedModalPublished"
+    />
   </LayoutProtectedShell>
 </template>
 
@@ -285,18 +292,37 @@ const showEditForm = ref(false)
 const showStatusModal = ref(false)
 
 const successBanner = ref('')
+const showCreatedModal = ref(false)
+let bannerTimer = null
+
+function flashBanner(text) {
+  successBanner.value = text
+  clearTimeout(bannerTimer)
+  bannerTimer = setTimeout(() => { successBanner.value = '' }, 4000)
+}
+
+onUnmounted(() => clearTimeout(bannerTimer))
+
 onMounted(() => {
   if (route.query.modal === 'edit') showEditForm.value = true
 
   const s = route.query.success
-  if (s === 'created') successBanner.value = 'האירוע נוסף בהצלחה!'
-  else if (s === 'updated') successBanner.value = 'האירוע עודכן בהצלחה!'
-  if (successBanner.value) {
-    const t = setTimeout(() => { successBanner.value = '' }, 4000)
-    onUnmounted(() => clearTimeout(t))
+  if (s === 'created') {
+    // New events are saved as drafts — immediately suggest publishing
+    showCreatedModal.value = true
+    router.replace({ query: {} })
+  } else if (s === 'updated') {
+    flashBanner('האירוע עודכן בהצלחה!')
     router.replace({ query: {} })
   }
 })
+
+async function onCreatedModalPublished() {
+  showCreatedModal.value = false
+  capture('publisher_event_status_changed', { eventId: route.params.id, isActive: true, source: 'created_modal' })
+  await refresh()
+  flashBanner('האירוע פורסם בהצלחה! 🎉')
+}
 
 function clearDraftFromUrl() {
   if (route.query.modal || route.query.draft) router.replace({ query: {} })

@@ -72,7 +72,6 @@
         </button>
 
         <button
-          v-if="!isFirst && !frozen"
           type="button"
           class="OccurrenceRow-remove"
           aria-label="הסר מועד"
@@ -80,7 +79,6 @@
         >
           <UiIcon name="delete" size="sm" />
         </button>
-        <div v-else class="OccurrenceRow-actionPlaceholder" aria-hidden="true" />
       </div>
 
     </div>
@@ -204,6 +202,17 @@ function onAllDayChange() {
 }
 
 function onHasEndTimeChange() {
+  if (hasEndTime.value) {
+    if (!local.endTime) {
+      const startMins = toMins(startH.value, startM.value)
+      const adjusted = startMins + 60
+      local.endTime = adjusted > 23 * 60 + 59
+        ? '23:59'
+        : `${String(Math.floor(adjusted / 60)).padStart(2, '0')}:${String(adjusted % 60).padStart(2, '0')}`
+    }
+  } else {
+    local.endTime = ''
+  }
   emit('update:modelValue', local)
 }
 
@@ -443,11 +452,6 @@ function confirmRemove() {
     &--first .OccurrenceRow-duplicate { order: 1; }
   }
 
-  &-actionPlaceholder {
-    width: 29px;
-    height: 29px;
-    visibility: hidden;
-  }
 
   &-duplicate {
     width: 29px;

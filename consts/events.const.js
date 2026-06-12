@@ -95,6 +95,14 @@ export const EVENT_CATEGORIES = {
     label: 'טכנולוגיה',
     color: '#0EA5E9',
   },
+  // Temporary, time-windowed category (selectable only within the dates below).
+  // Stays in the catalog permanently so tagged events keep their label/color forever.
+  mundial: {
+    label: 'מונדיאל ⚽',
+    color: '#15803D',
+    availableFrom: '2026-06-11',
+    availableTo: '2026-07-20',
+  },
 }
 
 /** Id used in filter UI and wa-bot for "all categories" */
@@ -107,7 +115,7 @@ export const CATEGORY_GROUPS = [
   {
     id: 'music_nature_movement',
     label: 'מוזיקה, טבע ותנועה',
-    categoryIds: ['party', 'show', 'jam', 'festival', 'nature', 'sport', 'music'],
+    categoryIds: ['party', 'show', 'jam', 'festival', 'nature', 'sport', 'music', 'mundial'],
   },
   {
     id: 'food_art_shopping',
@@ -135,4 +143,34 @@ export function getCategoriesList() {
     id,
     label: category.label,
   }))
+}
+
+/**
+ * Whether a category is currently selectable. Categories without an
+ * availableFrom/availableTo window are always available; time-windowed ones
+ * (e.g. mundial) are gated by the YYYY-MM-DD `todayYMD` the caller passes.
+ * The catalog still keeps every category for display — this only affects selection UIs.
+ * @param {{availableFrom?: string, availableTo?: string}} category
+ * @param {string} todayYMD - today's date as YYYY-MM-DD
+ * @returns {boolean}
+ */
+export function isCategoryAvailable(category, todayYMD) {
+  if (!category) return false
+  if (category.availableFrom && todayYMD < category.availableFrom) return false
+  if (category.availableTo && todayYMD > category.availableTo) return false
+  return true
+}
+
+/**
+ * Category groups with only the currently-selectable categories in each,
+ * dropping any group left empty. Use in selection UIs (publisher picker, public filter).
+ * @param {string} todayYMD - today's date as YYYY-MM-DD
+ */
+export function getAvailableCategoryGroups(todayYMD) {
+  return CATEGORY_GROUPS
+    .map((group) => ({
+      ...group,
+      categoryIds: group.categoryIds.filter((id) => isCategoryAvailable(EVENT_CATEGORIES[id], todayYMD)),
+    }))
+    .filter((group) => group.categoryIds.length > 0)
 }
