@@ -16,14 +16,3 @@
     display: none !important;
   }
 }
-
-// @vuepic/vue-datepicker brand overrides
-:root {
-  --dp-primary-color: var(--brand-dark-green);
-  --dp-primary-text-color: #fff;
-  --dp-border-color: var(--color-border);
-  --dp-border-color-hover: var(--brand-dark-green);
-  --dp-font-size: var(--font-size-sm);
-  --dp-border-radius: var(--radius-md);
-  --dp-cell-border-radius: var(--radius-sm);
-}

@@ -12,7 +12,7 @@ export default defineNuxtConfig({
     port: 3000,
   },
   
-  css: ['~/assets/css/main.scss', '@vuepic/vue-datepicker/dist/main.css'],
+  css: ['~/assets/css/main.scss'],
   
   modules: ['@pinia/nuxt', '@vueuse/nuxt'],
 
@@ -26,7 +26,7 @@ export default defineNuxtConfig({
   },
 
   build: {
-    transpile: ['floating-vue', '@floating-ui/core', '@floating-ui/dom', '@vuepic/vue-datepicker'],
+    transpile: ['floating-vue', '@floating-ui/core', '@floating-ui/dom'],
   },
   
   app: {
