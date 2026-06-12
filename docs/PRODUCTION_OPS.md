@@ -10,6 +10,7 @@
 ## Error visibility
 
 - Unhandled 5xx errors are logged as single-line JSON (route, status, correlationId, trimmed stack) by [error-logging.ts](../server/plugins/error-logging.ts) — searchable in Render logs.
+- **Email alerts** (env-gated by the `SMTP_*`/`MAIL_*` vars — see [.env.example](../.env.example)): 5xx errors and feedback submissions email the site owner via Zoho SMTP ([mailer.ts](../server/utils/mailer.ts)). Error emails are storm-protected: one per error signature per 15 min, max 10/hour, suppressed count carried into the next email. Unset vars = silently disabled.
 - Every request gets an `X-Correlation-Id` (honored when sent by the WA apps) via [correlation-id.ts](../server/middleware/correlation-id.ts); eventLogs entries carry correlation ids through the event lifecycle.
 - **Sentry (when ready):** create a project, set `SENTRY_DSN`, then install `@sentry/nuxt` per their Nuxt guide. Deliberately not pre-installed — without a DSN it is dead weight in the bundle.
 

@@ -80,6 +80,13 @@ export default defineNuxtConfig({
     otpSecret: process.env.OTP_SECRET || '',
     waCloudAccessToken: process.env.WA_CLOUD_ACCESS_TOKEN || '',
     waPhoneNumberId: process.env.WA_PHONE_NUMBER_ID || '',
+    // Notification emails via Zoho SMTP (optional — mailer no-ops when unset)
+    smtpHost: process.env.SMTP_HOST || '',
+    smtpPort: process.env.SMTP_PORT || '465',
+    smtpUser: process.env.SMTP_USER || '',
+    smtpPass: process.env.SMTP_PASS || '',
+    mailFrom: process.env.MAIL_FROM || '',
+    mailTo: process.env.MAIL_TO || '',
     // Public keys (exposed to client-side)
     public: {
       posthogPublicKey: process.env.NUXT_PUBLIC_POSTHOG_PUBLIC_KEY || '',
