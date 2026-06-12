@@ -1,3 +1,5 @@
+import { resolveCityName } from '~/utils/events.helpers'
+
 /**
  * Opens a navigation app (Waze / Google Maps) for the given location.
  * Uses a direct nav link when available, otherwise falls back to a search deep link.
@@ -9,7 +11,8 @@ export function handleNavigationSelection(navType, location) {
   if (location.locationName) queryParts.push(location.locationName)
   if (location.addressLine1) queryParts.push(location.addressLine1)
   if (location.addressLine2) queryParts.push(location.addressLine2)
-  if (location.city) queryParts.push(location.city)
+  const city = resolveCityName(location.city)
+  if (city) queryParts.push(city)
   const query = encodeURIComponent(queryParts.join(', '))
 
   let url
