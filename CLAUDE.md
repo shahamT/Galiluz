@@ -41,6 +41,12 @@ OTP via WhatsApp → HttpOnly cookie `galiluz_auth` (1h). Roles: `publisher` | `
 
 - **Local OTP testing**: in dev the OTP is never sent — it's printed in the Nuxt terminal as `[Auth][DEV] OTP for 972…: XXXXXX`. Read it from the server output.
 - In dev, `requireApiSecret` no-ops when `API_SECRET` is unset locally; production refuses to boot without it ([startup-checks.ts](server/plugins/startup-checks.ts)).
+- **Cloudflare Turnstile gates `send-otp` in production only** — dev is exempt on both client and server ([useTurnstile.js](composables/useTurnstile.js), [turnstile.ts](server/utils/turnstile.ts)), so local login never shows a captcha. Half-configured keys (one of the two) crash production startup by design.
+
+## Integrations (env-gated — unset vars silently disable)
+
+- **Zoho SMTP owner emails** ([server/utils/mailer.ts](server/utils/mailer.ts)): feedback submissions + throttled 5xx error alerts to the site owner. `SMTP_*`/`MAIL_*` env vars.
+- **Cloudflare Turnstile** (above). **PostHog** analytics, **Cloudinary** media — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full external-services map.
 
 ## Layout & conventions
 

@@ -4,7 +4,7 @@
 
 - Local dev: `.env` at the repo root (never committed). Template: [.env.example](../.env.example).
 - Production (Render): env vars are set in the Render dashboard — **never** by editing `.env` comments. The dev/prod database split is `MONGODB_DB_NAME`: `valley_luz_app_dev` locally, `valley_luz_app` in production. Switching DBs by commenting/uncommenting `.env` lines is forbidden: one un-commented line away from running dev code against production data.
-- Startup fails fast in production if `OTP_SECRET`, `API_SECRET`, `MONGODB_URI`, `MONGODB_DB_NAME`, or the WhatsApp credentials are missing ([startup-checks.ts](../server/plugins/startup-checks.ts)).
+- Startup fails fast in production if `OTP_SECRET`, `API_SECRET`, `MONGODB_URI`, `MONGODB_DB_NAME`, or the WhatsApp credentials are missing, **or if Turnstile is half-configured** — `TURNSTILE_SECRET_KEY` and `NUXT_PUBLIC_TURNSTILE_SITE_KEY` must be set both-or-neither ([startup-checks.ts](../server/plugins/startup-checks.ts)). Optional integrations that silently disable when unset: `SMTP_*`/`MAIL_*` (owner emails), the Turnstile pair (login captcha).
 - The WhatsApp apps (`apps/wa-bot`, `apps/wa-listener`) have their own env files; they share `API_SECRET` (sent as `X-API-Key`) and the Mongo connection with the web app.
 
 ## Error visibility

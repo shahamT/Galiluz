@@ -205,7 +205,7 @@ Durable audit trail, written via [eventLogs.service.ts](../server/utils/eventLog
   createdAt: Date,
   eventId: String,
   action: 'draft_created' | 'draft_processed' | 'event_created'
-        | 'event_activated' | 'event_edited' | 'event_deleted',
+        | 'event_activated' | 'event_deactivated' | 'event_edited' | 'event_deleted',
   publisherId: String, waId: String,           // when known
   correlationId: String,                       // greppable against server logs (X-Correlation-Id)
   isManagerAction: Boolean,                    // true when a manager acted on another publisher's event

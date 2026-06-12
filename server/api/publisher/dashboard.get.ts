@@ -2,7 +2,7 @@ import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { getTodayIsrael } from '~/server/utils/eventFirstOccurrence'
 
-const PUBLISHER_LOG_ACTIONS = ['event_activated', 'event_edited', 'event_deleted']
+const PUBLISHER_LOG_ACTIONS = ['event_created', 'event_activated', 'event_deactivated', 'event_edited', 'event_deleted']
 
 function formatDate(d: string) {
   // YYYY-MM-DD → D.M
@@ -37,20 +37,24 @@ export default defineEventHandler(async (event) => {
 
   // ── 1. Event counts (always all-time, no filter) ──────────────────────────
   const allEvents = await eventsCol.find(
-    { 'event.publisherId': session.publisherId, isActive: true, deletedAt: { $exists: false }, event: { $ne: null } },
-    { projection: { 'event.occurrences': 1, 'event.Title': 1, 'event.multiDayEvent': 1, _id: 1 } },
+    { 'event.publisherId': session.publisherId, deletedAt: { $exists: false }, event: { $ne: null } },
+    { projection: { 'event.occurrences': 1, 'event.Title': 1, 'event.multiDayEvent': 1, isActive: 1, _id: 1 } },
   ).toArray()
 
+  const activeEvents = allEvents.filter((e) => e.isActive === true)
+  const draftsCount = allEvents.length - activeEvents.length
+
   const futureEventIds = new Set<string>()
-  allEvents.forEach((e) => {
+  activeEvents.forEach((e) => {
     const hasFuture = (e.event?.occurrences || []).some((occ: any) => (occ.date || '') >= today)
     if (hasFuture) futureEventIds.add(e._id.toString())
   })
 
   const eventCounts = {
-    total: allEvents.length,
+    total: activeEvents.length,
     future: futureEventIds.size,
-    past: allEvents.length - futureEventIds.size,
+    past: activeEvents.length - futureEventIds.size,
+    drafts: draftsCount,
   }
 
   // ── 2. Determine date scope for filtered stats ────────────────────────────

@@ -40,7 +40,7 @@ The file store ([rateLimitFileStore.ts](../server/utils/rateLimitFileStore.ts)) 
 | GET | `/api/events/[id]/first-occurrence` | RateLimit | First occurrence ≥ today (Israel) for redirect logic. Accepts `docId` or flat `docId-0`. |
 | GET | `/api/events/[id]/meta` | RateLimit | SEO/social-card meta `{ title, shortDescription, imageUrl }` (prefers `isMain` media; video URLs become jpg thumbnails). 404 for inactive/deleted/draft. Cache 60s. |
 | POST | `/api/events/[id]/interact` | RateLimit | Track `action` (`view\|share\|nav\|calendar\|link\|contact`) per `visitorId`, optional `occurrenceDate`. Refuses deleted/missing events. Counting rules in [DATA_MODEL.md](./DATA_MODEL.md#interactions-counting-rules). |
-| POST | `/api/feedback` | RateLimit | `topic` (`bug\|feature\|content\|general\|other`) + `content` (10–2000 chars). |
+| POST | `/api/feedback` | RateLimit | `topic` (`bug\|feature\|content\|general\|other`) + `content` (10–2000 chars). Side-effect: owner notification email via [mailer.ts](../server/utils/mailer.ts) (fire-and-forget, never fails the request). |
 | GET | `/api/categories` | none | Static category list. Cache 24h. |
 | GET | `/api/health` | none | Liveness probe — returns instantly, no DB. |
 | GET | `/direct?event=xxx` | none (server route) | 302 → `/events/daily-view?date=...&event=docId-index` at the first future occurrence; falls back to today. Same logic runs as middleware for `GET /?event=xxx`. |

@@ -23,7 +23,7 @@
         </span>
         <div class="DashboardRecentLogs-info">
           <span class="DashboardRecentLogs-text">
-            {{ prefixFor(log.action) }} <strong>{{ log.title || 'אירוע' }}</strong>
+            {{ prefixFor(log.action) }} <strong>{{ truncateTitle(log.title) }}</strong>{{ suffixFor(log.action) }}
           </span>
           <span class="DashboardRecentLogs-time">{{ relativeTime(log.createdAt) }}</span>
         </div>
@@ -39,17 +39,33 @@ defineProps({
   loading: { type: Boolean, default: false },
 })
 
+const MAX_TITLE_CHARS = 20
+
+function truncateTitle(title) {
+  const t = (title || 'אירוע').trim()
+  return t.length > MAX_TITLE_CHARS ? `${t.slice(0, MAX_TITLE_CHARS)}…` : t
+}
+
 function iconFor(action) {
-  if (action === 'event_activated') return 'check_circle'
+  if (action === 'event_created') return 'add_circle'
+  if (action === 'event_activated') return 'publish'
+  if (action === 'event_deactivated') return 'draft_orders'
   if (action === 'event_edited') return 'edit'
   if (action === 'event_deleted') return 'delete'
   return 'history'
 }
 
 function prefixFor(action) {
+  if (action === 'event_created') return 'יצרת את'
   if (action === 'event_activated') return 'פרסמת את'
+  if (action === 'event_deactivated') return 'הפכת את'
   if (action === 'event_edited') return 'עדכנת את'
   if (action === 'event_deleted') return 'מחקת אירוע:'
+  return ''
+}
+
+function suffixFor(action) {
+  if (action === 'event_deactivated') return ' לטיוטה'
   return ''
 }
 
@@ -106,9 +122,11 @@ function relativeTime(iso) {
     flex-shrink: 0;
     font-size: 1rem;
 
-    &--event_activated { background: rgba(11,151,74,0.12); color: var(--brand-dark-green); }
-    &--event_edited    { background: rgba(25,118,210,0.12); color: var(--color-primary); }
-    &--event_deleted   { background: rgba(211,47,47,0.12);  color: var(--color-error); }
+    &--event_created     { background: rgba(133,200,75,0.16); color: var(--brand-light-green); }
+    &--event_activated   { background: rgba(11,151,74,0.12);  color: var(--brand-dark-green); }
+    &--event_deactivated { background: rgba(245,158,11,0.14); color: #b45309; }
+    &--event_edited      { background: rgba(25,118,210,0.12); color: var(--color-primary); }
+    &--event_deleted     { background: rgba(211,47,47,0.12);  color: var(--color-error); }
   }
 
   &-info {

@@ -51,14 +51,21 @@
                 />
               </FormField>
 
-              <div class="AddEventPage-priceField">
+              <div class="AddEventPage-priceField" :class="{ 'AddEventPage-priceField--error': errors.price }">
                 <span class="AddEventPage-priceLabel">מחיר כניסה</span>
-                <div class="AddEventPage-priceRow">
+
+                <label class="AddEventPage-toggle">
+                  <input v-model="form.isFree" type="checkbox" @change="onFreeToggle" />
+                  <span class="AddEventPage-toggleTrack" />
+                  <span>כניסה חופשית</span>
+                </label>
+
+                <div v-if="!form.isFree" class="AddEventPage-priceRow">
                   <input
                     :value="form.price ?? ''"
                     type="number"
                     class="FormInput AddEventPage-priceInput"
-                    placeholder="0 (כניסה חופשית)"
+                    placeholder="מחיר"
                     min="0"
                     step="1"
                     @input="form.price = $event.target.value === '' ? null : Number($event.target.value); clearError('price')"
@@ -75,7 +82,7 @@
               <h2 class="AddEventPage-sectionTitle">מועד האירוע</h2>
               <p class="AddEventPage-sectionHint">ניתן להוסיף מספר מועדים לאותו אירוע.</p>
 
-              <div class="AddEventPage-occurrences">
+              <div class="AddEventPage-occurrences" :class="{ 'FormField--error': errors.occurrences }">
                 <FormOccurrenceRow
                   v-for="(occ, i) in form.occurrences"
                   :key="occ._key"
@@ -86,6 +93,7 @@
                   @remove="removeOccurrence(i)"
                   @duplicate="duplicateOccurrence(i)"
                 />
+                <span v-if="errors.occurrences" class="FormField-error" role="alert">{{ errors.occurrences }}</span>
               </div>
 
               <button type="button" class="AddEventPage-addBtn" @click="addOccurrence">
@@ -235,11 +243,25 @@
               </div>
 
               <div v-if="!form.autoNav" class="AddEventPage-navLinks">
-                <FormField label="קישור Waze">
-                  <input v-model="form.wazeLink" type="url" class="FormInput" placeholder="https://waze.com/ul/..." />
+                <FormField label="קישור Waze" :error="errors.wazeLink">
+                  <input
+                    v-model="form.wazeLink"
+                    type="url"
+                    class="FormInput"
+                    placeholder="https://waze.com/ul/..."
+                    @input="clearError('wazeLink')"
+                    @blur="validateField('wazeLink')"
+                  />
                 </FormField>
-                <FormField label="קישור Google Maps">
-                  <input v-model="form.gmapsLink" type="url" class="FormInput" placeholder="https://maps.app.goo.gl/..." />
+                <FormField label="קישור Google Maps" :error="errors.gmapsLink">
+                  <input
+                    v-model="form.gmapsLink"
+                    type="url"
+                    class="FormInput"
+                    placeholder="https://maps.app.goo.gl/..."
+                    @input="clearError('gmapsLink')"
+                    @blur="validateField('gmapsLink')"
+                  />
                 </FormField>
               </div>
             </section>
@@ -294,7 +316,7 @@
             :disabled="isSubmitting"
           >
             <span v-if="isSubmitting" class="AddEventPage-submitSpinner" />
-            <template v-else>{{ props.mode === 'edit' ? 'עדכון אירוע ✓' : 'פרסם אירוע ✓' }}</template>
+            <template v-else>{{ props.mode === 'edit' ? 'עדכון אירוע ✓' : 'יצירת אירוע ✓' }}</template>
           </button>
           <button v-else type="button" class="EventFormModal-footerBtn" @click="resetForm">
             פרסם אירוע נוסף
@@ -367,6 +389,7 @@ const form = reactive({
   wazeLink: '',
   gmapsLink: '',
   price: null,
+  isFree: false,
   links: [],
   media: [],
 })
@@ -402,9 +425,21 @@ function validateField(key) {
       else if (/<a\b/i.test(form.description))
         errors.description = 'התיאור לא יכול להכיל קישורים'
       break
+    case 'wazeLink':
+      if (!form.autoNav && form.wazeLink.trim() && !isNavServiceLink(form.wazeLink, 'waze'))
+        errors.wazeLink = 'הקישור צריך להיות קישור שיתוף של Waze'
+      break
+    case 'gmapsLink':
+      if (!form.autoNav && form.gmapsLink.trim() && !isNavServiceLink(form.gmapsLink, 'gmaps'))
+        errors.gmapsLink = 'הקישור צריך להיות קישור שיתוף של Google Maps'
+      break
     case 'price':
-      if (form.price !== null && form.price !== '' && Number(form.price) < 0)
+      if (!form.isFree && (form.price === null || form.price === ''))
+        errors.price = 'יש להזין מחיר'
+      else if (form.price !== null && form.price !== '' && Number(form.price) < 0)
         errors.price = 'המחיר לא יכול להיות שלילי'
+      else if (!form.isFree && form.price !== null && form.price !== '' && Number(form.price) === 0)
+        errors.price = 'לאירוע ללא תשלום הפעילו את "כניסה חופשית"'
       break
   }
 }
@@ -470,8 +505,14 @@ function removeOtherCategory(id) {
 }
 
 // --- Helpers ---
-function addOccurrence() { form.occurrences.push(freshOccurrence()) }
-function removeOccurrence(i) { form.occurrences.splice(i, 1) }
+function addOccurrence() {
+  form.occurrences.push(freshOccurrence())
+  clearError('occurrences')
+}
+function removeOccurrence(i) {
+  form.occurrences.splice(i, 1)
+  if (form.occurrences.length === 0) errors.occurrences = 'יש להוסיף לפחות מועד אחד לאירוע'
+}
 function duplicateOccurrence(i) {
   const src = form.occurrences[i]
   const date = src._frozen ? todayLocal() : src.date
@@ -503,16 +544,22 @@ function validateLink(i, field) {
 function clearError(key) { errors[key] = '' }
 function onPriceBlur() {
   const n = parseFloat(form.price)
-  form.price = isNaN(n) ? null : n === 0 ? null : n
+  form.price = isNaN(n) ? null : n
   validateField('price')
+}
+
+// Free entry toggle: hide + clear the price input so no leftover value is saved
+function onFreeToggle() {
+  if (form.isFree) {
+    form.price = null
+    clearError('price')
+  }
 }
 
 function normalizeTime(t) {
   if (!t) return ''
   if (/^\d{2}:\d{2}$/.test(String(t))) return t
-  const match = String(t).match(/T(\d{2}):(\d{2})/)
-  if (match) return `${match[1]}:${match[2]}`
-  return ''
+  return getTimeInIsraelFromIso(t) || ''
 }
 
 function initFromData(data) {
@@ -533,7 +580,8 @@ function initFromData(data) {
   form.autoNav = !hasCustomLinks
   form.wazeLink = data.location?.wazeNavLink || ''
   form.gmapsLink = data.location?.gmapsNavLink || ''
-  form.price = data.price || null
+  form.isFree = data.price === 0
+  form.price = data.price === 0 ? null : (data.price ?? null)
   form.links = (data.urls || []).filter(Boolean).map(u => ({ _key: nextKey(), type: u.type || 'link', label: u.Title || '', url: u.Url || '' }))
   existingMedia.value = data.media || []
   const cityKey = data.location?.city || ''
@@ -562,6 +610,8 @@ function restoreFromDraft(draft) {
   form.wazeLink = d.wazeLink || ''
   form.gmapsLink = d.gmapsLink || ''
   form.price = d.price ?? null
+  form.isFree = d.isFree ?? (d.price === 0)
+  if (form.isFree) form.price = null
   form.links = (d.links || []).map(l => ({ ...l, _key: nextKey() }))
   form.media = []
   existingMedia.value = draft.existingMedia || []
@@ -582,6 +632,27 @@ function normalizeUrl(val) {
 
 function isValidUrl(val) {
   return /^(https?:\/\/)?[\w.-]+\.[a-zA-Z]{2,}(\/.*)?$/.test(val.trim())
+}
+
+// Loose service-recognition for navigation links — checks the host signature only,
+// so parameter/path format changes keep working. Extend with one regex per new format.
+// Waze:   waze.com/ul?…, www.waze.com/ul/h…, ul.waze.com/ul/h…, waze.com/live-map/…
+// GMaps:  maps.app.goo.gl/…, goo.gl/maps/… (legacy), google.<tld>/maps/…, maps.google.<tld>/…
+const NAV_LINK_PATTERNS = {
+  waze: [
+    /(\/\/|\.)waze\.com([/?#]|$)/i,
+  ],
+  gmaps: [
+    /(\/\/|\.)maps\.app\.goo\.gl([/?#]|$)/i,
+    /(\/\/|\.)goo\.gl\/maps/i,
+    /(\/\/|\.)google\.[a-z.]{2,10}\/maps/i,
+    /(\/\/|\.)maps\.google\.[a-z.]{2,10}([/?#]|$)/i,
+  ],
+}
+
+function isNavServiceLink(val, service) {
+  const normalized = normalizeUrl(val)
+  return NAV_LINK_PATTERNS[service].some((re) => re.test(normalized))
 }
 
 // --- Validation ---
@@ -613,6 +684,10 @@ function validate() {
     errors.description = 'התיאור לא יכול להכיל קישורים'; ok = false
   }
 
+  if (form.occurrences.length === 0) {
+    errors.occurrences = 'יש להוסיף לפחות מועד אחד לאירוע'; ok = false
+  }
+
   const today = todayLocal()
   form.occurrences.forEach((occ, i) => {
     if (occ._frozen) return
@@ -642,9 +717,22 @@ function validate() {
     errors.region = 'יש לבחור אזור'; ok = false
   }
 
+  if (!form.autoNav) {
+    if (form.wazeLink.trim() && !isNavServiceLink(form.wazeLink, 'waze')) {
+      errors.wazeLink = 'הקישור צריך להיות קישור שיתוף של Waze'; ok = false
+    }
+    if (form.gmapsLink.trim() && !isNavServiceLink(form.gmapsLink, 'gmaps')) {
+      errors.gmapsLink = 'הקישור צריך להיות קישור שיתוף של Google Maps'; ok = false
+    }
+  }
+
   const priceNum = parseFloat(form.price)
-  if (form.price !== null && form.price !== '' && (!isNaN(priceNum) && priceNum < 0)) {
+  if (!form.isFree && (form.price === null || form.price === '')) {
+    errors.price = 'יש להזין מחיר'; ok = false
+  } else if (form.price !== null && form.price !== '' && (!isNaN(priceNum) && priceNum < 0)) {
     errors.price = 'המחיר לא יכול להיות שלילי'; ok = false
+  } else if (!form.isFree && form.price !== null && form.price !== '' && (!isNaN(priceNum) && priceNum === 0)) {
+    errors.price = 'לאירוע ללא תשלום הפעילו את "כניסה חופשית"'; ok = false
   }
 
   form.links.forEach((link, i) => {
@@ -697,10 +785,10 @@ function buildEventPayload(f, allMedia) {
       locationName:  f.locationName,
       addressLine1:  f.addressLine1,
       locationNotes: f.locationNotes,
-      wazeNavLink:   f.autoNav ? null : (f.wazeLink || null),
-      gmapsNavLink:  f.autoNav ? null : (f.gmapsLink || null),
+      wazeNavLink:   f.autoNav ? null : (normalizeUrl(f.wazeLink) || null),
+      gmapsNavLink:  f.autoNav ? null : (normalizeUrl(f.gmapsLink) || null),
     },
-    price: f.price ?? null,
+    price: f.isFree ? 0 : (f.price ?? null),
     urls:  f.links.map(l => ({ Title: l.label, Url: l.type === 'link' ? normalizeUrl(l.url) : l.url, type: l.type })),
     media: allMedia,
   }
@@ -709,7 +797,10 @@ function buildEventPayload(f, allMedia) {
 async function onSubmit() {
   if (!validate()) {
     nextTick(() => {
-      const firstError = bodyEl.value?.querySelector('.FormField--error')
+      // Covers every error marker in the form: FormFields, link rows, and the price block
+      const firstError = bodyEl.value?.querySelector(
+        '.FormField--error, .LinkRow--hasErrors, .AddEventPage-priceField--error',
+      )
       if (firstError) {
         firstError.scrollIntoView({ behavior: 'smooth', block: 'center' })
         const focusable = firstError.querySelector('input, textarea, button, select')
@@ -770,6 +861,7 @@ function resetForm() {
   form.gmapsLink = ''
 
   form.price = null
+  form.isFree = false
   form.links = []
   form.media = []
   form.categories = []
@@ -1168,14 +1260,21 @@ function resetForm() {
     color: var(--color-error);
   }
 
+  &-priceField--error .FormInput {
+    border-color: var(--color-error) !important;
+  }
+
   &-priceRow {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    max-width: 16rem;
   }
 
-  &-priceInput { text-align: center; }
+  &-priceInput {
+    text-align: center;
+    width: 7rem;
+    flex: 0 0 auto;
+  }
 
   &-priceCurrency {
     font-size: var(--font-size-lg);

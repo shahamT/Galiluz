@@ -28,4 +28,5 @@ Rule that prevents real bugs: use `useAuthFetch` for **all** `/api/publisher/**`
 | [useInstallPrompt](useInstallPrompt.js) | Shared PWA install state: `canInstall`, `isIOS`, `isInstalled`, `showInstructions`, `triggerInstall` |
 | [usePosthog](usePosthog.js) | `capture`/`identify` wrappers around `$posthog`; no-op when PostHog isn't initialized |
 | [useScreenWidth](useScreenWidth.js) | Reactive `max-width` media query (default < 768px) via VueUse |
+| [useTurnstile](useTurnstile.js) | Cloudflare Turnstile loader for the login captcha: `enabled`, `render(el, {onToken, onExpire})`, `reset(widgetId)`; production-only (dev exempt), no-op without `NUXT_PUBLIC_TURNSTILE_SITE_KEY` |
 | [useUrlState](useUrlState.js) | URL ↔ calendar store sync (`?year/month` or `?date` + filter params) with localStorage filter preference fallback |

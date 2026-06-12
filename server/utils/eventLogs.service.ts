@@ -9,7 +9,19 @@ export type EventLogActionCreation =
   | 'event_created'
   | 'draft_processed'
   | 'event_activated'
-export type EventLogAction = EventLogActionCreation | 'event_edited' | 'event_deleted'
+export type EventLogAction = EventLogActionCreation | 'event_deactivated' | 'event_edited' | 'event_deleted'
+
+export interface EventLogStatusChangePayload {
+  eventId: string
+  /** true = published (event_activated), false = unpublished back to draft (event_deactivated) */
+  isActive: boolean
+  title?: string
+  publisherId?: string
+  waId?: string
+  correlationId?: string
+  /** true when a manager acted on another publisher's event */
+  isManagerAction?: boolean
+}
 
 export interface EventLogCreationPayload {
   eventId: string
@@ -82,6 +94,30 @@ export async function logEventCreation(payload: EventLogCreationPayload): Promis
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error(LOG_PREFIX, 'logEventCreation failed', payload.eventId, msg)
+  }
+}
+
+/**
+ * Insert a publish/unpublish log (event_activated / event_deactivated).
+ * Does not throw; logs errors so the main request still succeeds.
+ */
+export async function logEventStatusChange(payload: EventLogStatusChangePayload): Promise<void> {
+  try {
+    const collection = await getEventLogsCollection()
+    const doc = {
+      createdAt: new Date(),
+      eventId: payload.eventId,
+      action: (payload.isActive ? 'event_activated' : 'event_deactivated') as EventLogAction,
+      ...(payload.title !== undefined && { title: payload.title }),
+      ...(payload.publisherId !== undefined && { publisherId: payload.publisherId }),
+      ...(payload.waId !== undefined && { waId: payload.waId }),
+      ...(payload.correlationId !== undefined && { correlationId: payload.correlationId }),
+      ...(payload.isManagerAction && { isManagerAction: true }),
+    }
+    await collection.insertOne(doc)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(LOG_PREFIX, 'logEventStatusChange failed', payload.eventId, msg)
   }
 }
 

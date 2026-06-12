@@ -8,7 +8,7 @@
       <p class="PublisherDashboard-greeting">ברוך/ה הבאה {{ authStore.user?.fullName }}, כאן תוכל/י לקבל מבט מלמעלה על כל האירועים שפרסמת!</p>
     </div>
 
-    <PublisherDashboardEventsOverview :counts="data?.eventCounts || { total: 0, future: 0, past: 0 }" @add-event="showEventForm = true" />
+    <PublisherDashboardEventsOverview :counts="data?.eventCounts || { total: 0, future: 0, past: 0, drafts: 0 }" @add-event="showEventForm = true" />
 
     <div class="PublisherDashboard-divider" />
     <PublisherDashboardFilterBar v-model="filter" />
@@ -20,35 +20,35 @@
         :value="data?.activeEventsCount || 0"
         icon="event"
         color="#0b974a"
-        :loading="pending"
+        :loading="isFirstLoad"
       />
       <PublisherDashboardKpiCard
         label="צפיות"
         :value="data?.totals?.views || 0"
         icon="visibility"
         color="#85c84b"
-        :loading="pending"
+        :loading="isFirstLoad"
       />
       <PublisherDashboardKpiCard
         label="מבקרים ייחודיים"
         :value="data?.totals?.uniqueViews || 0"
         icon="person"
         color="#3c92b5"
-        :loading="pending"
+        :loading="isFirstLoad"
       />
       <PublisherDashboardKpiCard
         label="אינטרקציות"
         :value="totalInteractions"
         icon="touch_app"
         color="#80dcda"
-        :loading="pending"
+        :loading="isFirstLoad"
       />
     </div>
 
     <!-- Bottom row -->
     <div class="PublisherDashboard-bottom">
-      <PublisherDashboardTopEvents :events="data?.topEvents || []" :loading="pending" />
-      <PublisherDashboardRecentLogs :logs="data?.recentLogs || []" :loading="pending" />
+      <PublisherDashboardTopEvents :events="data?.topEvents || []" :loading="isFirstLoad" />
+      <PublisherDashboardRecentLogs :logs="data?.recentLogs || []" :loading="isFirstLoad" />
     </div>
     </div>
 
@@ -73,10 +73,16 @@ function onEventSaved({ id }) {
   }
 }
 
-const { data, pending } = await useAuthFetch('/api/publisher/dashboard', {
+const { data, pending, refresh } = await useAuthFetch('/api/publisher/dashboard', {
   query: computed(() => ({ filter: filter.value })),
   watch: [filter],
 })
+
+// Returning to the dashboard tab reuses cached data — refetch so stats reflect
+// actions performed in other tabs (create/publish/delete). Existing numbers stay
+// visible during the silent refresh (loading skeletons only on first load).
+onMounted(() => { refresh() })
+const isFirstLoad = computed(() => pending.value && !data.value)
 
 const totalInteractions = computed(() => {
   const t = data.value?.totals
