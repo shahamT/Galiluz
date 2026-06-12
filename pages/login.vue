@@ -128,6 +128,15 @@ onMounted(async () => {
   turnstileWidgetId = await renderTurnstile(turnstileEl.value, {
     onToken: (token) => { turnstileToken.value = token },
     onExpire: () => { turnstileToken.value = '' },
+    onError: (code) => {
+      // 110xxx = fatal config error (e.g. 110200 = hostname not in the widget's
+      // allowed list). These don't self-recover, so surface a message instead of
+      // leaving the send button silently disabled. Transient codes (network etc.)
+      // are left to Turnstile's own auto-retry.
+      if (String(code).startsWith('110')) {
+        error.value = 'אימות האבטחה אינו זמין כרגע. נסו שוב מאוחר יותר.'
+      }
+    },
   })
 })
 

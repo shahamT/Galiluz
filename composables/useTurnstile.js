@@ -32,9 +32,10 @@ export function useTurnstile() {
 
   /**
    * Render the widget into el. Returns the widgetId (or null when disabled/failed).
-   * onToken(token) fires on success; onExpire() when the token expires or errors.
+   * onToken(token) fires on success; onExpire() when the token expires;
+   * onError(code) fires on a widget error (the code is also logged + the token cleared).
    */
-  async function render(el, { onToken, onExpire }) {
+  async function render(el, { onToken, onExpire, onError }) {
     if (!enabled || !el) return null
     try {
       await loadScript()
@@ -44,7 +45,16 @@ export function useTurnstile() {
         theme: 'light',
         callback: onToken,
         'expired-callback': onExpire,
-        'error-callback': onExpire,
+        // Surface the error code instead of silently clearing the token and
+        // leaving the send button disabled forever. Common code: 110200 =
+        // "domain not allowed" — the production hostname is missing from the
+        // widget's allowed-hostnames list in the Cloudflare dashboard.
+        // Returning falsy lets Turnstile auto-retry recoverable errors.
+        'error-callback': (code) => {
+          console.error('[Turnstile] widget error code:', code)
+          onError?.(code)
+          onExpire?.()
+        },
       })
     } catch (err) {
       console.error('[Turnstile]', err?.message || err)
