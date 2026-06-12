@@ -1,3 +1,6 @@
+import { logger } from '~/utils/logger'
+
+const TRACK_PREFIX = '[Track]'
 const VISITOR_ID_KEY = 'galiluz_visitor_id'
 const PENDING_KEY = 'galiluz_pending_interactions'
 const SEEN_VIEWS_KEY = 'galiluz_seen_views'
@@ -56,15 +59,24 @@ export function useEventTracking() {
   const uiStore = useUiStore()
 
   async function track(eventId, action, extra = {}) {
-    if (!eventId || !import.meta.client) return
+    logger.info(TRACK_PREFIX, `track() called`, { eventId, action, extra, isClient: import.meta.client })
+    if (!eventId || !import.meta.client) {
+      logger.info(TRACK_PREFIX, `EARLY RETURN — missing eventId or not client`, { eventId, isClient: import.meta.client })
+      return
+    }
     // Attach occurrence date for view/calendar actions
     const occurrenceDate = uiStore.selectedOccurrenceDate
+    logger.info(TRACK_PREFIX, `occurrenceDate from uiStore`, { occurrenceDate })
 
     // Dedupe views per session so reopening the same event doesn't inflate stats
     if (action === 'view') {
       const viewKey = `${eventId}:${occurrenceDate || ''}`
-      if (alreadyViewed(viewKey)) return
+      if (alreadyViewed(viewKey)) {
+        logger.info(TRACK_PREFIX, `VIEW DEDUPED — already counted this session, NO network call`, { viewKey })
+        return
+      }
       markViewed(viewKey)
+      logger.info(TRACK_PREFIX, `view marked seen, proceeding to send`, { viewKey })
     }
 
     const body = {
@@ -74,10 +86,13 @@ export function useEventTracking() {
       ...extra,
     }
 
+    logger.info(TRACK_PREFIX, `SENDING POST /api/events/${eventId}/interact`, { body })
     try {
-      await send(eventId, body)
+      const res = await send(eventId, body)
+      logger.info(TRACK_PREFIX, `POST succeeded`, { eventId, action, res })
       flushPending().catch(() => {})
-    } catch {
+    } catch (err) {
+      logger.error(TRACK_PREFIX, `POST FAILED — queued for retry`, { eventId, action, error: err?.message || String(err), status: err?.statusCode || err?.response?.status })
       // Queue for retry on the next successful interaction (flaky mobile networks)
       const pending = readJson(PENDING_KEY)
       writeJson(PENDING_KEY, [...pending, { eventId, body, attempts: 1 }].slice(-MAX_PENDING))

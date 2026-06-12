@@ -5,11 +5,24 @@ import { ObjectId } from 'mongodb'
 const VALID_ACTIONS = new Set(['view', 'share', 'nav', 'calendar', 'link', 'contact'])
 const OCCURRENCE_ACTIONS = new Set(['view', 'calendar']) // tied to a specific date
 
+// Dev-only diagnostic logging — `import.meta.dev` is statically false in the prod build,
+// so these calls are stripped from the production bundle entirely.
+const DEV_LOG = '[Interact][DEV]'
+function devLog(message: string, data?: unknown) {
+  if (import.meta.dev) console.info(DEV_LOG, message, data !== undefined ? JSON.stringify(data) : '')
+}
+
 export default defineEventHandler(async (event) => {
   await checkRateLimit(event)
 
-  const id = getRouterParam(event, 'id')
-  if (!id) throw createError({ statusCode: 400, message: 'id required' })
+  const rawId = getRouterParam(event, 'id')
+  if (!rawId) throw createError({ statusCode: 400, message: 'id required' })
+
+  // The frontend flattens events into per-occurrence cards with composite ids of the form
+  // `<eventObjectId>-<occurrenceIndex>` (see flattenEventsByOccurrence in utils/events.service.js).
+  // Normalize back to the bare 24-char ObjectId — `new ObjectId('…-0')` throws, and the dashboard
+  // keys stats off events._id (no suffix), so stats must be stored under the bare id to be counted.
+  const id = rawId.split('-')[0]
 
   const body = await readBody<{
     action?: string
@@ -27,7 +40,10 @@ export default defineEventHandler(async (event) => {
     ? body.occurrenceDate
     : null
 
+  devLog('request received', { rawId, normalizedId: id, action, occurrenceDate, visitorId: visitorId.slice(0, 12), rawBody: body })
+
   if (!VALID_ACTIONS.has(action) || !visitorId) {
+    devLog('REJECTED 400 invalid_input', { action, hasVisitorId: !!visitorId })
     throw createError({ statusCode: 400, message: 'invalid_input' })
   }
 
@@ -43,9 +59,14 @@ export default defineEventHandler(async (event) => {
       { _id: new ObjectId(id) },
       { projection: { 'event.publisherId': 1, deletedAt: 1 } },
     )
-    if (!doc || doc.deletedAt) return { success: false }
+    if (!doc || doc.deletedAt) {
+      devLog('SKIP — event missing or soft-deleted, no stats written', { id, found: !!doc, deletedAt: doc?.deletedAt })
+      return { success: false }
+    }
     publisherId = doc?.event?.publisherId || ''
-  } catch {
+    devLog('event resolved', { id, publisherId: publisherId || '(empty)' })
+  } catch (err) {
+    devLog('SKIP — invalid ObjectId or lookup error', { id, error: err instanceof Error ? err.message : String(err) })
     return { success: false }
   }
 
@@ -88,15 +109,17 @@ export default defineEventHandler(async (event) => {
       inc.calendarAdds = 1
     }
 
-    await occStatsCol.updateOne(
+    // No $setOnInsert for the counters — $inc creates a missing field at the increment
+    // value, and listing the same path in both $inc and $setOnInsert is a Mongo conflict.
+    const r = await occStatsCol.updateOne(
       { eventId: id, occurrenceDate },
       {
         $inc: inc,
         $set: { publisherId, lastInteractionAt: now },
-        $setOnInsert: { views: 0, uniqueViews: 0, calendarAdds: 0 },
       },
       { upsert: true },
     )
+    devLog('eventOccurrenceStats write OK', { eventId: id, occurrenceDate, inc, matched: r.matchedCount, modified: r.modifiedCount, upsertedId: r.upsertedId })
   } else {
     // Event-level stats (share, nav, link, contact)
     const inc: Record<string, number> = {}
@@ -106,15 +129,15 @@ export default defineEventHandler(async (event) => {
     else if (action === 'contact') inc.contactClicks = 1
     else if (action === 'view') inc.views = 1 // fallback: view without occurrenceDate
 
-    await statsCol.updateOne(
+    const r = await statsCol.updateOne(
       { eventId: id },
       {
         $inc: inc,
         $set: { publisherId, lastInteractionAt: now },
-        $setOnInsert: { shares: 0, navClicks: 0, linkClicks: 0, contactClicks: 0 },
       },
       { upsert: true },
     )
+    devLog('eventStats write OK', { eventId: id, inc, matched: r.matchedCount, modified: r.modifiedCount, upsertedId: r.upsertedId })
   }
 
   return { success: true }
