@@ -89,6 +89,7 @@ export const useEventFilters = (events) => {
         ...transformEventForCard(event, occurrence),
         id: event.id,
         eventId: event.id,
+        date,
         mainCategory: event.mainCategory,
         categories: event.categories ?? [],
         locationDisplay: formatEventLocationForChip(event),

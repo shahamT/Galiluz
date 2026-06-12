@@ -60,6 +60,10 @@ try {
   const eventIds = allEvents.map((d) => d._id.toString())
   const softDeletedIds = allEvents.filter((d) => d.deletedAt).map((d) => d._id.toString())
   console.log(`${eventIds.length} event documents exist (${softDeletedIds.length} soft-deleted)`)
+  if (eventIds.length === 0) {
+    console.error('ERROR: No events found — events collection inaccessible or empty. Aborting to prevent catastrophic stamp.')
+    process.exit(1)
+  }
 
   const deletedAt = new Date()
   for (const colName of statsCollections) {
