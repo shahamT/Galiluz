@@ -15,6 +15,8 @@
 </template>
 
 <script setup>
+import { SEO_PAGES } from '~/consts/seo.const'
+
 const uiStore = useUiStore()
 const filterNotifyStore = useFilterNotifyStore()
 const { isEventModalShowing } = storeToRefs(uiStore)
@@ -23,24 +25,12 @@ const isProtectedRoute = computed(() =>
   route.path.startsWith('/publisher') || route.path.startsWith('/admin') || route.path === '/login'
 )
 
-const requestUrl = useRequestURL()
-const ogImageUrl = new URL('/galiluz-thumbnail.png', requestUrl.origin).href
-const socialTitle = 'גלילו"ז'
-const socialDescription = 'גלילו״ז – יומן אירועים ופעילויות בגליל ובגולן. גלו מה קורה בצפון.'
+const config = useRuntimeConfig()
+const siteUrl = computed(() => config.public.siteUrl || 'https://galiluz.co.il')
 
-useSeoMeta({
-  title: socialTitle,
-  description: socialDescription,
-  ogTitle: socialTitle,
-  ogDescription: socialDescription,
-  ogImage: ogImageUrl,
-  ogUrl: requestUrl.href,
-  ogType: 'website',
-  ogSiteName: 'גלילו"ז',
-  ogLocale: 'he_IL',
-  twitterCard: 'summary_large_image',
-  twitterTitle: socialTitle,
-  twitterDescription: socialDescription,
-  twitterImage: ogImageUrl,
+usePageSeo({
+  title: SEO_PAGES.default.title,
+  description: SEO_PAGES.default.description,
 })
+useSiteJsonLd(siteUrl)
 </script>

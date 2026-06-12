@@ -69,10 +69,13 @@
 </template>
 
 <script setup>
+import { SEO_PAGES } from '~/consts/seo.const'
+
 defineOptions({ name: 'AboutPage' })
 
-useHead({
-  title: 'אודות | גלילו"ז',
+usePageSeo({
+  title: SEO_PAGES.about.title,
+  description: SEO_PAGES.about.description,
 })
 </script>
 

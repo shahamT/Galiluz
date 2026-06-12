@@ -51,6 +51,7 @@
 <script setup>
 import { UI_TEXT, DAILY_CAROUSEL_DAYS_RANGE, ROUTE_DAILY_VIEW } from '~/consts/calendar.const'
 import { HEBREW_MONTHS } from '~/consts/dates.const'
+import { SEO_PAGES } from '~/consts/seo.const'
 
 import { getTodayDateString, formatMonthYear, parseDateString, formatDateToYYYYMMDD } from '~/utils/date.helpers'
 import { isValidRouteDate } from '~/utils/validation.helpers'
@@ -120,7 +121,6 @@ const dateParam = computed(() => {
   if (param && isValidRouteDate(String(param).trim())) return String(param).trim().slice(0, 10)
   return getTodayDateString()
 })
-const pageTitle = computed(() => 'גלילו"ז')
 const headerDate = computed(() => {
   const date = parseDateString(dateParam.value)
   return { year: date.getFullYear(), month: date.getMonth() + 1 }
@@ -148,28 +148,21 @@ const isTodayOrPast = computed(() => isMounted.value && dateParam.value <= today
 const eventsByDate = computed(() => getFilteredEventsByDate(visibleDays.value))
 
 const { data: eventMeta } = useEventMetaForSeo()
-const requestUrl = useRequestURL()
-const defaultOgImage = new URL('/galiluz-thumbnail.png', requestUrl.origin).href
-const DAILY_DEFAULT_DESC = 'תצוגה יומית של אירועים ופעילויות ב-Galiluz'
-const seoTitle = computed(() => eventMeta.value?.title ? `גלילו"ז - ${eventMeta.value.title}` : pageTitle.value)
-const seoDescription = computed(() => eventMeta.value?.shortDescription || eventMeta.value?.title || DAILY_DEFAULT_DESC)
-const seoImage = computed(() => eventMeta.value?.imageUrl || defaultOgImage)
+const seoTitle = computed(() =>
+  eventMeta.value?.title ? `גלילו"ז - ${eventMeta.value.title}` : SEO_PAGES.dailyView.title
+)
+const seoDescription = computed(
+  () =>
+    eventMeta.value?.shortDescription ||
+    eventMeta.value?.title ||
+    SEO_PAGES.dailyView.description
+)
+const seoImage = computed(() => eventMeta.value?.imageUrl)
 
-useHead({ title: seoTitle })
-useSeoMeta({
+usePageSeo({
   title: seoTitle,
   description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
   ogImage: seoImage,
-  ogUrl: requestUrl.href,
-  ogType: 'website',
-  ogSiteName: 'גלילו"ז',
-  ogLocale: 'he_IL',
-  twitterCard: 'summary_large_image',
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  twitterImage: seoImage,
 })
 
 const handlePrevDay = () => {

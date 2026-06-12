@@ -8,31 +8,35 @@
         <h1 class="LoginCard-title">כניסה למפרסמים</h1>
         <p class="LoginCard-subtitle">הזינו את מספר הטלפון שלכם לקבלת קוד אימות בוואטסאפ</p>
 
-        <div class="LoginCard-field">
-          <input
-            ref="phoneInput"
-            v-model="phone"
-            type="tel"
-            class="LoginCard-input"
-            placeholder="05X-XXXXXXX"
-            dir="ltr"
-            inputmode="tel"
-            autocomplete="tel"
-            :disabled="loading"
-            @keydown.enter="handleSendOtp"
-          />
-        </div>
+        <!-- A real <form> + named tel field + submit lets the browser save the number
+             for autofill on return visits (display:contents keeps the card's layout). -->
+        <form class="LoginCard-form" @submit.prevent="handleSendOtp">
+          <div class="LoginCard-field">
+            <input
+              ref="phoneInput"
+              v-model="phone"
+              type="tel"
+              name="phone"
+              class="LoginCard-input"
+              placeholder="05X-XXXXXXX"
+              dir="ltr"
+              inputmode="tel"
+              autocomplete="tel"
+              :disabled="loading"
+            />
+          </div>
 
-        <p v-if="error && !notRegistered" class="LoginCard-error">{{ error }}</p>
-        <p v-if="notRegistered" class="LoginCard-error">
-          המספר אינו רשום כמפרסם מאושר.
-          <a :href="PUBLISH_EVENT_WHATSAPP_LINK" target="_blank" rel="noopener noreferrer" class="LoginCard-errorLink">לחצו כאן להרשמה דרך הבוט</a>
-        </p>
+          <p v-if="error && !notRegistered" class="LoginCard-error">{{ error }}</p>
+          <p v-if="notRegistered" class="LoginCard-error">
+            המספר אינו רשום כמפרסם מאושר.
+            <a :href="PUBLISH_EVENT_WHATSAPP_LINK" target="_blank" rel="noopener noreferrer" class="LoginCard-errorLink">לחצו כאן להרשמה דרך הבוט</a>
+          </p>
 
-        <button class="LoginCard-btn" :disabled="loading || !phone.trim() || waitingForCaptcha" @click="handleSendOtp">
-          <span v-if="loading" class="LoginCard-spinner" />
-          <template v-else>שלח קוד אימות</template>
-        </button>
+          <button type="submit" class="LoginCard-btn" :disabled="loading || !phone.trim() || waitingForCaptcha">
+            <span v-if="loading" class="LoginCard-spinner" />
+            <template v-else>שלח קוד אימות</template>
+          </button>
+        </form>
       </template>
 
       <!-- State: OTP input -->
@@ -40,7 +44,7 @@
         <h1 class="LoginCard-title">הזינו את הקוד</h1>
         <p class="LoginCard-subtitle">
           נשלח קוד בן 6 ספרות לוואטסאפ של
-          <strong dir="ltr">{{ displayPhone }}</strong>
+          <strong dir="ltr" class="LoginCard-subtitlePhone">{{ displayPhone }}</strong>
         </p>
 
         <div class="LoginCard-otpRow" dir="ltr">
@@ -332,6 +336,17 @@ onUnmounted(() => clearInterval(countdownTimer))
     font-size: var(--font-size-sm);
     color: var(--color-text-light);
     line-height: 1.5;
+  }
+
+  &-subtitlePhone {
+    display: block;
+    margin-top: var(--spacing-xs);
+  }
+
+  // Transparent wrapper: keeps the field/error/button as direct flex children of the
+  // card (preserving gap + centering) while giving the browser a submittable form.
+  &-form {
+    display: contents;
   }
 
   &-field {

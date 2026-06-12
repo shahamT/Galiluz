@@ -1,4 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { SEO_DEFAULT_DESCRIPTION, SEO_DEFAULT_TITLE, SEO_KEYWORDS_STRING } from './consts/seo.const.js'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-15',
 
@@ -31,14 +33,17 @@ export default defineNuxtConfig({
   
   app: {
     head: {
-      title: 'גלילו"ז',
+      title: SEO_DEFAULT_TITLE,
       htmlAttrs: {
         lang: 'he',
         dir: 'rtl',
       },
       meta: [
+        { name: 'description', content: SEO_DEFAULT_DESCRIPTION },
+        { name: 'keywords', content: SEO_KEYWORDS_STRING },
         { name: 'apple-mobile-web-app-title', content: 'גלילו"ז' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'mobile-web-app-capable', content: 'yes' },
       ],
       link: [
         { rel: 'manifest', href: '/manifest.webmanifest' },
@@ -92,6 +97,10 @@ export default defineNuxtConfig({
     turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || '',
     // Public keys (exposed to client-side)
     public: {
+      siteUrl:
+        process.env.NUXT_PUBLIC_SITE_URL ||
+        process.env.GALILUZ_APP_URL ||
+        'https://galiluz.co.il',
       posthogPublicKey: process.env.NUXT_PUBLIC_POSTHOG_PUBLIC_KEY || '',
       posthogHost: process.env.NUXT_PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com',
       posthogDefaults: process.env.NUXT_PUBLIC_POSTHOG_DEFAULTS || '2026-01-30',

@@ -285,10 +285,13 @@
 </template>
 
 <script setup>
+import { SEO_PAGES } from '~/consts/seo.const'
+
 defineOptions({ name: 'TermsPage' })
 
-useHead({
-  title: 'תנאי שימוש ומדיניות פרטיות | גלילו"ז',
+usePageSeo({
+  title: SEO_PAGES.terms.title,
+  description: SEO_PAGES.terms.description,
 })
 </script>
 

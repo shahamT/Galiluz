@@ -52,6 +52,7 @@
 <script setup>
 import { UI_TEXT } from '~/consts/calendar.const'
 import { HEBREW_MONTHS } from '~/consts/dates.const'
+import { SEO_PAGES } from '~/consts/seo.const'
 
 import { formatMonthYear, getCurrentYearMonth, getPrevMonth, getNextMonth } from '~/utils/date.helpers'
 
@@ -102,39 +103,24 @@ watch(isWelcomeModalShowing, (isOpen, wasOpen) => {
 // computed
 const currentYear = computed(() => currentDate.value?.year ?? getCurrentYearMonth().year)
 const currentMonth = computed(() => currentDate.value?.month ?? getCurrentYearMonth().month)
-const pageTitle = computed(() => 'גלילו"ז')
 
 // SEO: event-specific meta when ?event=id (for social cards)
 const { data: eventMeta } = useEventMetaForSeo()
-const requestUrl = useRequestURL()
-const defaultOgImage = new URL('/galiluz-thumbnail.png', requestUrl.origin).href
-const MONTHLY_DEFAULT_DESC = 'יומן אירועים חודשי של Galiluz - צפייה בכל האירועים והפעילויות החודשיות'
-
 const seoTitle = computed(() =>
-  eventMeta.value?.title ? `גלילו"ז - ${eventMeta.value.title}` : pageTitle.value
+  eventMeta.value?.title ? `גלילו"ז - ${eventMeta.value.title}` : SEO_PAGES.monthlyView.title
 )
-const seoDescription = computed(() =>
-  eventMeta.value?.shortDescription || eventMeta.value?.title || MONTHLY_DEFAULT_DESC
+const seoDescription = computed(
+  () =>
+    eventMeta.value?.shortDescription ||
+    eventMeta.value?.title ||
+    SEO_PAGES.monthlyView.description
 )
-const seoImage = computed(() =>
-  eventMeta.value?.imageUrl || defaultOgImage
-)
+const seoImage = computed(() => eventMeta.value?.imageUrl)
 
-useHead({ title: seoTitle })
-useSeoMeta({
+usePageSeo({
   title: seoTitle,
   description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
   ogImage: seoImage,
-  ogUrl: requestUrl.href,
-  ogType: 'website',
-  ogSiteName: 'גלילו"ז',
-  ogLocale: 'he_IL',
-  twitterCard: 'summary_large_image',
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  twitterImage: seoImage,
 })
 const monthYearDisplay = computed(() => {
   return formatMonthYear(currentYear.value, currentMonth.value)

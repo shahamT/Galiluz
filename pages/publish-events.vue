@@ -72,13 +72,15 @@
 
 <script setup>
 import { PUBLISH_EVENT_WHATSAPP_LINK, BOT_WHATSAPP_LINK } from '~/consts/ui.const'
+import { SEO_PAGES } from '~/consts/seo.const'
 
 defineOptions({ name: 'PublishEventsPage' })
 
 const supportNumber = '972559896278'
 
-useHead({
-  title: 'איך לפרסם אירועים בגלילו"ז?',
+usePageSeo({
+  title: SEO_PAGES.publishEvents.title,
+  description: SEO_PAGES.publishEvents.description,
 })
 </script>
 
