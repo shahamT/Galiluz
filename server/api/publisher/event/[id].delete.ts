@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
     title:       typeof ev?.Title === 'string' ? ev.Title : undefined,
     rawTitle:    typeof rawEv?.rawTitle === 'string' ? rawEv.rawTitle : undefined,
     publisherId: session.publisherId,
-    waId:        typeof (rawEv?.publisher as any)?.waId === 'string' ? (rawEv!.publisher as any).waId : undefined,
+    waId:        session.waId,
     correlationId,
     isManagerAction: session.type === 'manager' && !ownsEvent,
   })
