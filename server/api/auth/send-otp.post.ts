@@ -77,8 +77,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 429, statusMessage: 'Too Many Requests', message: `send_limit:${resetAt}` })
   }
 
-  // Generate OTP
-  const otp = randomInt(100000, 1000000).toString()
+  // Generate OTP — fixed in dev only when ALLOW_FIXED_DEV_OTP=1 is explicitly set
+  const useFixedOtp = process.env.NODE_ENV !== 'production' && process.env.ALLOW_FIXED_DEV_OTP === '1'
+  const otp = useFixedOtp ? '111111' : randomInt(100000, 1000000).toString()
   const secret = config.otpSecret || process.env.OTP_SECRET || ''
   const otpHash = createHmac('sha256', secret).update(otp).digest('hex')
   const otpExpiresAt = new Date(now.getTime() + OTP_EXPIRY_MS)

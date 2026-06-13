@@ -1,6 +1,8 @@
 <template>
   <LayoutProtectedShell>
-    <PublisherNavTabs />
+    <template #nav>
+      <PublisherNavTabs />
+    </template>
 
     <div class="PublisherDashboard-body">
     <div class="PublisherDashboard-header">

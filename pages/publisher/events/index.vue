@@ -1,6 +1,8 @@
 <template>
   <LayoutProtectedShell>
-    <PublisherNavTabs />
+    <template #nav>
+      <PublisherNavTabs />
+    </template>
 
     <div class="PublisherEvents-body">
       <div class="PublisherEvents-header">
@@ -19,11 +21,20 @@
         <!-- List -->
         <div v-else-if="filteredEvents.length" class="PublisherEvents-list">
           <PublisherEventListItem
-            v-for="event in filteredEvents"
+            v-for="event in pagedEvents"
             :key="event.id"
             :event="event"
           />
         </div>
+
+        <UiPagination
+          v-if="filteredEvents.length > PAGE_SIZE"
+          v-model="currentPage"
+          :total="filteredEvents.length"
+          :page-size="PAGE_SIZE"
+          class="PublisherEvents-pagination"
+          @update:model-value="onPageChange"
+        />
 
         <!-- No events at all -->
         <PublisherDashboardEmptyState
@@ -75,10 +86,12 @@ useHead({ title: 'האירועים שלי | גלילו"ז' })
 const route = useRoute()
 const router = useRouter()
 const { capture } = usePosthog()
+const PAGE_SIZE = 8
 const filter = ref('future')
 const search = ref('')
 const debouncedSearch = useDebounce(search, 200)
 const showEventForm = ref(false)
+const currentPage = ref(1)
 
 function onEventCreated({ id }) {
   showEventForm.value = false
@@ -118,6 +131,16 @@ const filteredEvents = computed(() => {
 
   return list
 })
+
+watch([filter, debouncedSearch], () => { currentPage.value = 1 })
+
+const pagedEvents = computed(() =>
+  filteredEvents.value.slice((currentPage.value - 1) * PAGE_SIZE, currentPage.value * PAGE_SIZE)
+)
+
+function onPageChange() {
+  document.querySelector('.AppShell-scroller')?.scrollTo({ top: 0, behavior: 'smooth' })
+}
 </script>
 
 <style lang="scss">
@@ -182,6 +205,12 @@ const filteredEvents = computed(() => {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
+  }
+
+  &-pagination {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
   }
 }
 </style>

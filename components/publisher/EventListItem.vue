@@ -1,5 +1,5 @@
 <template>
-  <NuxtLink :to="`/publisher/events/${event.id}`" class="EventListItem">
+  <NuxtLink :to="to || `/publisher/events/${event.id}`" class="EventListItem">
     <img :src="thumbnailUrl" class="EventListItem-thumbnail" alt="" />
     <div class="EventListItem-content">
       <div class="EventListItem-titleRow">
@@ -32,6 +32,7 @@ import { isVideoUrl, getCloudinaryVideoThumbnailUrl } from '~/utils/media.helper
 defineOptions({ name: 'EventListItem' })
 const props = defineProps({
   event: { type: Object, required: true },
+  to:    { type: String, default: null },
 })
 
 const thumbnailUrl = computed(() => {

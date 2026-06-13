@@ -12,6 +12,48 @@
         <div ref="bodyEl" class="EventFormModal-body">
           <form id="eventForm" class="AddEventPage-form" novalidate @submit.prevent="onSubmit">
 
+            <!-- 0. פרסום אירוע עבור (admin only) -->
+            <section v-if="onBehalfPublishers.length" class="EventFormModal-onBehalf">
+              <h2 class="AddEventPage-sectionTitle">פרסום אירוע עבור</h2>
+              <div class="EventFormModal-onBehalfRadios">
+                <label class="EventFormModal-onBehalfRadio">
+                  <input v-model="onBehalfMode" type="radio" value="self" />
+                  <span>בשמי (גלילו"ז)</span>
+                </label>
+                <div class="EventFormModal-onBehalfOption">
+                  <label class="EventFormModal-onBehalfRadio">
+                    <input v-model="onBehalfMode" type="radio" value="existing" />
+                    <span>בשם מפרסם אחר</span>
+                  </label>
+                  <div v-if="onBehalfMode === 'existing'" class="EventFormModal-onBehalfField">
+                    <AdminPublisherSelect
+                      v-model="onBehalfPublisher"
+                      :publishers="onBehalfPublishers"
+                      :has-error="!!errors.onBehalfPublisher"
+                    />
+                    <p v-if="errors.onBehalfPublisher" class="EventFormModal-onBehalfError">{{ errors.onBehalfPublisher }}</p>
+                  </div>
+                </div>
+                <div class="EventFormModal-onBehalfOption">
+                  <label class="EventFormModal-onBehalfRadio">
+                    <input v-model="onBehalfMode" type="radio" value="new" />
+                    <span>מפרסם חדש</span>
+                  </label>
+                  <div v-if="onBehalfMode === 'new'" class="EventFormModal-onBehalfField">
+                    <input
+                      v-model="onBehalfPhone"
+                      type="tel"
+                      class="FormInput"
+                      placeholder="מספר טלפון (לדוגמה: 0501234567)"
+                      dir="ltr"
+                      @input="clearError('onBehalfPhone')"
+                    />
+                    <p v-if="errors.onBehalfPhone" class="EventFormModal-onBehalfError">{{ errors.onBehalfPhone }}</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <!-- 1. פרטי האירוע -->
             <section class="AddEventPage-section">
               <h2 class="AddEventPage-sectionTitle">פרטי האירוע</h2>
@@ -335,9 +377,10 @@ const FormRichTextEditor = defineAsyncComponent(() => import('~/components/form/
 
 defineOptions({ name: 'PublisherEventFormModal' })
 const props = defineProps({
-  mode:        { type: String, default: 'add' },
-  initialData: { type: Object, default: null },
-  draftKey:    { type: String, default: null },
+  mode:               { type: String, default: 'add' },
+  initialData:        { type: Object, default: null },
+  draftKey:           { type: String, default: null },
+  onBehalfPublishers: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['close', 'submitted'])
 
@@ -400,6 +443,16 @@ const isSubmitting = ref(false)
 const submitted = ref(false)
 const submitError = ref('')
 const hasErrors = computed(() => Object.values(errors).some(Boolean))
+
+const onBehalfMode = ref('self')
+const onBehalfPublisher = ref(null)
+const onBehalfPhone = ref('')
+watch(onBehalfMode, () => {
+  onBehalfPublisher.value = null
+  onBehalfPhone.value = ''
+  errors.onBehalfPublisher = ''
+  errors.onBehalfPhone = ''
+})
 
 
 function validateField(key) {
@@ -659,6 +712,14 @@ function isNavServiceLink(val, service) {
   return NAV_LINK_PATTERNS[service].some((re) => re.test(normalized))
 }
 
+function normalizeIsraeliPhone(raw) {
+  const digits = String(raw).replace(/\D/g, '')
+  if (digits.startsWith('972') && digits.length === 12) return digits
+  if (digits.startsWith('05') && digits.length === 10) return '972' + digits.slice(1)
+  if (digits.startsWith('5') && digits.length === 9) return '972' + digits
+  return null
+}
+
 // --- Validation ---
 const linkErrors = reactive([])
 
@@ -667,6 +728,15 @@ function validate() {
   Object.keys(occurrenceErrors).forEach((k) => { occurrenceErrors[k] = {} })
   linkErrors.splice(0)
   let ok = true
+
+  if (props.onBehalfPublishers.length) {
+    if (onBehalfMode.value === 'existing' && !onBehalfPublisher.value) {
+      errors.onBehalfPublisher = 'יש לבחור מפרסם'; ok = false
+    }
+    if (onBehalfMode.value === 'new' && !normalizeIsraeliPhone(onBehalfPhone.value)) {
+      errors.onBehalfPhone = 'מספר טלפון לא תקין'; ok = false
+    }
+  }
 
   if (!form.title.trim()) {
     errors.title = 'יש להוסיף שם לאירוע'; ok = false
@@ -776,7 +846,7 @@ async function uploadMediaFile(file) {
 }
 
 function buildEventPayload(f, allMedia) {
-  return {
+  const payload = {
     title:            f.title,
     shortDescription: f.shortDescription,
     fullDescription:  f.description,
@@ -800,6 +870,11 @@ function buildEventPayload(f, allMedia) {
     urls:  f.links.map(l => ({ Title: l.label, Url: l.type === 'link' ? normalizeUrl(l.url) : l.url, type: l.type })),
     media: allMedia,
   }
+  if (onBehalfMode.value === 'existing' && onBehalfPublisher.value?.id)
+    payload.onBehalfPublisherId = onBehalfPublisher.value.id
+  else if (onBehalfMode.value === 'new' && onBehalfPhone.value)
+    payload.onBehalfPhone = onBehalfPhone.value
+  return payload
 }
 
 async function onSubmit() {
@@ -995,6 +1070,50 @@ function resetForm() {
 
     &:disabled { opacity: 0.6; cursor: not-allowed; }
     &:not(:disabled):hover { opacity: 0.9; }
+  }
+
+  &-onBehalf {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding-bottom: var(--spacing-xl);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  &-onBehalfRadios {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  &-onBehalfOption {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  &-onBehalfRadio {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    user-select: none;
+
+    input[type='radio'] { accent-color: var(--brand-dark-green); cursor: pointer; }
+  }
+
+  &-onBehalfField {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  &-onBehalfError {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-error);
   }
 }
 

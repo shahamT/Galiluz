@@ -24,22 +24,14 @@ const isEvents = computed(() => route.path.startsWith('/publisher/events'))
 
 .PublisherNavTabs {
   display: flex;
-  position: sticky;
-  top: 0; // scroller starts below the header, so 0 = flush against it
-  z-index: 100;
   background-color: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   box-shadow: 0 2px 0 var(--brand-dark-green-tint);
-  margin-top: calc(-1 * var(--spacing-xl));
-  margin-bottom: var(--spacing-xl);
-  margin-inline: calc(-1 * var(--spacing-3xl) - max(0px, (100vw - var(--content-max-width)) / 2));
   padding-top: var(--spacing-md);
   padding-inline: calc(var(--spacing-3xl) + max(0px, (100vw - var(--content-max-width)) / 2));
 
   @include mobile {
-    margin-top: calc(-1 * var(--spacing-md));
-    margin-inline: 0;
     padding-inline: var(--spacing-md);
   }
 

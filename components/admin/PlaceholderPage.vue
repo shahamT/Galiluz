@@ -1,6 +1,8 @@
 <template>
   <LayoutProtectedShell>
-    <AdminNavTabs />
+    <template #nav>
+      <AdminNavTabs />
+    </template>
     <div class="AdminPlaceholder-body">
       <div class="AdminPlaceholder-header">
         <h1 class="AdminPlaceholder-title">{{ title }}</h1>

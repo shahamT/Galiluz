@@ -22,7 +22,7 @@ defineProps({ modelValue: { type: String, default: 'actions' } })
 const emit = defineEmits(['update:modelValue'])
 
 const options = [
-  { value: 'actions', label: 'פעולות',       mobileLabel: 'פעולות',  icon: 'tune' },
+  { value: 'actions', label: 'ניהול',         mobileLabel: 'ניהול',   icon: 'tune' },
   { value: 'preview', label: 'תצוגת האירוע', mobileLabel: 'תצוגה',   icon: 'event' },
   { value: 'stats',   label: 'סטטיסטיקות',   mobileLabel: 'נתונים',  icon: 'bar_chart' },
 ]
