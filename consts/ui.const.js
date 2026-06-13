@@ -61,6 +61,10 @@ const CONTACT_WHATSAPP_PREFILL = 'היי גלילו"ז בוט, מה קורה ב�
 export const CONTACT_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(CONTACT_WHATSAPP_PREFILL)}`
 const PUBLISH_EVENT_PREFILL = 'היי, אני מעוניין/ת להוסיף אירוע לגלילו"ז'
 export const PUBLISH_EVENT_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(PUBLISH_EVENT_PREFILL)}`
+// Publisher registration deep link — the prefill MUST contain the bot's trigger
+// phrase "רוצה להירשם כמפרסם" (apps/wa-bot routes that straight into registration).
+const PUBLISHER_REGISTER_PREFILL = 'אני רוצה להירשם כמפרסם בגלילו"ז'
+export const PUBLISHER_REGISTER_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(PUBLISHER_REGISTER_PREFILL)}`
 const BOT_START_PREFILL = 'היי'
 export const BOT_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(BOT_START_PREFILL)}`
 

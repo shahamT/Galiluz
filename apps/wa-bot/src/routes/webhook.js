@@ -284,6 +284,33 @@ function handlePublishSignMeUp(phoneNumberId, from, profileName) {
   return sendText(phoneNumberId, from, PUBLISH.ASK_FULL_NAME)
 }
 
+// Exact-text trigger sent by the website's "register as a publisher" deep link.
+// Matches a distinctive core phrase (whitespace-normalized) so it's robust to the
+// gershayim/surrounding wording in the prefilled message.
+const PUBLISHER_REGISTER_TRIGGER_CORE = 'רוצה להירשם כמפרסם'
+function isPublisherRegisterTrigger(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim().includes(PUBLISHER_REGISTER_TRIGGER_CORE)
+}
+
+// Send a new user straight into registration (no welcome/menu first); branch sensibly
+// for already-registered/pending users. Mirrors handlePublishButton but skips the
+// NOT_REGISTERED menu for new users by calling handlePublishSignMeUp directly.
+async function handlePublisherRegisterTrigger(phoneNumberId, from, profileName) {
+  const result = await checkPublisher(from)
+  if (result.connectionError) {
+    return sendInteractiveButtons(phoneNumberId, from, PUBLISH.CONNECTION_ERROR)
+  }
+  const { status, fullName: publisherFullName, publishingAs: publisherPublishingAs } = result
+  if (status === 'approved') {
+    conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION, publisherFullName: publisherFullName || '', publisherPublishingAs: publisherPublishingAs || '' })
+    return sendInteractiveButtons(phoneNumberId, from, PUBLISHER.HOW_TO_CONTINUE)
+  }
+  if (status === 'pending') {
+    return sendText(phoneNumberId, from, PUBLISH.PENDING_MESSAGE)
+  }
+  return handlePublishSignMeUp(phoneNumberId, from, profileName)
+}
+
 function handlePublishCommitNo(phoneNumberId, from) {
   conversationState.clear(from)
   return sendInteractiveButtons(phoneNumberId, from, PUBLISH.NOT_REGISTERED)
@@ -661,6 +688,11 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
 
   if (msg.type === 'text' && msg.text?.body) {
     const textBody = String(msg.text.body).trim()
+    // Website "register as a publisher" deep link → jump straight into registration,
+    // ahead of intent classification and step routing, so a fresh user sees no menu first.
+    if (textBody && isPublisherRegisterTrigger(textBody)) {
+      return handlePublisherRegisterTrigger(phoneNumberId, from, profileName)
+    }
     const isWelcome = state.step === conversationState.STEPS.WELCOME
     const isPublisherChoice = state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION
     const isSuccessScreen = state.step === conversationState.STEPS.EVENT_ADD_SUCCESS

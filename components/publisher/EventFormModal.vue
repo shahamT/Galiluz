@@ -10,7 +10,7 @@
         </header>
 
         <div ref="bodyEl" class="EventFormModal-body">
-          <form id="eventForm" class="AddEventPage-form" novalidate @submit.prevent="onSubmit">
+          <form id="eventForm" class="AddEventPage-form" :class="{ 'AddEventPage-form--busy': formBusy }" novalidate @submit.prevent="onSubmit">
 
             <!-- 0. פרסום אירוע עבור (admin only) -->
             <section v-if="onBehalfPublishers.length" class="EventFormModal-onBehalf">
@@ -54,8 +54,18 @@
               </div>
             </section>
 
+            <!-- AI generation (add mode only) -->
+            <PublisherEventFormAiGenerate
+              v-if="props.mode !== 'edit'"
+              v-model:text="aiText"
+              v-model:expanded="aiExpanded"
+              :loading="aiLoading"
+              :error="aiError"
+              @generate="onAiGenerate"
+            />
+
             <!-- 1. פרטי האירוע -->
-            <section class="AddEventPage-section">
+            <section ref="detailsSectionEl" class="AddEventPage-section">
               <h2 class="AddEventPage-sectionTitle">פרטי האירוע</h2>
 
               <FormField label="שם האירוע" required :error="errors.title" hint="2–80 תווים">
@@ -355,7 +365,7 @@
             type="submit"
             form="eventForm"
             class="EventFormModal-footerBtn"
-            :disabled="isSubmitting"
+            :disabled="formBusy"
           >
             <span v-if="isSubmitting" class="AddEventPage-submitSpinner" />
             <template v-else>{{ props.mode === 'edit' ? 'עדכון אירוע ✓' : 'יצירת אירוע ✓' }}</template>
@@ -364,6 +374,16 @@
             פרסם אירוע נוסף
           </button>
         </div>
+
+        <UiConfirmDialog
+          :open="showAiOverrideConfirm"
+          title="החלפת פרטי הטופס"
+          message="פעולה זו תחליף את כל הפרטים שכבר מולאו בטופס. להמשיך?"
+          confirm-label="כן, החליפו"
+          cancel-label="ביטול"
+          @confirm="confirmAiOverride"
+          @cancel="showAiOverrideConfirm = false"
+        />
       </div>
     </div>
   </Teleport>
@@ -385,6 +405,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'submitted'])
 
 const bodyEl = ref(null)
+const detailsSectionEl = ref(null)
 
 const existingMedia = ref([])
 
@@ -826,6 +847,144 @@ function validate() {
   return ok
 }
 
+// --- AI generation (add mode only) ---
+const aiText = ref('')
+const aiExpanded = ref(false)
+const aiLoading = ref(false)
+const aiError = ref('')
+const showAiOverrideConfirm = ref(false)
+
+// Whole-form busy state — true while the AI extracts or while the event saves.
+// Drives the disabled/dimmed form overlay and the footer button.
+const formBusy = computed(() => aiLoading.value || isSubmitting.value)
+
+// True when the form holds anything beyond a pristine fresh-add state — used to
+// warn before AI output overwrites work already entered.
+function hasUserData() {
+  const occ = form.occurrences
+  const firstOccPristine =
+    occ.length === 1 &&
+    occ[0]?.date === todayLocal() &&
+    occ[0]?.hasTime === true &&
+    occ[0]?.startTime === '08:00'
+  return !!(
+    form.title.trim() ||
+    form.shortDescription.trim() ||
+    getTextLength(form.description) > 0 ||
+    form.mainCategory ||
+    form.categories.length ||
+    form.locationName.trim() ||
+    form.addressLine1.trim() ||
+    form.locationNotes.trim() ||
+    form.price !== null ||
+    form.isFree ||
+    !form.autoNav ||
+    form.links.length ||
+    form.media.length ||
+    !firstOccPristine
+  )
+}
+
+function onAiGenerate() {
+  if (hasUserData()) showAiOverrideConfirm.value = true
+  else runAiGenerate()
+}
+
+function confirmAiOverride() {
+  showAiOverrideConfirm.value = false
+  runAiGenerate()
+}
+
+async function runAiGenerate() {
+  if (!aiText.value.trim() || aiLoading.value) return
+  aiLoading.value = true
+  aiError.value = ''
+  try {
+    const dto = await $fetch('/api/publisher/event/ai-generate', { method: 'POST', body: { text: aiText.value } })
+    applyAiResult(dto)
+    // Surface every field the AI left empty by running the full form validation.
+    Object.keys(errors).forEach((k) => { errors[k] = '' })
+    Object.keys(occurrenceErrors).forEach((k) => { occurrenceErrors[k] = {} })
+    linkErrors.splice(0)
+    await nextTick()
+    validate()
+    // Bring the filled-in details section to the top so the user sees the result.
+    detailsSectionEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  } catch (err) {
+    const status = err?.statusCode || err?.response?.status || err?.status
+    if (status === 401) {
+      aiError.value = 'ההתחברות פגה. רעננו את הדף והתחברו מחדש.'
+    } else if (status === 429) {
+      aiError.value = 'יותר מדי בקשות. נסו שוב בעוד רגע.'
+    } else {
+      aiError.value = err?.data?.message || err?.message || 'אירעה שגיאה ביצירת האירוע, נסו שוב'
+    }
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+// Map the AI DTO onto the reactive form. Mirrors initFromData's field mapping.
+function applyAiResult(dto) {
+  if (!dto || typeof dto !== 'object') return
+  if (dto.title) form.title = dto.title
+  if (dto.shortDescription) form.shortDescription = dto.shortDescription
+  if (dto.fullDescription) form.description = dto.fullDescription
+  if (dto.mainCategory) form.mainCategory = dto.mainCategory
+  form.categories = Array.isArray(dto.categories)
+    ? dto.categories.filter(c => c && c !== dto.mainCategory).slice(0, 3)
+    : []
+
+  const loc = dto.location || {}
+  form.locationName = loc.locationName || ''
+  form.addressLine1 = loc.addressLine1 || ''
+  form.locationNotes = loc.locationDetails || ''
+  if (loc.cityType === 'listed' && loc.city && CITIES[loc.city]) {
+    form.city = { cityId: loc.city, customCity: undefined, region: CITIES[loc.city].region }
+  } else if (loc.city) {
+    form.city = { cityId: '', customCity: loc.city, region: loc.region || '' }
+  } else {
+    form.city = { cityId: '', customCity: undefined, region: '' }
+  }
+  if (loc.wazeNavLink || loc.gmapsNavLink) {
+    form.autoNav = false
+    form.wazeLink = loc.wazeNavLink || ''
+    form.gmapsLink = loc.gmapsNavLink || ''
+  } else {
+    form.autoNav = true
+    form.wazeLink = ''
+    form.gmapsLink = ''
+  }
+
+  if (dto.price === 0) {
+    form.isFree = true
+    form.price = null
+  } else if (typeof dto.price === 'number') {
+    form.isFree = false
+    form.price = dto.price
+  } else {
+    form.isFree = false
+    form.price = null
+  }
+
+  if (Array.isArray(dto.occurrences) && dto.occurrences.length) {
+    form.occurrences = dto.occurrences.map(o => ({
+      _key: nextKey(),
+      date: o.date || '',
+      hasTime: o.hasTime !== false,
+      startTime: o.hasTime !== false ? (o.startTime || '08:00') : '',
+      endTime: o.hasTime !== false ? (o.endTime || '') : '',
+      _frozen: false,
+    }))
+  }
+
+  form.links = Array.isArray(dto.urls)
+    ? dto.urls
+        .filter(u => u && (u.Title || u.Url))
+        .map(u => ({ _key: nextKey(), type: u.type === 'phone' ? 'phone' : 'link', label: u.Title || '', url: u.Url || '' }))
+    : []
+}
+
 // --- Submit ---
 async function uploadMediaFile(file) {
   return new Promise((resolve, reject) => {
@@ -1123,6 +1282,18 @@ function resetForm() {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xl);
+
+    > * { transition: opacity 0.15s; }
+  }
+
+  // While the AI extracts or the event saves: block all interaction and dim the
+  // event-field sections so they read as disabled (covers the rich-text editor
+  // and other custom inputs). The AI card is left bright so its spinner stays
+  // the focus during generation.
+  &-form--busy {
+    pointer-events: none;
+
+    > *:not(.EventFormAi) { opacity: 0.55; }
   }
 
   &-section {
