@@ -269,9 +269,12 @@ function buildExtractionSchema(categoriesList) {
 
 const MAX_EXTRA_CATEGORIES = 3
 
-function buildExtractionSystemPrompt(categoriesList, citiesList, dateContext) {
+function buildExtractionSystemPrompt(categoriesList, citiesList, dateContext, extraInstructions = '') {
   const categoriesText = categoriesList.map((c) => `- ${c.id}: ${c.label}`).join('\n')
   const citiesText = (citiesList || []).map((c) => c.title).join(', ')
+  const extra = typeof extraInstructions === 'string' && extraInstructions.trim()
+    ? `\n\n${extraInstructions.trim()}`
+    : ''
   return `You extract event data from a single WhatsApp message (Hebrew community events calendar).
 
 ${dateContext}
@@ -291,14 +294,14 @@ RULES:
 5. occurrences: ${OCCURRENCE_RULES}
 When date and time appear in different parts of the message (e.g. date in header "28.2.26", time "18:00" in body), combine them into one startTime. When multiple times appear for the same date (e.g. "12:00 - פתיחה, 13:00 - הופעה"), infer the correct startTime from what the event is advertising: if the whole day/event is advertised, use the first stated time; if the event is specifically the show, use that time. Example: event with 18:00 (פתיחת מרחב), 18:30 (חימום), 18:45–21:00 (מסע) — the event starts at 18:00. No single clear end → endTime: null.
 6. rawPrice: String from message (e.g. "50" or "חינם"). price: number or 0 (free) or null. When the text implies no entrance fee (e.g. חינם, בחינם, חופשי, כניסה חופשית, ללא תשלום, ללא דמי כניסה, אין דמי כניסה, or any phrasing that clearly indicates free/no charge) → price: 0. Do NOT rely only on examples — infer from meaning. Use the MAIN/STANDARD price only — NOT last-minute or day-of price (e.g. "50 ש״ח עד למועד האירוע, 60 ש״ח ביום האירוע" → use 50), NOT bundle price (e.g. "100 ש״ח לכרטיס, 180 ש״ח לשני כרטיסים" → use 100). Prefer the single-ticket or advance price when multiple options exist.
-7. mainCategory/categories: ALWAYS try to infer from content first (event type, topic, keywords). Use the category list above. mainCategory = primary best-fit. categories = [mainCategory] + up to ${MAX_EXTRA_CATEGORIES} additional ids ONLY when the event clearly fits (e.g. concert → music + show). Do not add extras unless the event genuinely matches multiple categories. Only flag rawMainCategory when you truly cannot infer any suitable category (e.g. completely generic "אירוע" with zero context).
+7. mainCategory/categories: ALWAYS infer from content (event type, topic, keywords). mainCategory = primary best-fit. Then WORK HARD to find secondary categories — a secondary category is the NORM, not the exception. Scan the whole category list and add every other id whose theme is present, judged by the event's SUBJECT/TOPIC, its AUDIENCE, and its ACTIVITIES (not only its format). A lecture/talk/הרצאה MUST also carry its subject as a category (about art → [lecture, art]; about technology or AI → [lecture, technology]; about health → [lecture, health]; about nature → [lecture, nature]). Likewise: "מתאים לילדים"/"משפחות" → add kids; a guided or hands-on session → add workshop; food or drink as a focus → add food; time in nature → add nature; live music → add music. categories = [mainCategory] + up to ${MAX_EXTRA_CATEGORIES} additional ids; aim for 2 on most events. Return only mainCategory when, after this scan, genuinely no second theme exists (e.g. a plain pickup football game → sport alone), and never add an id that truly does not fit. Only flag rawMainCategory when you truly cannot infer any suitable category (e.g. completely generic "אירוע" with zero context).
 8. location: Extract locationName, addressLine1, addressLine2, wazeNavLink, gmapsNavLink. rawLocationName/rawAddressLine1 = raw strings. IMPORTANT: Do NOT repeat the city name in locationName or addressLine1 — City is stored separately. locationName = venue/place name only (e.g. "מרכז קהילתי", "פאב השכונה"); addressLine1 = street/address or specific detail (e.g. "רחוב הרצל 5"), NOT the city. If the only location info is the city, leave locationName and addressLine1 empty.
 9. urls: Event links and phones only. type=link|phone. For phones: Title = short Hebrew label (e.g. "טלפון להרשמה", "להזמנה", "הרשמה"); Url = digits only. Exclude Waze/Gmaps (those go to rawNavLinks).
 10. rawNavLinks: Newline-separated Waze and Google Maps URLs if present. Else "".
 11. rawUrls: Newline-separated other URLs and phone numbers. Else "".
 
 FLAGS: Add to flags ONLY when UNABLE to extract OR when you are CERTAIN the city is outside Northern Israel (per rule above — when in doubt, do not flag rawCityOutsideNorth). Flag rawOccurrences ONLY when no date/time at all. NEVER flag for missing end time — end time is optional. If you output occurrences with date and startTime, do NOT add rawOccurrences to flags. Flag rawPrice ONLY when you truly cannot conclude (neither price nor any implication of free). If the text implies no charge, output price: 0 and do NOT flag. Flag rawLocation ONLY when BOTH locationName AND city are empty (we need at least one). Flag rawCity when city could not be extracted but locationName exists (user can provide city or skip to go to region). Do NOT flag rawLocation when we have city (city only is valid). Do NOT flag rawCity when both are missing (rawLocation compound will collect city). Flag rawMainCategory ONLY when category truly cannot be inferred from content.
-Include ALL qualifying flags. reason = short Hebrew explanation.`
+Include ALL qualifying flags. reason = short Hebrew explanation.${extra}`
 }
 
 /**
@@ -307,7 +310,10 @@ Include ALL qualifying flags. reason = short Hebrew explanation.`
  * @param {string} text - Raw user message
  * @param {Array<{id: string, label: string}>} categoriesList
  * @param {Array<{id: string, title: string, region: string}>} citiesList
- * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string }} [options]
+ * @param {{ openaiApiKey?: string, openaiModel?: string, correlationId?: string, extraInstructions?: string }} [options]
+ *   extraInstructions: optional caller-supplied text appended verbatim to the end of the system
+ *   prompt (e.g. consumer-specific description-style / category rules). Defaults to none, so callers
+ *   that omit it get the exact base prompt — keeping behavior unchanged.
  * @returns {Promise<{ rawEventSupplement: object, formattedEvent: object, flags: Array<{fieldKey: string, reason: string}> } | { rawEventSupplement: null, formattedEvent: null, flags: [], errorReason: string }>}
  */
 export async function extractEventFromFreeText(text, categoriesList, citiesList, options = {}) {
@@ -331,7 +337,7 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
 
   const messageHtml = convertMessageToHtml(userContent)
   const dateContext = getIsraelDateContext()
-  const systemPrompt = buildExtractionSystemPrompt(categoriesList, citiesList || [], dateContext)
+  const systemPrompt = buildExtractionSystemPrompt(categoriesList, citiesList || [], dateContext, options.extraInstructions || '')
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {

@@ -35,6 +35,15 @@ export function checkPhoneRateLimit(phone: string): void {
 }
 
 /**
+ * Per-publisher rate limit for the AI event-generation endpoint: 10 calls per
+ * publisher per minute. Bounds the cost of the (paid) OpenAI extraction call.
+ * In-memory only — publisher ids are not sensitive as keys.
+ */
+export function checkAiGenerateRateLimit(publisherId: string): void {
+  checkMemoryLimit(`ai-generate:${publisherId}`, 10, 60_000)
+}
+
+/**
  * Stricter rate limit for auth endpoints: 10 requests per IP per 5 minutes.
  */
 export async function checkAuthRateLimit(event: Parameters<typeof getRequestIP>[0]): Promise<void> {

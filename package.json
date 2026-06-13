@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@flasd/whatsapp-formatting": "^0.2.0",
+    "@galiluz/event-format": "file:packages/event-format",
     "@pinia/nuxt": "^0.5.1",
     "@tiptap/extension-character-count": "^3.24.0",
     "@tiptap/extension-placeholder": "^3.24.0",

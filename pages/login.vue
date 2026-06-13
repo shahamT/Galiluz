@@ -37,6 +37,13 @@
             <template v-else>שלח קוד אימות</template>
           </button>
         </form>
+
+        <div class="LoginCard-register">
+          <span class="LoginCard-registerText">עדיין לא נרשמתם כמפרסמים?</span>
+          <button type="button" class="LoginCard-registerLink" @click="showRegisterModal = true">
+            לחצו כאן להרשמה מהירה!
+          </button>
+        </div>
       </template>
 
       <!-- State: OTP input -->
@@ -97,6 +104,13 @@
       <!-- Turnstile lives outside the state blocks: both send and resend need a fresh token -->
       <div v-show="turnstileEnabled && state !== 'success'" ref="turnstileEl" class="LoginCard-turnstile" />
     </div>
+
+    <UiRegisterPublisherModal
+      :open="showRegisterModal"
+      :href="PUBLISHER_REGISTER_WHATSAPP_LINK"
+      @register="goToRegister"
+      @close="showRegisterModal = false"
+    />
   </div>
 </template>
 
@@ -105,9 +119,10 @@ defineOptions({ name: 'LoginPage' })
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'כניסה | גלילו"ז' })
 
-import { PUBLISH_EVENT_WHATSAPP_LINK } from '~/consts/ui.const'
+import { PUBLISH_EVENT_WHATSAPP_LINK, PUBLISHER_REGISTER_WHATSAPP_LINK } from '~/consts/ui.const'
 
 const { sendOtp, verifyOtp } = useAuth()
+const { capture } = usePosthog()
 const authStore = useAuthStore()
 const { enabled: turnstileEnabled, render: renderTurnstile, reset: resetTurnstile } = useTurnstile()
 
@@ -120,6 +135,13 @@ const error = ref('')
 const notRegistered = ref(false)
 const resendCountdown = ref(0)
 let countdownTimer = null
+
+const showRegisterModal = ref(false)
+// The modal's CTA is a real <a> (reliable WhatsApp deep-link); here we only track + close.
+function goToRegister() {
+  capture('publisher_register_cta_clicked', { source: 'login' })
+  showRegisterModal.value = false
+}
 
 // Cloudflare Turnstile: tokens are single-use — reset after every send attempt
 const turnstileEl = ref(null)
@@ -449,6 +471,38 @@ onUnmounted(() => clearInterval(countdownTimer))
     text-decoration: underline;
 
     &:hover { opacity: 0.8; }
+  }
+
+  // Prominent "become a publisher" CTA under the send button (phone state only)
+  &-register {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+    width: 100%;
+    margin-top: var(--spacing-sm);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
+    text-align: center;
+  }
+
+  &-registerText {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
+  }
+
+  &-registerLink {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-family-body);
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--brand-dark-green);
+    text-decoration: underline;
+    padding: 0;
+
+    &:hover { opacity: 0.85; }
   }
 
   &-actions {
