@@ -25,6 +25,7 @@ export default defineEventHandler(async (event) => {
       'event.occurrences': 1,
       'event.price': 1,
       'event.mainCategory': 1,
+      'event.publisherId': 1,
     })
     .toArray()
 
@@ -47,5 +48,6 @@ export default defineEventHandler(async (event) => {
     price: doc.event?.price ?? null,
     isActive: doc.isActive ?? false,
     mainCategory: doc.event?.mainCategory || '',
+    publisherId: doc.event?.publisherId || '',
   }))
 })

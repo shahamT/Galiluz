@@ -1,6 +1,8 @@
 <template>
   <LayoutProtectedShell>
-    <AdminNavTabs />
+    <template #nav>
+      <AdminNavTabs />
+    </template>
 
     <div class="AdminEvents-body">
       <div class="AdminEvents-header">
@@ -9,53 +11,82 @@
       </div>
 
       <div class="AdminEvents-container">
-        <PublisherEventsSearchBar v-model="filter" v-model:search="search" @add-event="showEventForm = true" />
+        <!-- Filter bar: shared search/filter row + manager-only account/publisher filter directly beneath it -->
+        <div class="AdminEvents-filters">
+          <PublisherEventsSearchBar v-model="filter" v-model:search="search" @add-event="showEventForm = true" />
+          <AdminPublisherFilterSelect
+            v-model="publisherFilter"
+            :accounts="pubOptions?.accounts || []"
+            :publishers="pubOptions?.publishers || []"
+          />
+        </div>
 
         <!-- Skeleton -->
         <template v-if="pending">
           <div v-for="i in 5" :key="i" class="AdminEvents-skeleton" />
         </template>
 
-        <!-- List -->
-        <div v-else-if="filteredEvents.length" class="AdminEvents-list">
-          <PublisherEventListItem
-            v-for="event in filteredEvents"
-            :key="event.id"
-            :event="event"
+        <!-- List + pagination -->
+        <template v-else-if="filteredEvents.length">
+          <div class="AdminEvents-list">
+            <PublisherEventListItem
+              v-for="event in pagedEvents"
+              :key="event.id"
+              :event="event"
+              :to="`/admin/events/${event.id}`"
+            />
+          </div>
+          <UiPagination
+            v-if="filteredEvents.length > PAGE_SIZE"
+            v-model="currentPage"
+            :total="filteredEvents.length"
+            :page-size="PAGE_SIZE"
+            class="AdminEvents-pagination"
+            @update:model-value="onPageChange"
           />
-        </div>
+        </template>
 
-        <!-- No events at all -->
-        <PublisherDashboardEmptyState
-          v-else-if="!events?.length"
-          text="אין אירועים במערכת"
-          :show-button="false"
-        />
-
-        <!-- Search with no matches -->
-        <PublisherDashboardEmptyState
-          v-else-if="isSearching"
-          text="לא נמצאו אירועים מתאימים לחיפוש"
-          button-label="איפוס"
-          button-icon="close"
-          @action="search = ''"
-        />
-
-        <!-- Has events but none for the current filter -->
-        <PublisherDashboardEmptyState
-          v-else-if="filter === 'future'"
-          text="אין אירועים עתידיים"
-          :show-button="false"
-        />
-        <PublisherDashboardEmptyState
-          v-else
-          text="אין אירועים שהסתיימו"
-          :show-button="false"
-        />
+        <!-- Empty states -->
+        <template v-else>
+          <PublisherDashboardEmptyState
+            v-if="!events?.length"
+            text="אין אירועים במערכת"
+            :show-button="false"
+          />
+          <PublisherDashboardEmptyState
+            v-else-if="isSearching"
+            text="לא נמצאו אירועים מתאימים לחיפוש"
+            button-label="איפוס"
+            button-icon="close"
+            @action="search = ''"
+          />
+          <PublisherDashboardEmptyState
+            v-else-if="publisherFilter"
+            text="אין אירועים למפרסם או לחשבון שנבחר"
+            button-label="איפוס סינון"
+            button-icon="close"
+            @action="publisherFilter = null"
+          />
+          <PublisherDashboardEmptyState
+            v-else-if="filter === 'future'"
+            text="אין אירועים עתידיים"
+            :show-button="false"
+          />
+          <PublisherDashboardEmptyState
+            v-else
+            text="אין אירועים שהסתיימו"
+            :show-button="false"
+          />
+        </template>
       </div>
     </div>
 
-    <PublisherEventFormModal v-if="showEventForm" @close="showEventForm = false" @submitted="onEventCreated" />
+    <PublisherEventFormModal
+      v-if="showEventForm"
+      :on-behalf-publishers="pubOptions?.publishers || []"
+      @close="showEventForm = false"
+      @submitted="onEventCreated"
+    />
   </LayoutProtectedShell>
 </template>
 
@@ -65,20 +96,24 @@ definePageMeta({ middleware: 'auth' })
 useHead({ title: 'אירועים | ניהול | גלילו"ז' })
 
 const { capture } = usePosthog()
+const PAGE_SIZE = 8
 const filter = ref('all')
 const search = ref('')
 const debouncedSearch = useDebounce(search, 200)
 const showEventForm = ref(false)
+const publisherFilter = ref(null) // { kind: 'account'|'publisher', id, label, accountName? } | null
+const currentPage = ref(1)
 
 function onEventCreated({ id }) {
   showEventForm.value = false
   if (id) {
     capture('publisher_event_created', { eventId: id, source: 'admin_events_list' })
-    navigateTo(`/publisher/events/${id}?success=created`)
+    navigateTo(`/admin/events/${id}?success=created`)
   }
 }
 
 const { data: events, pending } = await useAuthFetch('/api/admin/events')
+const { data: pubOptions } = await useAuthFetch('/api/admin/publishers')
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -86,6 +121,21 @@ const isSearching = computed(() => !!debouncedSearch.value.trim())
 
 const filteredEvents = computed(() => {
   let list = events.value || []
+
+  // Account / publisher filter (manager-only): an account resolves to the set of
+  // its publishers' ids; a single publisher matches its id directly.
+  if (publisherFilter.value) {
+    if (publisherFilter.value.kind === 'publisher') {
+      list = list.filter(e => e.publisherId === publisherFilter.value.id)
+    } else {
+      const pubIds = new Set(
+        (pubOptions.value?.publishers || [])
+          .filter(p => p.accountId === publisherFilter.value.id)
+          .map(p => p.id),
+      )
+      list = list.filter(e => pubIds.has(e.publisherId))
+    }
+  }
 
   if (filter.value === 'future') {
     list = list.filter(e => e.occurrences.some(o => o.date >= today))
@@ -100,6 +150,16 @@ const filteredEvents = computed(() => {
 
   return list
 })
+
+watch([filter, debouncedSearch, publisherFilter], () => { currentPage.value = 1 })
+
+const pagedEvents = computed(() =>
+  filteredEvents.value.slice((currentPage.value - 1) * PAGE_SIZE, currentPage.value * PAGE_SIZE)
+)
+
+function onPageChange() {
+  document.querySelector('.AppShell-scroller')?.scrollTo({ top: 0, behavior: 'smooth' })
+}
 </script>
 
 <style lang="scss">
@@ -146,6 +206,19 @@ const filteredEvents = computed(() => {
     }
   }
 
+  // Group the shared search/filter row with the account/publisher filter as one
+  // bar: tight gap between them, normal spacing below the block before the list.
+  &-filters {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+
+    // The shared search bar carries its own bottom margin — collapse it so the
+    // publisher filter sits snugly directly beneath the other filters.
+    .EventsSearchBar { margin-bottom: 0; }
+  }
+
   &-skeleton {
     height: 4.5rem;
     border-radius: var(--radius-lg);
@@ -164,6 +237,12 @@ const filteredEvents = computed(() => {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
+  }
+
+  &-pagination {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
   }
 }
 </style>

@@ -97,6 +97,7 @@ export default defineEventHandler(async (event) => {
   const formattedEvent = { ...formattedEventSupplied }
   normalizePublisherFormattedEvent(formattedEvent, validCategoryIds)
   if (publisherId) formattedEvent.publisherId = publisherId
+  if (publisherId) formattedEvent.originalCreatorPublisherId = publisherId
   const phone = typeof publisher?.phone === 'string' ? publisher.phone.replace(/\D/g, '').trim() : ''
   if (phone) formattedEvent.publisherPhone = phone
   if (formattedEvent.multiDayEvent === undefined) formattedEvent.multiDayEvent = true

@@ -4,6 +4,7 @@
     <LayoutAppHeader @menu-click="isMainMenuOpen = true" />
     <UiMainMenu v-model="isMainMenuOpen" />
     <UiInstallInstructions v-if="showInstructions" @close="showInstructions = false" />
+    <slot name="nav" />
     <div class="AppShell-scroller">
       <div class="AppShell-content">
         <slot />
@@ -39,6 +40,7 @@ const { showInstructions } = useInstallPrompt()
     min-height: 0;
     overflow-y: auto;
     direction: ltr; // scrollbar at screen edge
+    scrollbar-gutter: stable;
   }
 
   &-content {

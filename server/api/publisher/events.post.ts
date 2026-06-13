@@ -11,6 +11,14 @@ import { convertOccurrenceTimes } from '~/server/utils/convertOccurrenceTimes'
 
 const VALID_CATEGORY_IDS = Object.keys(EVENT_CATEGORIES)
 
+function normalizeIsraeliPhone(raw: string): string | null {
+  const digits = String(raw).replace(/\D/g, '')
+  if (digits.startsWith('972') && digits.length === 12) return digits
+  if (digits.startsWith('05') && digits.length === 10) return '972' + digits.slice(1)
+  if (digits.startsWith('5') && digits.length === 9) return '972' + digits
+  return null
+}
+
 /** Resolve a location's cityType, trusting the client value but deriving from CITIES as a fallback. */
 function resolveCityType(loc: Record<string, unknown>): 'listed' | 'custom' {
   if (loc.cityType === 'listed' || loc.cityType === 'custom') return loc.cityType
@@ -27,6 +35,44 @@ export default defineEventHandler(async (event) => {
 
   // Sanitize all user text fields
   sanitizeEventFields(body)
+
+  // Manager override: allow assigning the event to a different publisher
+  const onBehalfPublisherId = typeof body.onBehalfPublisherId === 'string' ? body.onBehalfPublisherId.trim() : ''
+  const onBehalfPhone        = typeof body.onBehalfPhone === 'string' ? body.onBehalfPhone.trim() : ''
+  let effectivePublisherId   = session.publisherId
+  let isManagerAction        = false
+
+  if (onBehalfPublisherId || onBehalfPhone) {
+    if (session.type !== 'manager') throw createError({ statusCode: 403, message: 'אין הרשאה' })
+    isManagerAction = true
+
+    if (onBehalfPublisherId) {
+      if (!ObjectId.isValid(onBehalfPublisherId))
+        throw createError({ statusCode: 400, message: 'מזהה מפרסם לא תקין' })
+      effectivePublisherId = onBehalfPublisherId
+    } else {
+      const normalized = normalizeIsraeliPhone(onBehalfPhone)
+      if (!normalized) throw createError({ statusCode: 400, message: 'מספר טלפון לא תקין' })
+
+      const config2 = useRuntimeConfig() as Record<string, string>
+      const { db: db2 } = await getMongoConnection()
+      const publishersCol = db2.collection(config2.mongodbCollectionPublishers || 'publishers')
+      const existing = await publishersCol.findOne({ waId: normalized })
+      if (existing) {
+        effectivePublisherId = existing._id.toString()
+      } else {
+        const ghostResult = await publishersCol.insertOne({
+          waId: normalized,
+          phone: normalized,
+          status: 'ghost',
+          type: 'publisher',
+          createdOnBehalf: true,
+          createdAt: new Date(),
+        })
+        effectivePublisherId = ghostResult.insertedId.toString()
+      }
+    }
+  }
 
   const loc = (body.location as Record<string, unknown>) || {}
   const occurrences = convertOccurrenceTimes(Array.isArray(body.occurrences) ? body.occurrences : [])
@@ -58,7 +104,8 @@ export default defineEventHandler(async (event) => {
     price:       body.price !== undefined ? (body.price === null ? null : Number(body.price)) : null,
     urls:        Array.isArray(body.urls) ? body.urls : [],
     media:       Array.isArray(body.media) ? body.media : [],
-    publisherId: session.publisherId,
+    publisherId: effectivePublisherId,
+    originalCreatorPublisherId: effectivePublisherId,
     publisherPhone: '',
   }
 
@@ -79,7 +126,15 @@ export default defineEventHandler(async (event) => {
     createdAt: new Date(),
     isActive:  false,
     event:     eventObj,
-    rawEvent:  { publisherId: session.publisherId, source: 'publisher_portal' },
+    rawEvent:  {
+      publisherId: effectivePublisherId,
+      source: 'publisher_portal',
+      ...(isManagerAction && {
+        isManagerAction: true,
+        actingManagerPublisherId: session.publisherId,
+        actingManagerWaId: session.waId,
+      }),
+    },
   }
 
   const result = await col.insertOne(doc)
@@ -89,7 +144,7 @@ export default defineEventHandler(async (event) => {
     eventId,
     action:      'event_created',
     title:       String(eventObj.Title),
-    publisherId: session.publisherId,
+    publisherId: effectivePublisherId,
     waId:        session.waId,
     correlationId,
   })

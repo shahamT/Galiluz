@@ -22,7 +22,7 @@
     />
     <ul v-else class="DashboardTopEvents-list">
       <li v-for="(ev, i) in events" :key="`${ev.eventId}-${ev.occurrenceDate || i}`" class="DashboardTopEvents-row">
-        <NuxtLink :to="`/publisher/events/${ev.eventId}`" class="DashboardTopEvents-link">
+        <NuxtLink :to="`${basePath}/${ev.eventId}`" class="DashboardTopEvents-link">
           <span class="DashboardTopEvents-rank">{{ i + 1 }}</span>
           <div class="DashboardTopEvents-info">
             <span class="DashboardTopEvents-name">{{ ev.title }}</span>
@@ -44,8 +44,9 @@
 <script setup>
 defineOptions({ name: 'DashboardTopEvents' })
 defineProps({
-  events: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false },
+  events:   { type: Array, default: () => [] },
+  loading:  { type: Boolean, default: false },
+  basePath: { type: String, default: '/publisher/events' },
 })
 </script>
 

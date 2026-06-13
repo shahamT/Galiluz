@@ -9,7 +9,7 @@ export type EventLogActionCreation =
   | 'event_created'
   | 'draft_processed'
   | 'event_activated'
-export type EventLogAction = EventLogActionCreation | 'event_deactivated' | 'event_edited' | 'event_deleted'
+export type EventLogAction = EventLogActionCreation | 'event_deactivated' | 'event_edited' | 'event_deleted' | 'event_transferred'
 
 export interface EventLogStatusChangePayload {
   eventId: string

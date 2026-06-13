@@ -30,6 +30,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'forbidden' })
   }
 
+  let ownerInfo: { publisherId: string; publisherName: string; originalCreatorPublisherId?: string } | null = null
+  if (session.type === 'manager' && doc.event?.publisherId) {
+    const publishersCol = db.collection(config.mongodbCollectionPublishers || 'publishers')
+    let pubObjId: ObjectId | null = null
+    try { pubObjId = new ObjectId(doc.event.publisherId) } catch { /* skip */ }
+    const pub = pubObjId ? await publishersCol.findOne({ _id: pubObjId }) : null
+    ownerInfo = {
+      publisherId: doc.event.publisherId,
+      publisherName: pub?.name || pub?.fullName || pub?.waId || doc.event.publisherId,
+      ...(doc.event.originalCreatorPublisherId && {
+        originalCreatorPublisherId: doc.event.originalCreatorPublisherId,
+      }),
+    }
+  }
+
   const [eventStats, occurrenceStats, linkGroups] = await Promise.all([
     statsCol.findOne({ eventId: id }),
     occStatsCol.find({ eventId: id }).toArray(),
@@ -94,5 +109,6 @@ export default defineEventHandler(async (event) => {
       totalViews,
       totalUniqueViews,
     },
+    ...(ownerInfo && ownerInfo),
   }
 })

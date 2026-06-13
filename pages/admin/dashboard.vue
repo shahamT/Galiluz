@@ -1,6 +1,8 @@
 <template>
   <LayoutProtectedShell>
-    <AdminNavTabs />
+    <template #nav>
+      <AdminNavTabs />
+    </template>
 
     <div class="AdminDashboard-body">
     <div class="AdminDashboard-header">
@@ -47,12 +49,17 @@
 
     <!-- Bottom row -->
     <div class="AdminDashboard-bottom">
-      <PublisherDashboardTopEvents :events="data?.topEvents || []" :loading="isFirstLoad" />
+      <PublisherDashboardTopEvents :events="data?.topEvents || []" :loading="isFirstLoad" base-path="/admin/events" />
       <PublisherDashboardRecentLogs :logs="data?.recentLogs || []" :loading="isFirstLoad" />
     </div>
     </div>
 
-    <PublisherEventFormModal v-if="showEventForm" @close="showEventForm = false" @submitted="onEventSaved" />
+    <PublisherEventFormModal
+      v-if="showEventForm"
+      :on-behalf-publishers="pubOptions?.publishers || []"
+      @close="showEventForm = false"
+      @submitted="onEventSaved"
+    />
   </LayoutProtectedShell>
 </template>
 
@@ -69,9 +76,11 @@ function onEventSaved({ id }) {
   showEventForm.value = false
   if (id) {
     capture('publisher_event_created', { eventId: id, source: 'admin_dashboard' })
-    navigateTo(`/publisher/events/${id}?success=created`)
+    navigateTo(`/admin/events/${id}?success=created`)
   }
 }
+
+const { data: pubOptions } = await useAuthFetch('/api/admin/publishers')
 
 const { data, pending, refresh } = await useAuthFetch('/api/admin/dashboard', {
   query: computed(() => ({ filter: filter.value })),

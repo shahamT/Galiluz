@@ -1,6 +1,9 @@
 <template>
   <ClientOnly>
     <LayoutAppShell v-if="authStore.authReady">
+      <template #nav>
+        <slot name="nav" />
+      </template>
       <slot />
     </LayoutAppShell>
     <div v-else class="AuthLoader">
