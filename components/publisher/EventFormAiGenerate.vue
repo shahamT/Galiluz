@@ -2,10 +2,8 @@
   <section class="EventFormAi" :class="{ 'EventFormAi--expanded': expanded }">
     <div class="EventFormAi-top" @click="!expanded && toggle()">
       <span class="EventFormAi-sparkle"><UiIcon name="auto_awesome" size="md" /></span>
-      <div class="EventFormAi-intro">
-        <h3 class="EventFormAi-title">יצירת אירוע בעזרת AI</h3>
-        <p class="EventFormAi-subtitle">הדביקו את פרטי האירוע (למשל הודעת וואטסאפ) ותנו ל-AI למלא את הטופס עבורכם.</p>
-      </div>
+      <h3 class="EventFormAi-title">יצירת אירוע בעזרת AI</h3>
+      <p class="EventFormAi-subtitle">הדביקו את פרטי האירוע (למשל הודעת וואטסאפ) ותנו ל-AI למלא את הטופס עבורכם.</p>
       <button
         v-if="!expanded"
         type="button"
@@ -88,16 +86,32 @@ function toggle() {
   }
 
   &-top {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "icon title    action"
+      "icon subtitle action";
     align-items: center;
-    gap: var(--spacing-md);
+    column-gap: var(--spacing-md);
+    row-gap: 2px;
     padding: var(--spacing-md);
     cursor: pointer;
 
     .EventFormAi--expanded & { cursor: default; }
+
+    @include mobile {
+      grid-template-columns: auto 1fr;
+      grid-template-areas:
+        "icon     title"
+        "subtitle subtitle"
+        "action   action";
+      column-gap: var(--spacing-sm);
+      row-gap: var(--spacing-sm);
+    }
   }
 
   &-sparkle {
+    grid-area: icon;
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -109,15 +123,9 @@ function toggle() {
     color: #fff;
   }
 
-  &-intro {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
   &-title {
+    grid-area: title;
+    min-width: 0;
     margin: 0;
     font-size: var(--font-size-base);
     font-weight: 700;
@@ -125,6 +133,8 @@ function toggle() {
   }
 
   &-subtitle {
+    grid-area: subtitle;
+    min-width: 0;
     margin: 0;
     font-size: var(--font-size-sm);
     color: var(--color-text-light);
@@ -132,9 +142,11 @@ function toggle() {
   }
 
   &-cta {
+    grid-area: action;
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--spacing-xs);
     height: var(--control-height);
     padding: 0 var(--spacing-md);
@@ -150,12 +162,13 @@ function toggle() {
     &:hover { opacity: 0.9; }
 
     @include mobile {
-      // Keep the label; let it wrap tightly on very small screens
-      padding: 0 var(--spacing-sm);
+      width: 100%;
     }
   }
 
   &-collapse {
+    grid-area: action;
+    justify-self: end;
     flex-shrink: 0;
     display: flex;
     align-items: center;

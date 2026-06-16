@@ -129,7 +129,13 @@ const editor = useEditor({
   content: props.modelValue,
   editorProps: {
     transformPastedHTML(html) {
-      return html.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, '$1')
+      // Links aren't allowed in descriptions. Replace each <a> with its href (the actual
+      // URL the user copied) rather than its visible text (often just the site name);
+      // fall back to the inner text when there's no href.
+      return html.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_m, attrs, inner) => {
+        const href = (attrs.match(/\bhref\s*=\s*["']([^"']*)["']/i) || [])[1]
+        return href || inner
+      })
     },
     handleKeyDown(view, event) {
       if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
@@ -145,7 +151,10 @@ const editor = useEditor({
     },
   },
   extensions: [
-    StarterKit.configure({ heading: false }),
+    // link: false — TipTap v3 StarterKit bundles the Link extension (with autolink),
+    // which would turn pasted/typed URLs into <a> links. Descriptions must not contain
+    // links (sanitizer strips them; the form rejects <a>), so disable it entirely.
+    StarterKit.configure({ heading: false, link: false }),
     Placeholder.configure({ placeholder: props.placeholder }),
     CharacterCount.configure({ limit: props.maxLength }),
   ],
