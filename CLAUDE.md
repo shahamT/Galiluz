@@ -23,6 +23,7 @@ node scripts/cleanup-orphan-stats.js   # ad-hoc stats consistency sweep (reads .
 | Pages, data flow, stores, carousels, styling, tracking | [docs/FRONTEND.md](docs/FRONTEND.md) |
 | System overview + cross-cutting flows | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Deploys, env rules, backups, error visibility | [docs/PRODUCTION_OPS.md](docs/PRODUCTION_OPS.md) |
+| Env-var groups + which group attaches to which service | [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) |
 | OTP/session security, media validation, API secret | [docs/SECURITY_AND_BUDGET.md](docs/SECURITY_AND_BUDGET.md) |
 | Composables index | [composables/README.md](composables/README.md) |
 | WhatsApp pipeline (out of web-app scope) | [docs/EVENT_OBJECT_INTEGRATION.md](docs/EVENT_OBJECT_INTEGRATION.md), [docs/WHATSAPP_SERVICE.md](docs/WHATSAPP_SERVICE.md) |

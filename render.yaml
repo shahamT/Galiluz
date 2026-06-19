@@ -1,12 +1,17 @@
 # Render Blueprint – Galiluz monorepo
-# Services from one repo, all deploy from main branch only.
+# Services from one repo, all deploy from the main branch only.
 #
 # 1. galiluz-web        – Nuxt 3 SSR app (Web Service)
-# 2. galiluz-wa         – WhatsApp listener / group ingestion (Background Worker + persistent disk)
-# 3. galiluz-wa-bot     – WhatsApp Cloud API webhook bot (Web Service)
-# 4. galiluz-wa-gateway – WhatsApp gateway via Green API; OTP delivery + future actions (Web Service, single instance)
+# 2. galiluz-wa-bot     – WhatsApp Cloud API webhook bot (Web Service)
+# 3. galiluz-wa-gateway – WhatsApp gateway via Green API; OTP delivery + future actions (Web Service, single instance)
 #
-# Shared env vars live in the "galiluz-shared" environment group (create once in Render dashboard).
+# NOTE: the old galiluz-wa listener (Baileys group ingestion) is legacy and is NOT
+# managed by this blueprint — it has no env groups here.
+#
+# Env vars are organized into fine-grained groups: galiluz-core (shared secret),
+# galiluz-int-* (per-integration credentials), galiluz-app-* (per-app config).
+# Full reference + group→service matrix: docs/ENVIRONMENT.md.
+# NODE_ENV / NODE_VERSION (and the listener's WA_AUTH_PATH) are set inline per service.
 
 services:
   # ── Nuxt 3 Web App ────────────────────────────────────────────
@@ -24,35 +29,14 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
-      - fromGroup: galiluz-shared
-      - key: OTP_SECRET
-        sync: false
-      # OTP delivery goes through the WhatsApp gateway service (Green API bridge).
-      # Set to the gateway's URL, e.g. https://galiluz-wa-gateway.onrender.com
-      - key: WA_GATEWAY_URL
-        sync: false
-
-  # ── WhatsApp Listener Worker ──────────────────────────────────
-  - type: worker
-    name: galiluz-wa
-    runtime: node
-    branch: main
-    plan: starter
-    region: frankfurt
-    rootDir: apps/wa-listener
-    buildCommand: npm install
-    startCommand: npm start
-    disk:
-      name: wa-data
-      mountPath: /var/data
-      sizeGB: 1
-    envVars:
-      - key: NODE_VERSION
-        value: "22"
-      - key: WA_AUTH_PATH
-        value: /var/data/auth
-      - fromGroup: galiluz-shared
-      - fromGroup: galiluz-wa-secrets
+      - fromGroup: galiluz-core
+      - fromGroup: galiluz-int-mongodb
+      - fromGroup: galiluz-int-cloudinary
+      - fromGroup: galiluz-int-openai
+      - fromGroup: galiluz-int-zoho-smtp
+      - fromGroup: galiluz-int-turnstile
+      - fromGroup: galiluz-int-posthog
+      - fromGroup: galiluz-app-web
 
   # ── WhatsApp Cloud API Bot ─────────────────────────────────────
   - type: web
@@ -70,7 +54,10 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
-      - fromGroup: galiluz-wa-bot-secrets
+      - fromGroup: galiluz-core
+      - fromGroup: galiluz-int-openai
+      - fromGroup: galiluz-int-whatsapp-cloud
+      - fromGroup: galiluz-app-wa-bot
 
   # ── WhatsApp Gateway (Green API) ───────────────────────────────
   # Single bridge to the WhatsApp Business account. Sends OTP now; future:
@@ -92,35 +79,30 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
-      - fromGroup: galiluz-shared          # provides API_SECRET (+ MONGODB_* for future use)
-      - fromGroup: galiluz-wa-gateway-secrets
+      - fromGroup: galiluz-core
+      - fromGroup: galiluz-int-green-api
+      - fromGroup: galiluz-app-wa-gateway
 
 # ── Environment Groups ──────────────────────────────────────────
-# Create these in the Render dashboard and fill in the actual values.
-# The "sync: false" flag means Render will prompt you to enter the value manually.
+# "sync: false" = enter the value in the Render dashboard. See docs/ENVIRONMENT.md.
 
 envVarGroups:
-  # Shared between galiluz-web (Nuxt) and galiluz-wa (listener): DB, API secret. No OpenAI (web does not use it; listener has own in wa-secrets).
-  - name: galiluz-shared
+  # ── Core (shared internal secret) ──
+  - name: galiluz-core
+    envVars:
+      - key: API_SECRET           # shared by web, wa-bot, wa-gateway (min 16 chars)
+        sync: false
+
+  # ── Integration credentials ──
+  - name: galiluz-int-mongodb
     envVars:
       - key: MONGODB_URI
         sync: false
       - key: MONGODB_DB_NAME
         sync: false
-      - key: API_SECRET
-        sync: false
 
-  # WA worker only – secrets that the Nuxt app does not need. Includes listener's own OpenAI key.
-  - name: galiluz-wa-secrets
+  - name: galiluz-int-cloudinary
     envVars:
-      - key: NODE_ENV
-        sync: false
-      - key: WA_DISCOVERY_MODE
-        sync: false
-      - key: WHATSAPP_GROUP_IDS
-        sync: false
-      - key: WHATSAPP_CONFIRMATION_GROUP_IDS
-        sync: false
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
@@ -129,33 +111,17 @@ envVarGroups:
         sync: false
       - key: CLOUDINARY_FOLDER
         sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_MODEL
-        sync: false
 
-  # wa-bot (Cloud API webhook) – set in Render dashboard. OpenAI used for event format (wa-bot owns format).
-  - name: galiluz-wa-bot-secrets
+  - name: galiluz-int-openai
     envVars:
-      - key: WEBHOOK_VERIFY_TOKEN
-        sync: false
-      - key: WA_CLOUD_ACCESS_TOKEN
-        sync: false
-      - key: WA_PHONE_NUMBER_ID
-        sync: false
-      - key: GALILUZ_APP_URL
-        value: https://galiluz.co.il
-      - key: GALILUZ_APP_API_KEY
-        sync: false
-      - key: PUBLISHERS_APPROVER_WA_NUMBER
-        sync: false
       - key: OPENAI_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        sync: false
+      - key: OPENAI_MODEL          # wa-bot pipeline + web fallback
+        value: gpt-4o-mini
+      - key: OPENAI_MODEL_WEB      # web AI event-generation (stronger model)
+        value: gpt-4o
 
-  # wa-gateway (Green API bridge) – instance credentials from the Green API console.
-  - name: galiluz-wa-gateway-secrets
+  - name: galiluz-int-green-api
     envVars:
       - key: GREEN_API_ID_INSTANCE
         sync: false
@@ -166,3 +132,81 @@ envVarGroups:
         sync: false
       - key: GREEN_API_MEDIA_URL
         sync: false
+
+  - name: galiluz-int-whatsapp-cloud
+    envVars:
+      - key: WA_CLOUD_ACCESS_TOKEN
+        sync: false
+      - key: WA_PHONE_NUMBER_ID
+        sync: false
+      - key: WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: APP_SECRET            # Meta app secret (webhook signature) — NOT API_SECRET
+        sync: false
+      - key: WHATSAPP_TEST_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_PROD_PHONE_NUMBER_ID
+        sync: false
+
+  - name: galiluz-int-zoho-smtp
+    envVars:
+      - key: SMTP_HOST
+        value: smtppro.zoho.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: MAIL_TO
+        sync: false
+
+  - name: galiluz-int-turnstile
+    envVars:
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: NUXT_PUBLIC_TURNSTILE_SITE_KEY
+        sync: false
+
+  - name: galiluz-int-posthog
+    envVars:
+      - key: NUXT_PUBLIC_POSTHOG_PUBLIC_KEY
+        sync: false
+      - key: NUXT_PUBLIC_POSTHOG_HOST
+        value: https://eu.i.posthog.com
+      - key: NUXT_PUBLIC_POSTHOG_DEFAULTS
+        value: "2026-01-30"
+      - key: NUXT_PUBLIC_POSTHOG_IN_DEV
+        value: "false"
+
+  # ── Per-app config ──
+  - name: galiluz-app-web
+    envVars:
+      - key: OTP_SECRET           # HMAC secret for OTP + sessions (min 32 chars)
+        sync: false
+      - key: WA_GATEWAY_URL       # URL of galiluz-wa-gateway (required in prod)
+        sync: false
+      - key: NUXT_PUBLIC_SITE_URL
+        value: https://galiluz.co.il
+
+  - name: galiluz-app-wa-bot
+    envVars:
+      - key: GALILUZ_APP_URL
+        value: https://galiluz.co.il
+      - key: PUBLISHERS_APPROVER_WA_NUMBER
+        sync: false
+      - key: APPROVER_REENGAGEMENT_TEMPLATE_NAME
+        sync: false
+      - key: APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE
+        value: he
+      - key: LOG_LEVEL
+        value: info
+      - key: ALLOW_MAIN_MENU_FREE_LANGUAGE
+        value: "true"
+
+  - name: galiluz-app-wa-gateway
+    envVars:
+      - key: WA_LOG_LEVEL
+        value: info
