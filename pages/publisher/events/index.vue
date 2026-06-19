@@ -18,23 +18,25 @@
           <div v-for="i in 5" :key="i" class="PublisherEvents-skeleton" />
         </template>
 
-        <!-- List -->
-        <div v-else-if="filteredEvents.length" class="PublisherEvents-list">
-          <PublisherEventListItem
-            v-for="event in pagedEvents"
-            :key="event.id"
-            :event="event"
-          />
-        </div>
+        <!-- List + pagination (one branch so the empty states below stay in the same chain) -->
+        <template v-else-if="filteredEvents.length">
+          <div class="PublisherEvents-list">
+            <PublisherEventListItem
+              v-for="event in pagedEvents"
+              :key="event.id"
+              :event="event"
+            />
+          </div>
 
-        <UiPagination
-          v-if="filteredEvents.length > PAGE_SIZE"
-          v-model="currentPage"
-          :total="filteredEvents.length"
-          :page-size="PAGE_SIZE"
-          class="PublisherEvents-pagination"
-          @update:model-value="onPageChange"
-        />
+          <UiPagination
+            v-if="filteredEvents.length > PAGE_SIZE"
+            v-model="currentPage"
+            :total="filteredEvents.length"
+            :page-size="PAGE_SIZE"
+            class="PublisherEvents-pagination"
+            @update:model-value="onPageChange"
+          />
+        </template>
 
         <!-- No events at all -->
         <PublisherDashboardEmptyState

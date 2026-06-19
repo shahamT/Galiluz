@@ -12,6 +12,7 @@
     "dev:ngrok": "ngrok http 3001",
     "dev:wa": "npm --prefix apps/wa-listener run dev",
     "dev:wa-bot": "npm --prefix apps/wa-bot run dev",
+    "dev:wa-gateway": "npm --prefix apps/wa-gateway run dev",
     "list-groups:wa": "npm --prefix apps/wa-listener run list-groups",
     "build": "nuxt build",
     "generate": "nuxt generate",

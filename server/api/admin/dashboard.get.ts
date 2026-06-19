@@ -18,5 +18,6 @@ export default defineEventHandler(async (event) => {
     eventsPubFilter: {},                                 // all events, incl. ghost-publisher events
     logsPubFilter: { publisherId: session.publisherId }, // the admin's own actions
     filter,
+    includeStats: true,                                  // admin portal always sees full stats — never gated by `features`
   })
 })

@@ -160,6 +160,9 @@ async function ensureSchemaValidation() {
             isActive: { bsonType: 'bool' },
             deletedAt: { bsonType: 'date' },
             createdAt: { bsonType: 'date' },
+            // Account-level feature flags (entitlements). Optional object of booleans;
+            // resolved by server/utils/accountFeatures.ts. Keys: see consts/features.const.js.
+            features: { bsonType: 'object' },
           },
         },
       },

@@ -15,8 +15,8 @@
     <div class="PublisherDashboard-divider" />
     <PublisherDashboardFilterBar v-model="filter" />
 
-    <!-- KPI row -->
-    <div class="PublisherDashboard-kpis">
+    <!-- KPI row — only when the account has the globalStats entitlement -->
+    <div v-if="authStore.hasFeature('globalStats')" class="PublisherDashboard-kpis">
       <PublisherDashboardKpiCard
         label="אירועים פעילים"
         :value="data?.activeEventsCount || 0"
@@ -49,7 +49,7 @@
 
     <!-- Bottom row -->
     <div class="PublisherDashboard-bottom">
-      <PublisherDashboardTopEvents :events="data?.topEvents || []" :loading="isFirstLoad" />
+      <PublisherDashboardTopEvents :events="data?.topEvents || []" :loading="isFirstLoad" :show-stats="authStore.hasFeature('globalStats')" />
       <PublisherDashboardRecentLogs :logs="data?.recentLogs || []" :loading="isFirstLoad" />
     </div>
     </div>

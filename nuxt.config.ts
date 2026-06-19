@@ -84,6 +84,9 @@ export default defineNuxtConfig({
     openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     // OTP authentication
     otpSecret: process.env.OTP_SECRET || '',
+    // WhatsApp Gateway (Green API bridge) — OTP delivery goes through this service.
+    waGatewayUrl: process.env.WA_GATEWAY_URL || '',
+    // Legacy Cloud API creds — no longer used for OTP (kept for parity; wa-bot has its own).
     waCloudAccessToken: process.env.WA_CLOUD_ACCESS_TOKEN || '',
     waPhoneNumberId: process.env.WA_PHONE_NUMBER_ID || '',
     // Notification emails via Zoho SMTP (optional — mailer no-ops when unset)

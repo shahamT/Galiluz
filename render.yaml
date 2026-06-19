@@ -1,9 +1,10 @@
 # Render Blueprint – Galiluz monorepo
-# Two services from one repo, both deploy from main branch only.
+# Services from one repo, all deploy from main branch only.
 #
-# 1. galiluz-web    – Nuxt 3 SSR app (Web Service)
-# 2. galiluz-wa     – WhatsApp listener (Background Worker + persistent disk)
-# 3. galiluz-wa-bot – WhatsApp Cloud API webhook bot (Web Service)
+# 1. galiluz-web        – Nuxt 3 SSR app (Web Service)
+# 2. galiluz-wa         – WhatsApp listener / group ingestion (Background Worker + persistent disk)
+# 3. galiluz-wa-bot     – WhatsApp Cloud API webhook bot (Web Service)
+# 4. galiluz-wa-gateway – WhatsApp gateway via Green API; OTP delivery + future actions (Web Service, single instance)
 #
 # Shared env vars live in the "galiluz-shared" environment group (create once in Render dashboard).
 
@@ -26,9 +27,9 @@ services:
       - fromGroup: galiluz-shared
       - key: OTP_SECRET
         sync: false
-      - key: WA_CLOUD_ACCESS_TOKEN
-        sync: false
-      - key: WA_PHONE_NUMBER_ID
+      # OTP delivery goes through the WhatsApp gateway service (Green API bridge).
+      # Set to the gateway's URL, e.g. https://galiluz-wa-gateway.onrender.com
+      - key: WA_GATEWAY_URL
         sync: false
 
   # ── WhatsApp Listener Worker ──────────────────────────────────
@@ -70,6 +71,29 @@ services:
       - key: NODE_ENV
         value: production
       - fromGroup: galiluz-wa-bot-secrets
+
+  # ── WhatsApp Gateway (Green API) ───────────────────────────────
+  # Single bridge to the WhatsApp Business account. Sends OTP now; future:
+  # incoming webhook + group ingestion. Single instance (one queue consumer).
+  # No persistent disk — Green API holds the WhatsApp session remotely.
+  - type: web
+    name: galiluz-wa-gateway
+    runtime: node
+    branch: main
+    plan: starter
+    region: frankfurt
+    numInstances: 1
+    rootDir: apps/wa-gateway
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - fromGroup: galiluz-shared          # provides API_SECRET (+ MONGODB_* for future use)
+      - fromGroup: galiluz-wa-gateway-secrets
 
 # ── Environment Groups ──────────────────────────────────────────
 # Create these in the Render dashboard and fill in the actual values.
@@ -128,4 +152,17 @@ envVarGroups:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
+        sync: false
+
+  # wa-gateway (Green API bridge) – instance credentials from the Green API console.
+  - name: galiluz-wa-gateway-secrets
+    envVars:
+      - key: GREEN_API_ID_INSTANCE
+        sync: false
+      - key: GREEN_API_API_TOKEN_INSTANCE
+        sync: false
+      # Optional host overrides (per-instance hosts, e.g. https://7105.api.green-api.com)
+      - key: GREEN_API_BASE_URL
+        sync: false
+      - key: GREEN_API_MEDIA_URL
         sync: false

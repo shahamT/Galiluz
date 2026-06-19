@@ -99,29 +99,30 @@ export default defineEventHandler(async (event) => {
     },
   )
 
-  // Send via WhatsApp Cloud API
-  const accessToken = config.waCloudAccessToken || process.env.WA_CLOUD_ACCESS_TOKEN || ''
-  const phoneNumberId = config.waPhoneNumberId || process.env.WA_PHONE_NUMBER_ID || ''
+  // Send via the WhatsApp Gateway (Green API bridge). The gateway can message
+  // cold users (no 24h-window/template restriction), unlike the old Cloud API
+  // text path. OTP is already stored, so a delivery failure is non-fatal — the
+  // user can retry — but we log it rather than swallowing it blindly.
+  const gatewayUrl = (config.waGatewayUrl || process.env.WA_GATEWAY_URL || '').replace(/\/$/, '')
+  const apiSecret = config.apiSecret || process.env.API_SECRET || ''
 
-  if (accessToken && phoneNumberId) {
+  if (gatewayUrl) {
     try {
-      await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, {
+      const res = await fetch(`${gatewayUrl}/internal/otp`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: waId,
-          type: 'text',
-          text: { body: `קוד האימות שלך לגלילו"ז: *${otp}*\nהקוד תקף ל-10 דקות.` },
-        }),
+        headers: { 'Content-Type': 'application/json', 'x-api-secret': apiSecret },
+        body: JSON.stringify({ phone: waId, otp }),
       })
+      if (!res.ok) {
+        console.error(`[Auth] Gateway OTP send failed (${res.status}): ${(await res.text()).slice(0, 200)}`)
+      }
     } catch (err) {
-      console.error('[Auth] Failed to send OTP via WhatsApp:', err instanceof Error ? err.message : String(err))
+      console.error('[Auth] Failed to reach WhatsApp gateway:', err instanceof Error ? err.message : String(err))
       // Don't expose the error — OTP is stored, user can retry
     }
   } else if (process.env.NODE_ENV === 'production') {
-    // Production with missing WA credentials — this should never happen (startup check catches it)
-    console.error('[Auth] CRITICAL: WA credentials missing in production — OTP not sent')
+    // Production without a gateway URL — should never happen (startup check catches it)
+    console.error('[Auth] CRITICAL: WA_GATEWAY_URL missing in production — OTP not sent')
     throw createError({ statusCode: 503, statusMessage: 'Service Unavailable', message: 'messaging_unavailable' })
   } else {
     // Dev mode only (gated by NODE_ENV !== 'production')

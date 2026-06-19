@@ -7,6 +7,12 @@ export const useAuthStore = defineStore('auth', () => {
   const canManageAll = computed(() => user.value?.type === 'manager')
   /** Any authenticated user can act on their own resources. */
   const canManageOwn = computed(() => !!user.value)
+  /**
+   * Account-level feature entitlement check (UI gating only — the server
+   * independently withholds gated data). The server sends a fully-resolved map
+   * (defaults applied; managers get every feature), so this just reads booleans.
+   */
+  const hasFeature = (key) => user.value?.features?.[key] === true
 
   function setUser(userData) {
     user.value = userData
@@ -30,5 +36,5 @@ export const useAuthStore = defineStore('auth', () => {
     authReady.value = false
   }
 
-  return { user, authReady, isLoggedIn, isManager, canManageAll, canManageOwn, setUser, login, logout, setAuthReady, resetAuthReady }
+  return { user, authReady, isLoggedIn, isManager, canManageAll, canManageOwn, hasFeature, setUser, login, logout, setAuthReady, resetAuthReady }
 })

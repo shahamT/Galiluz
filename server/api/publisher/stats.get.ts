@@ -1,10 +1,15 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { getAccountPublisherIds } from '~/server/utils/accountScope'
+import { getAccountFeatures } from '~/server/utils/accountFeatures'
 import { ObjectId } from 'mongodb'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
+
+  // Entitlement: this is account-wide statistics — withhold entirely when the
+  // account lacks `globalStats` (managers bypass).
+  if (!(await getAccountFeatures(session)).globalStats) return []
 
   const config = useRuntimeConfig()
   const { db } = await getMongoConnection()

@@ -26,7 +26,7 @@
     </template>
 
     <template v-else-if="event">
-      <PublisherEventViewSwitch v-model="activeView" />
+      <PublisherEventViewSwitch v-model="activeView" :show-stats="showStats" />
 
       <template v-if="activeView === 'actions'">
         <div class="EventPage-actionsCard">
@@ -116,7 +116,7 @@
         <PublisherEventPreview :event="event" />
       </template>
 
-      <template v-else>
+      <template v-else-if="showStats && event.stats">
         <template v-if="event.multiDayEvent">
           <div class="EventPage-statCard">
             <div class="EventPage-statSection">
@@ -298,6 +298,10 @@ const showEditForm = ref(false)
 const showStatusModal = ref(false)
 const showTransferModal = ref(false)
 const authStore = useAuthStore()
+
+// Per-event statistics entitlement (managers bypass via the resolved feature map).
+// Drives the stats tab + panel; the server independently omits the stats payload.
+const showStats = computed(() => authStore.hasFeature('perEventStats'))
 
 const activeView = ref('actions')
 
