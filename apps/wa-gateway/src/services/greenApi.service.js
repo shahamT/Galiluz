@@ -11,6 +11,12 @@ import { LOG_PREFIXES } from '../consts/index.js'
  * Docs: https://green-api.com/en/docs/api/
  */
 
+// Redact secret-bearing fields from any response text before it reaches the logs
+// (e.g. getSettings returns webhookUrlToken).
+function redactSecrets(text) {
+  return text.replace(/("(?:webhookUrlToken|apiTokenInstance)"\s*:\s*")[^"]*/g, '$1***')
+}
+
 function buildUrl(method, { useMedia = false, suffix = '' } = {}) {
   const { idInstance, apiToken, baseUrl, mediaUrl } = config.greenApi
   const host = useMedia ? mediaUrl : baseUrl
@@ -35,12 +41,13 @@ async function request(method, { httpMethod = 'POST', body = null, useMedia = fa
 
   const text = await res.text()
   if (!res.ok) {
-    // Green API returns useful error bodies — surface them for diagnostics.
-    logger.error(LOG_PREFIXES.GREEN_API, `${method} FAILED ${res.status} → ${safeUrl} :: ${text.slice(0, 1000)}`)
+    // Green API returns useful error bodies — surface them (secrets redacted).
+    logger.error(LOG_PREFIXES.GREEN_API, `${method} FAILED ${res.status} → ${safeUrl} :: ${redactSecrets(text).slice(0, 1000)}`)
     throw new Error(`green_api_error:${method}:${res.status}`)
   }
-  // Success: log the RESPONSE body (never the request payload — it may hold the OTP).
-  logger.info(LOG_PREFIXES.GREEN_API, `${method} ok ${res.status} :: ${text.slice(0, 1000)}`)
+  // Success: log the RESPONSE body (never the request payload — it may hold the
+  // OTP — and with secret fields like webhookUrlToken redacted).
+  logger.info(LOG_PREFIXES.GREEN_API, `${method} ok ${res.status} :: ${redactSecrets(text).slice(0, 1000)}`)
   try { return text ? JSON.parse(text) : {} } catch { return { raw: text } }
 }
 
