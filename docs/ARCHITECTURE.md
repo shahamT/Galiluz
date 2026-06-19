@@ -48,6 +48,7 @@ High-level map of the system and the main flows: where each flow starts and whic
 | [FRONTEND.md](FRONTEND.md) | Component-level frontend detail, form internals, code conventions |
 | [../composables/README.md](../composables/README.md) | Composables inventory |
 | [PRODUCTION_OPS.md](PRODUCTION_OPS.md) | Env vars, deploy checklist, backups, rate limiting |
+| [ENVIRONMENT.md](ENVIRONMENT.md) | Env-var groups (core/integration/app) + group→service matrix |
 | [SECURITY_AND_BUDGET.md](SECURITY_AND_BUDGET.md) | OTP/auth detail, media validation, sanitization, API budget |
 | [EVENT_OBJECT_INTEGRATION.md](EVENT_OBJECT_INTEGRATION.md) | wa-listener message → event pipeline |
 | [../packages/event-format/README.md](../packages/event-format/README.md) | Shared formatted-event contract (wa-bot) |
