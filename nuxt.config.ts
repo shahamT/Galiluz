@@ -122,7 +122,10 @@ export default defineNuxtConfig({
           'Referrer-Policy': 'strict-origin-when-cross-origin',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
           'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.posthog.com https://fonts.googleapis.com https://*.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.posthog.com https://*.cloudflare.com; frame-src 'self' https://*.cloudflare.com; frame-ancestors 'none'; form-action 'self';",
+          // Turnstile's interactive challenge (unlike the passive pass) needs a
+          // blob: web worker, WASM compilation, and Cloudflare-hosted styles —
+          // hence worker-src blob:, 'wasm-unsafe-eval', and *.cloudflare.com in style-src.
+          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://*.posthog.com https://fonts.googleapis.com https://*.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.cloudflare.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.posthog.com https://*.cloudflare.com; worker-src 'self' blob:; frame-src 'self' https://*.cloudflare.com; frame-ancestors 'none'; form-action 'self';",
         },
       },
     },
