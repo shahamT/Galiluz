@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { getAccountPublisherIds } from '~/server/utils/accountScope'
+import { getAccountFeatures } from '~/server/utils/accountFeatures'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
@@ -45,19 +46,47 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const [eventStats, occurrenceStats, linkGroups] = await Promise.all([
-    statsCol.findOne({ eventId: id }),
-    occStatsCol.find({ eventId: id }).toArray(),
-    interactionsCol.aggregate([
-      { $match: { eventId: id, action: 'link' } },
-      { $group: { _id: '$linkTitle', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ]).toArray(),
-  ])
+  // Entitlement: per-event statistics are returned only when the account has
+  // `perEventStats` (managers bypass). When off, the three stats queries are
+  // skipped and the `stats` field is omitted from the response — the rest of the
+  // payload (which also powers the management & preview tabs) is unchanged.
+  const features = await getAccountFeatures(session)
 
-  const totalViews      = occurrenceStats.reduce((s: number, o: any) => s + (o.views || 0), 0)
-  const totalUniqueViews = occurrenceStats.reduce((s: number, o: any) => s + (o.uniqueViews || 0), 0)
-  const totalCalendarAdds = occurrenceStats.reduce((s: number, o: any) => s + (o.calendarAdds || 0), 0)
+  let stats: Record<string, unknown> | undefined
+  if (features.perEventStats) {
+    const [eventStats, occurrenceStats, linkGroups] = await Promise.all([
+      statsCol.findOne({ eventId: id }),
+      occStatsCol.find({ eventId: id }).toArray(),
+      interactionsCol.aggregate([
+        { $match: { eventId: id, action: 'link' } },
+        { $group: { _id: '$linkTitle', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]).toArray(),
+    ])
+
+    const totalViews       = occurrenceStats.reduce((s: number, o: any) => s + (o.views || 0), 0)
+    const totalUniqueViews  = occurrenceStats.reduce((s: number, o: any) => s + (o.uniqueViews || 0), 0)
+    const totalCalendarAdds = occurrenceStats.reduce((s: number, o: any) => s + (o.calendarAdds || 0), 0)
+
+    stats = {
+      shares:        eventStats?.shares || 0,
+      navClicks:     eventStats?.navClicks || 0,
+      calendarAdds:  totalCalendarAdds,
+      contactClicks: eventStats?.contactClicks || 0,
+      linkClicks:    eventStats?.linkClicks || 0,
+      linkBreakdown: linkGroups.map((l: any) => ({ title: l._id || 'קישור', clicks: l.count })),
+      occurrenceStats: occurrenceStats
+        .sort((a: any, b: any) => a.occurrenceDate.localeCompare(b.occurrenceDate))
+        .map((o: any) => ({
+          date:        o.occurrenceDate,
+          views:       o.views || 0,
+          uniqueViews: o.uniqueViews || 0,
+          calendarAdds: o.calendarAdds || 0,
+        })),
+      totalViews,
+      totalUniqueViews,
+    }
+  }
 
   return {
     id,
@@ -91,24 +120,7 @@ export default defineEventHandler(async (event) => {
       cloudinaryData: m.cloudinaryData || {},
       isMain: m.isMain || false,
     })),
-    stats: {
-      shares:        eventStats?.shares || 0,
-      navClicks:     eventStats?.navClicks || 0,
-      calendarAdds:  totalCalendarAdds,
-      contactClicks: eventStats?.contactClicks || 0,
-      linkClicks:    eventStats?.linkClicks || 0,
-      linkBreakdown: linkGroups.map((l: any) => ({ title: l._id || 'קישור', clicks: l.count })),
-      occurrenceStats: occurrenceStats
-        .sort((a: any, b: any) => a.occurrenceDate.localeCompare(b.occurrenceDate))
-        .map((o: any) => ({
-          date:        o.occurrenceDate,
-          views:       o.views || 0,
-          uniqueViews: o.uniqueViews || 0,
-          calendarAdds: o.calendarAdds || 0,
-        })),
-      totalViews,
-      totalUniqueViews,
-    },
+    ...(stats && { stats }),
     ...(ownerInfo && ownerInfo),
   }
 })

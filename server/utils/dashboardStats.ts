@@ -28,6 +28,9 @@ export interface DashboardScope {
   logsPubFilter: Record<string, unknown>
   /** 'all' | 'active' | 'month' — date scope for the filtered stats. */
   filter: string
+  /** Account entitlement `globalStats`. When false, `totals` is null and top-event
+   *  rows omit view/visitor numbers (ranking is preserved). Gated by the caller. */
+  includeStats: boolean
 }
 
 /**
@@ -37,7 +40,7 @@ export interface DashboardScope {
  * scoping inputs; the date/deletedAt logic and aggregation shape are identical for both.
  */
 export async function computeDashboard(scope: DashboardScope) {
-  const { statsPubFilter, eventsPubFilter, logsPubFilter, filter } = scope
+  const { statsPubFilter, eventsPubFilter, logsPubFilter, filter, includeStats } = scope
 
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()
@@ -85,59 +88,65 @@ export async function computeDashboard(scope: DashboardScope) {
   if (filter === 'active') occDateFilter = { occurrenceDate: { $gte: today } }
   else if (filter === 'month') occDateFilter = { occurrenceDate: { $regex: `^${monthPrefix}` } }
 
-  // ── 3. Occurrence-level totals (views, uniqueViews, calendarAdds) ─────────
-  if (import.meta.dev) {
-    const occTotalDocs = await occStatsCol.countDocuments({})
-    const occMatchedDocs = await occStatsCol.countDocuments({ ...pubFilter, ...occDateFilter })
-    const statsTotalDocs = await statsCol.countDocuments({})
-    const statsMatchedDocs = await statsCol.countDocuments(pubFilter)
-    devLog('collection doc counts', {
-      eventOccurrenceStats: { total: occTotalDocs, matchedByFilter: occMatchedDocs },
-      eventStats: { total: statsTotalDocs, matchedByFilter: statsMatchedDocs },
-      occDateFilter,
-    })
-  }
+  // ── 3 & 4. Aggregate totals (KPIs) — only when the account has `globalStats`. ──
+  // When the entitlement is off, the totals queries are skipped entirely (the
+  // protected numbers never leave the server) and `totals` stays null.
+  let totals: Record<string, number> | null = null
+  if (includeStats) {
+    // ── 3. Occurrence-level totals (views, uniqueViews, calendarAdds) ─────────
+    if (import.meta.dev) {
+      const occTotalDocs = await occStatsCol.countDocuments({})
+      const occMatchedDocs = await occStatsCol.countDocuments({ ...pubFilter, ...occDateFilter })
+      const statsTotalDocs = await statsCol.countDocuments({})
+      const statsMatchedDocs = await statsCol.countDocuments(pubFilter)
+      devLog('collection doc counts', {
+        eventOccurrenceStats: { total: occTotalDocs, matchedByFilter: occMatchedDocs },
+        eventStats: { total: statsTotalDocs, matchedByFilter: statsMatchedDocs },
+        occDateFilter,
+      })
+    }
 
-  const [occTotals] = await occStatsCol.aggregate([
-    { $match: { ...pubFilter, ...occDateFilter } },
-    { $group: { _id: null, views: { $sum: '$views' }, uniqueViews: { $sum: '$uniqueViews' }, calendarAdds: { $sum: '$calendarAdds' } } },
-  ]).toArray()
-
-  // ── 4. Event-level totals (shares, nav, links, contact) ───────────────────
-  let eventLevelTotals = { shares: 0, navClicks: 0, linkClicks: 0, contactClicks: 0 }
-
-  if (filter === 'month') {
-    const monthStart = new Date(`${monthPrefix}-01T00:00:00.000Z`)
-    const nextMo = parseInt(mo) === 12 ? `${parseInt(yr) + 1}-01` : `${yr}-${String(parseInt(mo) + 1).padStart(2, '0')}`
-    const monthEnd = new Date(`${nextMo}-01T00:00:00.000Z`)
-    const groups = await interactionsCol.aggregate([
-      { $match: { ...pubFilter, action: { $in: ['share', 'nav', 'link', 'contact'] }, timestamp: { $gte: monthStart, $lt: monthEnd } } },
-      { $group: { _id: '$action', count: { $sum: 1 } } },
+    const [occTotals] = await occStatsCol.aggregate([
+      { $match: { ...pubFilter, ...occDateFilter } },
+      { $group: { _id: null, views: { $sum: '$views' }, uniqueViews: { $sum: '$uniqueViews' }, calendarAdds: { $sum: '$calendarAdds' } } },
     ]).toArray()
-    groups.forEach((g: any) => {
-      if (g._id === 'share') eventLevelTotals.shares = g.count
-      else if (g._id === 'nav') eventLevelTotals.navClicks = g.count
-      else if (g._id === 'link') eventLevelTotals.linkClicks = g.count
-      else if (g._id === 'contact') eventLevelTotals.contactClicks = g.count
-    })
-  } else {
-    const statsMatchFilter = filter === 'active'
-      ? { ...pubFilter, eventId: { $in: Array.from(futureEventIds) } }
-      : pubFilter
-    const [sr] = await statsCol.aggregate([
-      { $match: statsMatchFilter },
-      { $group: { _id: null, shares: { $sum: '$shares' }, navClicks: { $sum: '$navClicks' }, linkClicks: { $sum: '$linkClicks' }, contactClicks: { $sum: '$contactClicks' } } },
-    ]).toArray()
-    if (sr) eventLevelTotals = { shares: sr.shares || 0, navClicks: sr.navClicks || 0, linkClicks: sr.linkClicks || 0, contactClicks: sr.contactClicks || 0 }
-  }
 
-  const totals = {
-    views: occTotals?.views || 0,
-    uniqueViews: occTotals?.uniqueViews || 0,
-    calendarAdds: occTotals?.calendarAdds || 0,
-    ...eventLevelTotals,
+    // ── 4. Event-level totals (shares, nav, links, contact) ───────────────────
+    let eventLevelTotals = { shares: 0, navClicks: 0, linkClicks: 0, contactClicks: 0 }
+
+    if (filter === 'month') {
+      const monthStart = new Date(`${monthPrefix}-01T00:00:00.000Z`)
+      const nextMo = parseInt(mo) === 12 ? `${parseInt(yr) + 1}-01` : `${yr}-${String(parseInt(mo) + 1).padStart(2, '0')}`
+      const monthEnd = new Date(`${nextMo}-01T00:00:00.000Z`)
+      const groups = await interactionsCol.aggregate([
+        { $match: { ...pubFilter, action: { $in: ['share', 'nav', 'link', 'contact'] }, timestamp: { $gte: monthStart, $lt: monthEnd } } },
+        { $group: { _id: '$action', count: { $sum: 1 } } },
+      ]).toArray()
+      groups.forEach((g: any) => {
+        if (g._id === 'share') eventLevelTotals.shares = g.count
+        else if (g._id === 'nav') eventLevelTotals.navClicks = g.count
+        else if (g._id === 'link') eventLevelTotals.linkClicks = g.count
+        else if (g._id === 'contact') eventLevelTotals.contactClicks = g.count
+      })
+    } else {
+      const statsMatchFilter = filter === 'active'
+        ? { ...pubFilter, eventId: { $in: Array.from(futureEventIds) } }
+        : pubFilter
+      const [sr] = await statsCol.aggregate([
+        { $match: statsMatchFilter },
+        { $group: { _id: null, shares: { $sum: '$shares' }, navClicks: { $sum: '$navClicks' }, linkClicks: { $sum: '$linkClicks' }, contactClicks: { $sum: '$contactClicks' } } },
+      ]).toArray()
+      if (sr) eventLevelTotals = { shares: sr.shares || 0, navClicks: sr.navClicks || 0, linkClicks: sr.linkClicks || 0, contactClicks: sr.contactClicks || 0 }
+    }
+
+    totals = {
+      views: occTotals?.views || 0,
+      uniqueViews: occTotals?.uniqueViews || 0,
+      calendarAdds: occTotals?.calendarAdds || 0,
+      ...eventLevelTotals,
+    }
+    devLog('computed totals', { eventCounts, totals, activeEventsCount: futureEventIds.size })
   }
-  devLog('computed totals', { eventCounts, totals, activeEventsCount: futureEventIds.size })
 
   const activeEventsCount = futureEventIds.size
 
@@ -239,5 +248,11 @@ export async function computeDashboard(scope: DashboardScope) {
     createdAt: l.createdAt instanceof Date ? l.createdAt.toISOString() : (l.createdAt || ''),
   }))
 
-  return { eventCounts, totals, activeEventsCount, topEvents, recentLogs }
+  // When `globalStats` is off, keep the ranking (title + date) but withhold the
+  // view/visitor numbers — they must not reach the browser.
+  const topEventsOut = includeStats
+    ? topEvents
+    : topEvents.map(({ views, uniqueViews, ...rest }) => rest)
+
+  return { eventCounts, totals, activeEventsCount, topEvents: topEventsOut, recentLogs }
 }

@@ -7,14 +7,17 @@
         <div class="OccurrenceRow-group1">
           <div class="OccurrenceRow-dateWrap">
             <FormField label="תאריך" required :error="errors.date">
-              <input
-                v-model="local.date"
-                type="date"
-                class="FormInput OccurrenceRow-dateInput"
-                :min="minDate"
-                :disabled="frozen"
-                @change="emit('update:modelValue', local)"
-              />
+              <div class="OccurrenceRow-dateField">
+                <input
+                  v-model="local.date"
+                  type="date"
+                  class="FormInput OccurrenceRow-dateInput"
+                  :min="minDate"
+                  :disabled="frozen"
+                  @change="emit('update:modelValue', local)"
+                />
+                <span v-if="weekdayLabel" class="OccurrenceRow-dayChip">{{ weekdayLabel }}</span>
+              </div>
             </FormField>
           </div>
           <div class="OccurrenceRow-allDayWrap">
@@ -125,6 +128,17 @@ watch(() => props.modelValue, (val) => {
 }, { deep: true })
 
 const minDate = computed(() => props.frozen ? undefined : new Date().toISOString().slice(0, 10))
+
+// Hebrew weekday chip beside the date — recomputes live as local.date changes.
+// Parse the YYYY-MM-DD parts manually (avoids UTC-vs-local off-by-one from new Date(str)).
+const HEBREW_DAYS = ["יום א'", "יום ב'", "יום ג'", "יום ד'", "יום ה'", "יום ו'", 'שבת']
+const weekdayLabel = computed(() => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(local.date || '')
+  if (!m) return ''
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return Number.isNaN(d.getTime()) ? '' : (HEBREW_DAYS[d.getDay()] || '')
+})
+
 const allDay = ref(!local.hasTime)
 const hasEndTime = ref(!!local.endTime)
 
@@ -298,7 +312,29 @@ function confirmRemove() {
   }
 
   &-dateWrap {
-    flex: 0 0 9rem;
+    flex: 0 0 auto;
+  }
+
+  &-dateField {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+  }
+
+  &-dayChip {
+    flex-shrink: 0;
+    width: 3.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-light);
+    background: var(--light-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    white-space: nowrap;
   }
 
   &-timeWrap {
@@ -315,6 +351,7 @@ function confirmRemove() {
   }
 
   &-dateInput {
+    width: 9rem;
     font-size: var(--font-size-sm);
     padding: var(--spacing-xs) var(--spacing-sm);
   }

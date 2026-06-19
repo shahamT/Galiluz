@@ -1,5 +1,6 @@
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { getAccountPublisherIds } from '~/server/utils/accountScope'
+import { getAccountFeatures } from '~/server/utils/accountFeatures'
 import { computeDashboard } from '~/server/utils/dashboardStats'
 
 export default defineEventHandler(async (event) => {
@@ -13,10 +14,16 @@ export default defineEventHandler(async (event) => {
   // stay scoped to the caller's account.
   const accountPublisherIds = await getAccountPublisherIds(session)
 
+  // Entitlement: KPI totals + top-event numbers are returned only when the
+  // account has `globalStats` (managers bypass). When off, computeDashboard
+  // omits the totals and strips the top-event numbers server-side.
+  const features = await getAccountFeatures(session)
+
   return computeDashboard({
     statsPubFilter: session.type === 'manager' ? {} : { publisherId: { $in: accountPublisherIds } },
     eventsPubFilter: { 'event.publisherId': { $in: accountPublisherIds } },
     logsPubFilter: { publisherId: { $in: accountPublisherIds } },
     filter,
+    includeStats: features.globalStats,
   })
 })

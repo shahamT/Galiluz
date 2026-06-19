@@ -11,8 +11,8 @@ export default defineNitroPlugin(() => {
     if (!config.apiSecret || config.apiSecret.length < 16) missing.push('API_SECRET (must be at least 16 characters)')
     if (!config.mongodbUri) missing.push('MONGODB_URI')
     if (!config.mongodbDbName) missing.push('MONGODB_DB_NAME')
-    if (!config.waCloudAccessToken) missing.push('WA_CLOUD_ACCESS_TOKEN')
-    if (!config.waPhoneNumberId) missing.push('WA_PHONE_NUMBER_ID')
+    // OTP delivery now flows through the WhatsApp gateway (Green API bridge).
+    if (!config.waGatewayUrl) missing.push('WA_GATEWAY_URL')
 
     // Turnstile must be all-or-nothing: half-configured means either a broken
     // login (site key without server verification secret never passes) or a

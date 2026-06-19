@@ -18,14 +18,18 @@
 
 <script setup>
 defineOptions({ name: 'EventViewSwitch' })
-defineProps({ modelValue: { type: String, default: 'actions' } })
+const props = defineProps({
+  modelValue: { type: String, default: 'actions' },
+  // When false (account lacks `perEventStats`), the statistics segment is omitted.
+  showStats: { type: Boolean, default: true },
+})
 const emit = defineEmits(['update:modelValue'])
 
-const options = [
+const options = computed(() => [
   { value: 'actions', label: 'ניהול',         mobileLabel: 'ניהול',   icon: 'tune' },
   { value: 'preview', label: 'תצוגת האירוע', mobileLabel: 'תצוגה',   icon: 'event' },
-  { value: 'stats',   label: 'סטטיסטיקות',   mobileLabel: 'נתונים',  icon: 'bar_chart' },
-]
+  ...(props.showStats ? [{ value: 'stats', label: 'סטטיסטיקות', mobileLabel: 'נתונים', icon: 'bar_chart' }] : []),
+])
 </script>
 
 <style lang="scss">

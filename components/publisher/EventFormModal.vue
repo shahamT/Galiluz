@@ -967,16 +967,18 @@ function applyAiResult(dto) {
     form.price = null
   }
 
-  if (Array.isArray(dto.occurrences) && dto.occurrences.length) {
-    form.occurrences = dto.occurrences.map(o => ({
-      _key: nextKey(),
-      date: o.date || '',
-      hasTime: o.hasTime !== false,
-      startTime: o.hasTime !== false ? (o.startTime || '08:00') : '',
-      endTime: o.hasTime !== false ? (o.endTime || '') : '',
-      _frozen: false,
-    }))
-  }
+  // Replace the default occurrence with whatever the AI found. If it found none,
+  // clear the list entirely (empty array) so the user sees no date rows — the
+  // validation pass then flags "יש להוסיף לפחות מועד אחד לאירוע", making it obvious
+  // they must add one (rather than silently leaving today 08:00–09:00 in place).
+  form.occurrences = (Array.isArray(dto.occurrences) ? dto.occurrences : []).map(o => ({
+    _key: nextKey(),
+    date: o.date || '',
+    hasTime: o.hasTime !== false,
+    startTime: o.hasTime !== false ? (o.startTime || '08:00') : '',
+    endTime: o.hasTime !== false ? (o.endTime || '') : '',
+    _frozen: false,
+  }))
 
   form.links = Array.isArray(dto.urls)
     ? dto.urls

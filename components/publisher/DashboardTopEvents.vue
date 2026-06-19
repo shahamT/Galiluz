@@ -8,7 +8,7 @@
           <div class="DashboardTopEvents-sk DashboardTopEvents-sk--name" />
           <div class="DashboardTopEvents-sk DashboardTopEvents-sk--date" />
         </div>
-        <div class="DashboardTopEvents-metrics">
+        <div v-if="showStats" class="DashboardTopEvents-metrics">
           <div class="DashboardTopEvents-sk DashboardTopEvents-sk--views" />
           <div class="DashboardTopEvents-sk DashboardTopEvents-sk--unique" />
         </div>
@@ -31,7 +31,7 @@
               <template v-else-if="ev.occurrenceDate">{{ ev.occurrenceDate }}</template>
             </span>
           </div>
-          <div class="DashboardTopEvents-metrics">
+          <div v-if="showStats" class="DashboardTopEvents-metrics">
             <span class="DashboardTopEvents-views">{{ ev.views }}<span class="DashboardTopEvents-viewsLabel"> צפיות</span></span>
             <span class="DashboardTopEvents-unique">{{ ev.uniqueViews }} ייחודיות</span>
           </div>
@@ -47,6 +47,10 @@ defineProps({
   events:   { type: Array, default: () => [] },
   loading:  { type: Boolean, default: false },
   basePath: { type: String, default: '/publisher/events' },
+  // When false (account lacks `globalStats`), the per-event view/visitor columns
+  // are hidden — the ranking stays. Server also omits the numbers. Default true
+  // keeps the admin dashboard and other callers unchanged.
+  showStats: { type: Boolean, default: true },
 })
 </script>
 

@@ -157,10 +157,15 @@ Groups publishers under a business account: **one account → many publishers; e
   isActive: Boolean,    // default true; false = disabled
   createdAt: Date,
   deletedAt: Date,      // PRESENT only when soft-deleted (absent on live accounts, like events)
+  features: {           // OPTIONAL account-level feature flags (entitlements); absent = all default OFF
+    globalStats: Boolean,    // dashboard KPI totals + account-wide stats list + top-event numbers
+    perEventStats: Boolean,  // per-event statistics tab on the event detail page
+  },
 }
 ```
 
 - **Created** automatically when a publisher is approved ([approve.post.ts](../server/api/publishers/approve.post.ts) → `ensureAccountForPublisher` in [accountScope.ts](../server/utils/accountScope.ts)); existing publishers are backfilled by [scripts/backfill-accounts.js](../scripts/backfill-accounts.js).
+- **`features`** is the entitlement map (registry: [consts/features.const.js](../consts/features.const.js); resolver: [accountFeatures.ts](../server/utils/accountFeatures.ts)). Default **OFF / opt-in** — an absent flag resolves to disabled. **Enforcement is server-side** (gated endpoints omit the data); the client receives the resolved map only to gate UI. **Managers bypass** (always all-enabled) and the admin portal never checks `features`. Set them in the DB via [scripts/set-account-features.js](../scripts/set-account-features.js) (no admin UI yet).
 - **Released** (soft-deleted) when its last publisher is hard-deleted on reject ([reject.post.ts](../server/api/publishers/reject.post.ts)).
 - **Scoping is resolved at query time** — the portal dashboard, events list, stats, and event-ownership checks scope by the account's publisher set: `event.publisherId ∈ getAccountPublisherIds(session)` (resolves `account → its publisherIds`, falling back to the caller's own id when no account yet). `accountId` is **not** denormalized onto events/stats; the existing `publisherId` fields remain the source of truth for "who did it".
 
