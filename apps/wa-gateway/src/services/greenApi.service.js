@@ -19,6 +19,8 @@ function buildUrl(method, { useMedia = false, suffix = '' } = {}) {
 
 async function request(method, { httpMethod = 'POST', body = null, useMedia = false, suffix = '' } = {}) {
   const url = buildUrl(method, { useMedia, suffix })
+  // Redact the instance token before any URL reaches the logs.
+  const safeUrl = config.greenApi.apiToken ? url.split(config.greenApi.apiToken).join('***') : url
   let res
   try {
     res = await fetch(url, {
@@ -27,16 +29,18 @@ async function request(method, { httpMethod = 'POST', body = null, useMedia = fa
       body: body ? JSON.stringify(body) : undefined,
     })
   } catch (err) {
-    logger.error(LOG_PREFIXES.GREEN_API, `${method} network error: ${err instanceof Error ? err.message : String(err)}`)
+    logger.error(LOG_PREFIXES.GREEN_API, `${httpMethod} ${method} network error → ${safeUrl}: ${err instanceof Error ? err.message : String(err)}`)
     throw new Error(`green_api_unreachable:${method}`)
   }
 
   const text = await res.text()
   if (!res.ok) {
     // Green API returns useful error bodies — surface them for diagnostics.
-    logger.error(LOG_PREFIXES.GREEN_API, `${method} failed ${res.status}: ${text.slice(0, 500)}`)
+    logger.error(LOG_PREFIXES.GREEN_API, `${method} FAILED ${res.status} → ${safeUrl} :: ${text.slice(0, 1000)}`)
     throw new Error(`green_api_error:${method}:${res.status}`)
   }
+  // Success: log the RESPONSE body (never the request payload — it may hold the OTP).
+  logger.info(LOG_PREFIXES.GREEN_API, `${method} ok ${res.status} :: ${text.slice(0, 1000)}`)
   try { return text ? JSON.parse(text) : {} } catch { return { raw: text } }
 }
 
