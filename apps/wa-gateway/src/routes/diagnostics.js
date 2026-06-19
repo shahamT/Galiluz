@@ -12,10 +12,12 @@ import { LOG_PREFIXES } from '../consts/index.js'
  *                         starting | yellowCard
  */
 export async function handleDiagnostics(req, res) {
-  const [state, settings] = await Promise.all([
+  const [state, rawSettings] = await Promise.all([
     getStateInstance().catch((e) => ({ error: String(e?.message || e) })),
     getSettings().catch((e) => ({ error: String(e?.message || e) })),
   ])
+  // Drop the webhook auth token — never log or return it.
+  const { webhookUrlToken, ...settings } = rawSettings || {}
   logger.info(LOG_PREFIXES.GREEN_API, `Diagnostics: state=${JSON.stringify(state)} settings=${JSON.stringify(settings)}`)
   return sendJson(res, 200, { state, settings })
 }
