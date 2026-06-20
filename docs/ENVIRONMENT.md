@@ -52,6 +52,7 @@ Create each group, add its variables, and set the value. **Value** column: a lit
 | | `OPENAI_MODEL_WEB` | `gpt-4o` | web AI event-generation |
 | **galiluz-int-green-api** | `GREEN_API_ID_INSTANCE` | 🔒 enter | paid instance |
 | | `GREEN_API_API_TOKEN_INSTANCE` | 🔒 enter | paid instance |
+| | `GREEN_API_WEBHOOK_TOKEN` | 🔒 enter | required for crawler; = `webhookUrlToken` on the instance; gateway webhook fails closed (503) without it |
 | | `GREEN_API_BASE_URL` | (blank/optional) | only if instance uses a custom host |
 | | `GREEN_API_MEDIA_URL` | (blank/optional) | |
 | **galiluz-int-whatsapp-cloud** | `WA_CLOUD_ACCESS_TOKEN` | 🔒 enter | |
