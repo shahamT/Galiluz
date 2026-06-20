@@ -82,7 +82,7 @@ Everything is opt-in and admin-gated; nothing is ever auto-published.
 | [server/utils/appSettings.ts](../../server/utils/appSettings.ts) | `getAppSetting(key)` / `setAppSetting(key, patch, actor)` |
 | [server/utils/publisherPreferences.ts](../../server/utils/publisherPreferences.ts) + [consts/preferences.const.js](../../consts/preferences.const.js) | Preference registry + resolver (`getPublisherPreferences`) |
 | [server/utils/sanitizeMessageForPrompt.ts](../../server/utils/sanitizeMessageForPrompt.ts) | Strip prompt-injection / noise from message text |
-| [server/utils/crawlerEventMatch.ts](../../server/utils/crawlerEventMatch.ts) | AI compare new event vs account's future events (fail-open) |
+| [server/utils/crawlerEventMatch.ts](../../server/utils/crawlerEventMatch.ts) | AI semantic compare (title+description+idea) of new event vs account's recent/upcoming events incl. drafts (fail-open) |
 | [server/utils/buildCrawlerDraft.ts](../../server/utils/buildCrawlerDraft.ts) | Map extractor output → stored event shape; compute `validDraft` (never rejects) |
 | [server/utils/safeImageFetch.ts](../../server/utils/safeImageFetch.ts) | **SSRF-hardened** fetch of the WhatsApp media URL before Cloudinary upload |
 | [server/utils/magicLink.ts](../../server/utils/magicLink.ts) + [server/api/auth/magic-link.get.ts](../../server/api/auth/magic-link.get.ts) | Issue / consume single-use login links |
@@ -142,8 +142,12 @@ fire-and-forget caller must not error-loop). Success returns
 | 13 | `logEventCreation('draft_created')` | — |
 | 14 | `issueMagicLink(publisherId, '/publisher/events/<draftId>?modal=edit')` + gateway `send-message` (best-effort) | `notified:false` if it fails (draft still created) |
 
-The account-scope for step 10 uses `getAccountPublisherIds` over `NOT_DELETED`
-future events (occurrence date ≥ Israel-today).
+Step 10 candidates: account-scoped (`getAccountPublisherIds`), `NOT_DELETED`,
+**published OR draft**, with an occurrence in `[today − MATCH_WINDOW_DAYS, ∞)` (a
+recent+upcoming window, not future-only, so a duplicate of a just-passed/today's
+event is still caught), capped at `MAX_MATCH_CANDIDATES`. The AI judges *same
+real-world event* from **title + description + general idea** (tolerant of reworded
+titles and imperfectly-extracted dates/cities) — not exact field equality.
 
 ## 6. Authentication & security
 

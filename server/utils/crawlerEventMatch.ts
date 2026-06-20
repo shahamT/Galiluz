@@ -5,7 +5,8 @@ export interface MatchCandidate {
   id: string
   title: string
   city: string
-  date: string // first future occurrence YYYY-MM-DD
+  date: string // an occurrence date within the match window (YYYY-MM-DD)
+  shortDescription: string
 }
 
 const MATCH_SCHEMA = {
@@ -23,12 +24,13 @@ const MATCH_SCHEMA = {
   },
 }
 
-const SYSTEM_PROMPT = `You compare a newly detected event against a list of existing events from the same account, to avoid creating a duplicate draft.
+const SYSTEM_PROMPT = `You compare a newly detected event against existing events from the same account, to avoid creating a duplicate.
 
-Decide whether the NEW event is the SAME real-world event as one of the CANDIDATES.
-Two events are the SAME only if they clearly refer to the same happening: similar title/topic AND same city AND same or very close date. A repost of the same event = same. A different event (different name, place, or date) = NOT the same.
+Decide whether the NEW event is the SAME real-world event as one of the CANDIDATES — i.e. a reasonable person would consider it the same happening, including a repost or a reworded version of it.
 
-Return matchedId = the candidate's ID when it is the same event; otherwise matchedId = null. Give a short reason.`
+Judge by the event's OVERALL IDENTITY: its title, description, and general idea/concept, together with a roughly consistent date and place. Titles are often phrased differently, and dates/locations can be imperfectly extracted from free text — so DO NOT require exact matches on title, date, or city. Weigh the whole picture: do they describe the same event? Clearly different events (a different concept/topic, or genuinely far-apart dates or places) are NOT the same.
+
+Return matchedId = the candidate's ID of the same event; otherwise matchedId = null. Give a short reason citing the evidence.`
 
 /**
  * AI comparison of a freshly extracted event vs the account's existing future
@@ -44,10 +46,12 @@ export async function matchCrawlerEvent(
 ): Promise<{ matchedId: string | null; reason: string | null }> {
   const correlationId = options.correlationId || ''
   const occ = formattedEvent.occurrences?.[0] || {}
+  const newDescription = String(formattedEvent.shortDescription || '').slice(0, 300)
   const newEvent = {
     title: formattedEvent.Title || '',
     city: formattedEvent.location?.city || '',
     date: occ.date || '',
+    description: newDescription,
   }
 
   // No candidates → the account has no future event (incl. drafts WITH a date) to
@@ -64,18 +68,19 @@ export async function matchCrawlerEvent(
     return { matchedId: null, reason: 'no_openai_key' }
   }
   const candidatesText = candidates
-    .map((c, i) => `Candidate ${i + 1}: ID=${c.id} | Title="${c.title}" | City="${c.city}" | Date=${c.date}`)
+    .map((c, i) => `Candidate ${i + 1}: ID=${c.id} | Title="${c.title}" | City="${c.city}" | Date=${c.date} | Description="${String(c.shortDescription || '').slice(0, 300)}"`)
     .join('\n')
   const userContent = `NEW EVENT:
 Title: ${formattedEvent.Title || '(none)'}
 City: ${formattedEvent.location?.city || '(none)'}
 Date: ${occ.date || '(none)'}
-Message: ${sanitizeMessageForPrompt(messageText).slice(0, 2000)}
+Description: ${newDescription || '(none)'}
+Original message: ${sanitizeMessageForPrompt(messageText).slice(0, 2000)}
 
-EXISTING CANDIDATES (same account, future events):
+EXISTING CANDIDATES (same account):
 ${candidatesText}
 
-Is the NEW event the same as one of the candidates?`
+Is the NEW event the same real-world event as one of the candidates?`
 
   try {
     const openai = createOpenAIClient({ apiKey, timeout: 20_000, maxRetries: 0 })
