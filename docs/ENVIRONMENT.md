@@ -83,6 +83,7 @@ Create each group, add its variables, and set the value. **Value** column: a lit
 | | `LOG_LEVEL` | `info` | |
 | | `ALLOW_MAIN_MENU_FREE_LANGUAGE` | `true` | |
 | **galiluz-app-wa-gateway** | `WA_LOG_LEVEL` | `info` | (`PORT` is auto-assigned by Render) |
+| | `WEB_APP_URL` | `https://galiluz.co.il` | gateway → web ingest (crawler); required for crawler |
 
 Optional web ops add-ons, not grouped (add directly to `galiluz-web` only if used): `RATE_LIMIT_FILE_PATH`, `SENTRY_DSN`.
 
@@ -92,7 +93,7 @@ Each service's keys = inline + the union of its attached groups. No key repeats 
 
 - **galiluz-web**: NODE_ENV, NODE_VERSION · API_SECRET · MONGODB_URI, MONGODB_DB_NAME · CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_FOLDER · OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MODEL_WEB · SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM, MAIL_TO · TURNSTILE_SECRET_KEY, NUXT_PUBLIC_TURNSTILE_SITE_KEY · NUXT_PUBLIC_POSTHOG_* · OTP_SECRET, WA_GATEWAY_URL, NUXT_PUBLIC_SITE_URL
 - **galiluz-wa-bot**: NODE_ENV, NODE_VERSION · API_SECRET · OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MODEL_WEB* · WA_CLOUD_ACCESS_TOKEN, WA_PHONE_NUMBER_ID, WEBHOOK_VERIFY_TOKEN, APP_SECRET, WHATSAPP_*_PHONE_NUMBER_ID · GALILUZ_APP_URL, PUBLISHERS_APPROVER_WA_NUMBER, APPROVER_REENGAGEMENT_TEMPLATE_*, LOG_LEVEL, ALLOW_MAIN_MENU_FREE_LANGUAGE
-- **galiluz-wa-gateway**: NODE_ENV, NODE_VERSION · API_SECRET · GREEN_API_* · WA_LOG_LEVEL
+- **galiluz-wa-gateway**: NODE_ENV, NODE_VERSION · API_SECRET · GREEN_API_* · WA_LOG_LEVEL · WEB_APP_URL
 
 No key repeats within a service. (* wa-bot inherits `OPENAI_MODEL_WEB` from the shared `galiluz-int-openai` group but doesn't read it — harmless.)
 
