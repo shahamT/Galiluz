@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isRetryableOpenAIError, getRetryDelayMs } from '~/packages/event-format/openaiRetry.js'
+import { isRetryableOpenAIError, getRetryDelayMs, describeOpenAIError } from '~/packages/event-format/openaiRetry.js'
 
 // The whole point of this helper: transient failures retry, deterministic ones don't.
 // The crawler incident was a status-less connection drop ("Premature close") that the
@@ -32,6 +32,26 @@ describe('isRetryableOpenAIError', () => {
     expect(isRetryableOpenAIError({ name: 'SyntaxError', message: 'bad json' })).toBe(false)
     expect(isRetryableOpenAIError({})).toBe(false)
     expect(isRetryableOpenAIError(null)).toBe(false)
+  })
+})
+
+describe('describeOpenAIError', () => {
+  it('walks the cause chain so the transport code surfaces', () => {
+    // Mirrors the real shape: APIConnectionError → "fetch failed" → undici socket error.
+    const root = Object.assign(new Error('terminated'), { code: 'UND_ERR_SOCKET' })
+    const mid = Object.assign(new Error('fetch failed'), { cause: root })
+    const top = Object.assign(new Error('Connection error.'), { name: 'APIConnectionError', cause: mid })
+    const d = describeOpenAIError(top)
+    expect(d.name).toBe('APIConnectionError')
+    expect(d.chain).toHaveLength(3)
+    expect(d.chain.some((c: { code?: string }) => c.code === 'UND_ERR_SOCKET')).toBe(true)
+  })
+
+  it('captures HTTP status and is safe on a bare error / cyclic cause', () => {
+    expect(describeOpenAIError({ status: 429, message: 'rate limited' }).status).toBe(429)
+    const a: Record<string, unknown> = { message: 'a' }
+    a.cause = a // cycle must not hang
+    expect(describeOpenAIError(a).chain).toHaveLength(1)
   })
 })
 

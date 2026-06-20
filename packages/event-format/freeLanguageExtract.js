@@ -7,7 +7,7 @@ import { convertMessageToHtml } from './whatsappFormatToHtml.js'
 import { normalizeCityToListedOrCustom } from './index.js'
 import { normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 import { OCCURRENCE_RULES } from './occurrenceRules.js'
-import { isRetryableOpenAIError, getRetryDelayMs, sleep } from './openaiRetry.js'
+import { isRetryableOpenAIError, getRetryDelayMs, sleep, describeOpenAIError } from './openaiRetry.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
@@ -154,7 +154,7 @@ export async function detectEventFromFreeText(text, options = {}) {
     } catch (err) {
       const retryable = isRetryableOpenAIError(err)
       const msg = err instanceof Error ? err.message : String(err)
-      log(correlationId, 'error', 'detectEventFromFreeText failed', { attempt, retryable, error: msg })
+      log(correlationId, 'error', 'detectEventFromFreeText failed', { attempt, retryable, detail: describeOpenAIError(err) })
       if (attempt < MAX_ATTEMPTS && retryable) {
         await sleep(getRetryDelayMs(err, attempt - 1))
         continue
@@ -537,7 +537,7 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
     } catch (err) {
       const retryable = isRetryableOpenAIError(err)
       const msg = err instanceof Error ? err.message : String(err)
-      log(correlationId, 'error', 'extractEventFromFreeText failed', { attempt, retryable, error: msg })
+      log(correlationId, 'error', 'extractEventFromFreeText failed', { attempt, retryable, detail: describeOpenAIError(err) })
       if (attempt < MAX_ATTEMPTS && retryable) {
         await sleep(getRetryDelayMs(err, attempt - 1))
         continue

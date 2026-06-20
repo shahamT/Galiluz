@@ -44,3 +44,37 @@ export function getRetryDelayMs(err, attemptIndex) {
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
+
+/**
+ * Serialize an OpenAI/undici error into a structured, log-safe object — walking the
+ * `cause` chain so the real transport code surfaces (undici nests it: APIConnectionError
+ * → "fetch failed" → { code: 'UND_ERR_SOCKET' | 'ECONNRESET' | … }). This is what tells
+ * apart a connection drop, a TLS reset, a DNS failure, a proxy abort, and an HTTP status.
+ */
+export function describeOpenAIError(err) {
+  const seen = new Set()
+  const chain = []
+  let cur = err
+  while (cur && typeof cur === 'object' && !seen.has(cur) && chain.length < 6) {
+    seen.add(cur)
+    chain.push({
+      name: cur.name,
+      message: typeof cur.message === 'string' ? cur.message.slice(0, 300) : undefined,
+      code: cur.code,
+      errno: cur.errno,
+      syscall: cur.syscall,
+      status: cur.status,
+      type: cur.type,
+    })
+    cur = cur.cause
+  }
+  const top = chain[0] || {}
+  return {
+    name: top.name,
+    message: top.message,
+    code: top.code,
+    status: top.status,
+    chain,
+    stack: typeof err?.stack === 'string' ? err.stack.split('\n').slice(0, 5).join(' | ') : undefined,
+  }
+}
