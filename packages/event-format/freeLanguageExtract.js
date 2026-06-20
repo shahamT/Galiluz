@@ -96,13 +96,26 @@ const DETECTION_SCHEMA = {
   },
 }
 
-const DETECTION_SYSTEM_PROMPT = `You are an assistant for a Hebrew community events calendar. Determine if a WhatsApp message describes an EVENT (a specific gathering, activity, or happening with date/time and location).
+const DETECTION_SYSTEM_PROMPT = `You are an assistant for a Hebrew community events calendar. Decide whether a WhatsApp message ANNOUNCES A REAL EVENT — a specific, concrete happening people could actually attend (e.g. a concert, show, party, workshop, class, lecture, tour, screening, fair, meetup, ceremony, festival).
 
-RULES (relaxed — prefer isEvent true when in doubt):
-- If the message describes any event (concert, workshop, meetup, party, etc.) even without all details, set isEvent to true.
-- Only set isEvent to false when: spam, irrelevant content, business hours/menus, generic ads with no event, or text that clearly does not describe any event.
-- Partial event info (e.g. only title and date, missing price) still counts as an event.
-- reason: null when isEvent is true. When isEvent is false, provide short Hebrew reason.`
+To qualify, the message must actually DESCRIBE such a happening — convey WHAT it is, plus at least a hint of WHEN or WHERE. Judge the real content: the mere presence of the word "event"/"אירוע" does NOT make something an event.
+
+isEvent = true (be inclusive — do not miss real events):
+- A real event even with partial details: a name/activity plus at least a day, time, or place. Missing exact time, price, or full address is fine.
+
+isEvent = false (reject anything that is not actually a described event):
+- A bare statement, claim, label, or meta-text that does not describe a real happening — e.g. "this is an event", "זה אירוע", "test"/"בדיקה", greetings, questions, opinions, a single word, random chatter.
+- Spam, ads or business info with no actual event, menus / opening hours, items for sale, news, or a link with no event details.
+
+When genuinely unsure between a real-but-partial event and non-event text, lean toward true — but text that only mentions or asserts "event" without describing one is false.
+
+Examples:
+- "this is an event" / "זה אירוע" → false (a statement, not a described happening).
+- "בדיקה" / "מה קורה היום?" → false.
+- "סדנת יוגה ביום ראשון בבוקר" → true (partial but real: activity + day).
+- "הופעה של להקת X ביום שישי 20:00 בפאב Y" → true.
+
+reason: null when isEvent is true; a short Hebrew reason when false.`
 
 /**
  * Detect if the message describes an event. Relaxed vs wa-listener: accepts partial event descriptions.
