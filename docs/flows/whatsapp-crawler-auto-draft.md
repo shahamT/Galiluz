@@ -250,6 +250,7 @@ settings via gateway `GET /internal/diagnostics`.
 | `detect_error:…Premature close` / `extract_error:…Premature close` | The prod OpenAI gzip bug below (now fixed). If it recurs, a NEW OpenAI client may have bypassed the factory. | ensure the client is built via `createOpenAIClient()` (never `new OpenAI()` directly) |
 | `not_event:…Premature close` (pre-`46e3b1f` only) | transient drop with no retry, mis-recorded as a non-event verdict | retry + transient-flag added in `46e3b1f` |
 | Webhook works but no draft after a fix | gateway running a stale process | gateway config is boot-time only — redeploy/restart |
+| Magic link lands on `/login` (token already used) | Green API `linkPreview` (default ON) made WhatsApp FETCH the magic-link URL for a preview, burning the single-use token before the user tapped it | gateway `sendMessage` forces `linkPreview: false` (`greenApi.service.js`) — never re-enable it for link-bearing messages |
 
 ### Resolved — `Premature close` on every OpenAI call (prod only) → node-fetch v2 + Node 22
 

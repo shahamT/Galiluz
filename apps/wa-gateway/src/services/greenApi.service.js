@@ -53,9 +53,17 @@ async function request(method, { httpMethod = 'POST', body = null, useMedia = fa
 
 // ── Actions ────────────────────────────────────────────────────────────────
 
-/** Send a plain-text message. `chatId` e.g. 972526052835@c.us or <id>@g.us. */
+/**
+ * Send a plain-text message. `chatId` e.g. 972526052835@c.us or <id>@g.us.
+ *
+ * linkPreview is forced OFF: Green API defaults it to true, which makes WhatsApp
+ * FETCH any URL in the message to build a preview. For our single-use magic links
+ * that fetch hits /api/auth/magic-link and BURNS the token before the user taps it,
+ * so they'd land on /login. All gateway messages are transactional (OTP codes,
+ * magic links) and never want a preview anyway.
+ */
 export function sendMessage(chatId, message) {
-  return request('sendMessage', { body: { chatId, message } })
+  return request('sendMessage', { body: { chatId, message, linkPreview: false } })
 }
 
 /** Instance auth/health state → { stateInstance: 'authorized' | 'notAuthorized' | ... }. */
