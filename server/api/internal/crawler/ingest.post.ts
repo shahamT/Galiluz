@@ -41,11 +41,16 @@ const skip = (reason: string) => ({ processed: false, reason })
 const MAX_MATCH_CANDIDATES = 40
 
 function buildCrawlerNotification(name: string, title: string, link: string): string {
+  // WhatsApp bold = *text*; the opening * must sit at a word boundary to render.
   return [
-    `היי ${name || ''},`.trim(),
-    `זיהינו שפרסמת אירוע חדש בוואטסאפ – ${title}`,
-    'יצרנו בשבילך אותו כטיוטה בגלילו"ז! נשאר רק לעבור על הפרטים וללחוץ "פרסום" כדי שהאירוע יופיע בגלילו"ז.',
-    'זהו לינק כניסה אישי לאזור שלך – אל תעבירו אותו לאף אחד. תקף לכ-10 דקות, אחריו צריך להזדהות מחדש:',
+    name ? `היי *${name}*,` : 'היי,',
+    'שמנו לב שפרסמת אירוע חדש בקבוצת וואטסאפ:',
+    `*${title}*`,
+    '',
+    'בואו נעלה אותו יחד לגלילו"ז',
+    `יצרנו אותו בשבילך במערכת כדי *שכל מה שתצטרך/י לעשות זה לעבור על הפרטים וללחוץ על 'פרסום'!*`,
+    '',
+    'הנה הלינק הישיר לפרטי האירוע באיזור האישי שלך – אל תעבירו אותו לאף אחד אחר',
     link,
   ].join('\n')
 }
