@@ -49,8 +49,8 @@ export interface EventLogEditPayload {
 
 export interface EventLogDeletionPayload {
   eventId: string
-  /** 'kill' = draft/flow abandoned (e.g. timeout or cancel before completing add). 'user_deleted' = user chose to delete the event. */
-  deletionType?: 'kill' | 'user_deleted'
+  /** 'kill' = draft/flow abandoned (e.g. timeout or cancel before completing add). 'user_deleted' = user chose to delete the event. 'crawler_expired' = crawler auto-draft never published within a week, swept silently. */
+  deletionType?: 'kill' | 'user_deleted' | 'crawler_expired'
   title?: string
   rawTitle?: string
   publisherId?: string

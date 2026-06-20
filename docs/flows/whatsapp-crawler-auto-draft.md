@@ -111,11 +111,13 @@ Collection name keys live in [nuxt.config.ts](../../nuxt.config.ts) runtimeConfi
 - **events** (the wa-bot events collection) — a crawler draft:
   ```js
   { createdAt, isActive:false, validDraft:boolean,
+    createdByCrawler:true,  // marks crawler-created events (stats + cleanup); rawEvent.source mirrors it
     event:{ …publisher-portal event shape… },
     rawEvent:{ publisherId, source:'whatsapp_crawler', rawText, groupChatId } }
   ```
   `validDraft` flags whether required fields are complete; **it has no behavioral
-  effect yet** (§12).
+  effect yet** (§12). `createdByCrawler` identifies crawler events for statistics and
+  is the key the cleanup sweep targets (§8).
 
 ## 5. The ingest pipeline
 
@@ -213,6 +215,16 @@ settings via gateway `GET /internal/diagnostics`.
   draft is still created (the publisher reviews it anyway).
 - **Notify is best-effort** — the draft is already saved; a send failure only sets
   `notified:false`.
+- **Untouched-draft cleanup** ([crawlerCleanup.ts](../../server/utils/crawlerCleanup.ts)):
+  a crawler draft (`createdByCrawler:true`) is **silently soft-deleted** only if, **7
+  days** after creation, it is still `isActive:false` **and the publisher never acted on
+  it** (`updatedAt` absent). `updatedAt` is stamped by edit / publish / unpublish /
+  transfer, so a draft the publisher modified — or published then unpublished — is
+  **kept**. Soft-delete only (never hard-deleted — same sequence as the publisher delete
+  route: log `crawler_expired` → `deletedAt` + `isActive:false` → stamp stats → destroy
+  Cloudinary media). Triggered **opportunistically** from the ingest (throttled ≤1/h,
+  fire-and-forget), so it rides normal crawler traffic — no separate scheduler. If
+  traffic is needed-but-absent, swap in a cron hitting a dedicated endpoint.
 
 ## 9. Enablement runbook (production)
 
