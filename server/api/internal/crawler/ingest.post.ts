@@ -83,22 +83,36 @@ export default defineEventHandler(async (event) => {
   if (!rawText) return skip('no_text')
 
   // 4. Dedup: exact-duplicate by (publisher, text hash) within the TTL window (21d).
+  // The message is recorded as "seen" only AFTER a definitive verdict (genuine
+  // non-event, deterministic failure, or a created draft) — a transient AI/transport
+  // error must NOT poison this window and silently suppress a real event on re-post.
   const hash = textHashOf(rawText)
   const crawlerMessages = db.collection(config.mongodbCollectionCrawlerMessages || 'crawlerMessages')
-  const dup = await crawlerMessages.findOne({ publisherId, textHash: hash })
-  if (dup) return skip('duplicate')
-  await crawlerMessages.insertOne({ publisherId, groupChatId, textHash: hash, createdAt: new Date() })
+  if (await crawlerMessages.findOne({ publisherId, textHash: hash })) return skip('duplicate')
+  const recordSeen = () => crawlerMessages.updateOne(
+    { publisherId, textHash: hash },
+    { $setOnInsert: { publisherId, groupChatId, textHash: hash, createdAt: new Date() } },
+    { upsert: true },
+  )
 
   const openaiApiKey = config.openaiApiKey || process.env.OPENAI_API_KEY
   const openaiModel = (process.env.OPENAI_MODEL_WEB || 'gpt-4o').trim() || 'gpt-4o'
 
-  // 5. Is this an event? (relaxed; accepts partial detail.)
+  // 5. Is this an event? (relaxed; accepts partial detail.) A transient AI/transport
+  // error aborts WITHOUT recording, so the same message can be re-evaluated on re-post.
   const detection = await detectEventFromFreeText(rawText, { openaiApiKey, openaiModel, correlationId })
-  if (!detection?.isEvent) return skip(`not_event:${detection?.reason || 'n/a'}`)
+  if (detection?.transient) return skip(`detect_error:${detection.reason || 'n/a'}`)
+  if (!detection?.isEvent) { await recordSeen(); return skip(`not_event:${detection?.reason || 'n/a'}`) }
 
-  // 6. Extract structured event.
-  const { formattedEvent, errorReason } = await extractEventFromFreeText(rawText, getCategoriesList(), CITIES_LIST, { openaiApiKey, openaiModel })
-  if (errorReason || !formattedEvent) return skip(`extract_failed:${errorReason || 'n/a'}`)
+  // 6. Extract structured event. Transient errors abort without recording; a
+  // deterministic failure is a final verdict, so record it to avoid reprocessing.
+  const { formattedEvent, errorReason, transient } = await extractEventFromFreeText(rawText, getCategoriesList(), CITIES_LIST, { openaiApiKey, openaiModel })
+  if (transient) return skip(`extract_error:${errorReason || 'n/a'}`)
+  if (errorReason || !formattedEvent) { await recordSeen(); return skip(`extract_failed:${errorReason || 'n/a'}`) }
+
+  // A real event was extracted — record it now so a re-post within the window doesn't
+  // create a duplicate draft, regardless of the match/draft outcome below.
+  await recordSeen()
 
   // 7. Skip if it matches an existing FUTURE event in the publisher's account.
   const today = getTodayIsrael()
