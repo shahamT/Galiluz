@@ -2,7 +2,7 @@
  * Main menu intent classification: map free-language user message to a menu action.
  * Used when user sends text at welcome or publisher-choice step (if allowMainMenuFreeLanguage).
  */
-import OpenAI from 'openai'
+import { createOpenAIClient } from '@galiluz/event-format'
 import { LOG_PREFIXES } from '../consts/index.js'
 import { logger } from '../utils/logger.js'
 
@@ -71,7 +71,7 @@ export async function classifyMainMenuIntent(userMessage, options = {}) {
   }
 
   try {
-    const openai = new OpenAI({ apiKey, timeout: 15_000 })
+    const openai = createOpenAIClient({ apiKey, timeout: 15_000 })
     const response = await openai.chat.completions.create({
       model,
       messages: [

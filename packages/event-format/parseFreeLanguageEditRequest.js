@@ -3,7 +3,7 @@
  * User types free text; LLM returns unclear | complete_update | edits.
  * Used by wa-bot when in EVENT_ADD_EDIT_MENU and user sends text (not list reply).
  */
-import OpenAI from 'openai'
+import { createOpenAIClient } from './openaiClient.js'
 import { getCurrentIsraelUtcOffset } from './israelDate.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
@@ -215,7 +215,7 @@ export async function parseFreeLanguageEditRequest(userMessage, menuOptions, cur
   const currentEventSummary = buildCurrentEventSummary(currentEvent)
 
   try {
-    const openai = new OpenAI({ apiKey, timeout: 30_000 })
+    const openai = createOpenAIClient({ apiKey, timeout: 30_000 })
     const response = await openai.chat.completions.create({
       model,
       messages: [

@@ -2,7 +2,7 @@
  * Filter image URLs to only those likely to be event posters or event photos.
  * Used when adding an event via link - excludes logos, icons, decorations.
  */
-import OpenAI from 'openai'
+import { createOpenAIClient } from './openaiClient.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 2
@@ -99,7 +99,7 @@ ${urls.map((u, i) => `${i + 1}. ${u}`).join('\n')}`
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const openai = new OpenAI({ apiKey, timeout: 30_000 })
+      const openai = createOpenAIClient({ apiKey, timeout: 30_000 })
       const response = await openai.chat.completions.create({
         model,
         messages: [
