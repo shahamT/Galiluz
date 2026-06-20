@@ -63,6 +63,11 @@ export function getStateInstance() {
   return request('getStateInstance', { httpMethod: 'GET' })
 }
 
+/** All chats/contacts (users + groups) → [{ id, name, type:'user'|'group' }]. Filter to groups by id @g.us. */
+export function getContacts() {
+  return request('getContacts', { httpMethod: 'GET' })
+}
+
 /** Send a file by URL (future use — media host). */
 export function sendFileByUrl(chatId, urlFile, fileName, caption = '') {
   return request('sendFileByUrl', { useMedia: true, body: { chatId, urlFile, fileName, caption } })

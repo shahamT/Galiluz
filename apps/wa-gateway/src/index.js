@@ -1,6 +1,7 @@
 import { config } from './config.js'
 import { startServer } from './server.js'
 import { getStateInstance } from './services/greenApi.service.js'
+import { startWatchedGroupSync } from './services/crawler.service.js'
 import { logger } from './utils/logger.js'
 import { LOG_PREFIXES } from './consts/index.js'
 
@@ -18,6 +19,9 @@ if (config.greenApi.idInstance && config.greenApi.apiToken) {
 } else {
   logger.warn(LOG_PREFIXES.GREEN_API, 'Green API credentials not set — sends will fail until configured')
 }
+
+// Crawler: keep the watched-group cache warm (no-op if WEB_APP_URL is unset).
+startWatchedGroupSync()
 
 const shutdown = () => {
   logger.info(LOG_PREFIXES.SHUTDOWN, 'Shutting down...')

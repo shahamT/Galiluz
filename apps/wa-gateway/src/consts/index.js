@@ -6,6 +6,7 @@ export const LOG_PREFIXES = {
   GREEN_API: '[GreenAPI]',
   OTP: '[OTP]',
   WEBHOOK: '[Webhook]',
+  CRAWLER: '[Crawler]',
   SHUTDOWN: '[Shutdown]',
   FATAL: '[FATAL]',
 }

@@ -3,6 +3,7 @@ import { getMongoConnection } from '~/server/utils/mongodb'
 import { checkAuthRateLimit, checkPhoneRateLimit } from '~/server/utils/rateLimit'
 import { logAuthEvent } from '~/server/utils/authLog'
 import { getAccountFeatures } from '~/server/utils/accountFeatures'
+import { getPublisherPreferences } from '~/server/utils/publisherPreferences'
 
 const MAX_ATTEMPTS = 5
 const BLOCK_MS = 30 * 60 * 1000      // 30 minutes
@@ -127,6 +128,7 @@ export default defineEventHandler(async (event) => {
       // Resolved here so the client has entitlements immediately after login,
       // without waiting for a /api/auth/me round-trip.
       features: await getAccountFeatures({ accountId: doc.accountId, type: doc.type }),
+      preferences: getPublisherPreferences(doc),
     },
   }
 })
