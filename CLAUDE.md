@@ -18,6 +18,7 @@ node scripts/cleanup-orphan-stats.js   # ad-hoc stats consistency sweep (reads .
 
 | Topic | Doc |
 |---|---|
+| **End-to-end flow docs** (per-feature journeys; write one for every new cross-cutting flow) | [docs/flows/](docs/flows/README.md) |
 | Collections, document shapes, lifecycles, soft delete, invariants | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) |
 | Every API route, auth flows, rate limits, conventions | [docs/API.md](docs/API.md) |
 | Pages, data flow, stores, carousels, styling, tracking | [docs/FRONTEND.md](docs/FRONTEND.md) |
