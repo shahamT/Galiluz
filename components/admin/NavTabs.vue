@@ -15,6 +15,11 @@
       <span class="AdminNavTabs-label">חשבונות ומפרסמים</span>
       <span class="AdminNavTabs-labelMobile">חשבונות</span>
     </NuxtLink>
+    <NuxtLink to="/admin/settings" class="AdminNavTabs-tab" :class="{ 'AdminNavTabs-tab--active': isSettings }">
+      <UiIcon name="settings" size="sm" class="AdminNavTabs-tabIcon" />
+      <span class="AdminNavTabs-label">הגדרות</span>
+      <span class="AdminNavTabs-labelMobile">הגדרות</span>
+    </NuxtLink>
   </nav>
 </template>
 
@@ -25,6 +30,7 @@ const route = useRoute()
 const isDashboard = computed(() => route.path === '/admin/dashboard' || route.path === '/admin')
 const isEvents = computed(() => route.path.startsWith('/admin/events'))
 const isAccounts = computed(() => route.path.startsWith('/admin/accounts'))
+const isSettings = computed(() => route.path.startsWith('/admin/settings'))
 </script>
 
 <style lang="scss">

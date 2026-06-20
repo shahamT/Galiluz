@@ -4,6 +4,8 @@ import { checkApiSecret } from './utils/requireApiSecret.js'
 import { handleHealth } from './routes/health.js'
 import { handleOtp } from './routes/internal.js'
 import { handleDiagnostics } from './routes/diagnostics.js'
+import { handleGroups } from './routes/groups.js'
+import { handleSendMessage } from './routes/sendMessage.js'
 import { handleWebhook } from './routes/webhook.js'
 import { logger } from './utils/logger.js'
 import { LOG_PREFIXES } from './consts/index.js'
@@ -32,6 +34,8 @@ export function createGatewayServer() {
       if (!checkApiSecret(req)) return sendJson(res, 401, { error: 'unauthorized' })
       if (pathname === '/internal/otp' && method === 'POST') return handleOtp(req, res)
       if (pathname === '/internal/diagnostics' && method === 'GET') return handleDiagnostics(req, res)
+      if (pathname === '/internal/groups' && method === 'GET') return handleGroups(req, res)
+      if (pathname === '/internal/send-message' && method === 'POST') return handleSendMessage(req, res)
       return sendJson(res, 404, { error: 'not found' })
     }
 
@@ -47,7 +51,7 @@ export function startServer(port) {
   const server = createGatewayServer()
   server.listen(port, () => {
     logger.info(LOG_PREFIXES.SERVER, `wa-gateway listening on port ${port}`)
-    logger.info(LOG_PREFIXES.SERVER, 'Routes: GET /health, POST /internal/otp, GET /internal/diagnostics, POST /webhook/green-api')
+    logger.info(LOG_PREFIXES.SERVER, 'Routes: GET /health, POST /internal/otp, GET /internal/diagnostics, GET /internal/groups, POST /internal/send-message, POST /webhook/green-api')
   })
   return server
 }

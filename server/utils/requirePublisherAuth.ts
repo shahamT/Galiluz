@@ -10,6 +10,8 @@ export interface PublisherSession {
   type: 'publisher' | 'manager'
   /** Account this publisher belongs to. Absent on legacy docs pre-backfill. */
   accountId?: string
+  /** Per-publisher preference flags (raw, stored); resolve with getPublisherPreferences(). */
+  preferences?: Record<string, unknown>
 }
 
 export interface AuthOptions {
@@ -54,7 +56,7 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
 
     const doc = await collection.findOne(
       { authKey: hash, authKeyExpiresAt: { $gt: new Date() } },
-      { projection: { _id: 1, waId: 1, fullName: 1, publishingAs: 1, type: 1, status: 1, accountId: 1 } },
+      { projection: { _id: 1, waId: 1, fullName: 1, publishingAs: 1, type: 1, status: 1, accountId: 1, preferences: 1 } },
     )
 
     if (!doc || doc.status !== 'approved') {
@@ -68,6 +70,7 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
       publishingAs: doc.publishingAs || '',
       type: doc.type === 'manager' ? 'manager' : 'publisher',
       accountId: doc.accountId || undefined,
+      preferences: doc.preferences || {},
     }
 
     if (options.requireManager && session.type !== 'manager') {

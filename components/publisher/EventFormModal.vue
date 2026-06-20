@@ -373,6 +373,17 @@
           <button v-else type="button" class="EventFormModal-footerBtn" @click="resetForm">
             פרסם אירוע נוסף
           </button>
+          <!-- Draft-only: delete is offered here for drafts; active events are deleted from the details page. -->
+          <button
+            v-if="props.mode === 'edit' && props.initialData && props.initialData.isActive === false"
+            type="button"
+            class="EventFormModal-footerDelete"
+            :disabled="formBusy"
+            @click="emit('delete')"
+          >
+            <UiIcon name="delete" size="sm" />
+            מחיקת טיוטה
+          </button>
         </div>
 
         <UiConfirmDialog
@@ -402,7 +413,7 @@ const props = defineProps({
   draftKey:           { type: String, default: null },
   onBehalfPublishers: { type: Array, default: () => [] },
 })
-const emit = defineEmits(['close', 'submitted'])
+const emit = defineEmits(['close', 'submitted', 'delete'])
 
 const bodyEl = ref(null)
 const detailsSectionEl = ref(null)
@@ -1231,6 +1242,28 @@ function resetForm() {
 
     &:disabled { opacity: 0.6; cursor: not-allowed; }
     &:not(:disabled):hover { opacity: 0.9; }
+  }
+
+  &-footerDelete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    width: 100%;
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-body);
+    font-weight: 600;
+    color: var(--color-error);
+    background: transparent;
+    border: 1.5px solid var(--color-error);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+    &:not(:disabled):hover { background: rgba(211, 47, 47, 0.08); }
   }
 
   &-onBehalf {

@@ -37,6 +37,9 @@ async function ensureIndexes() {
   const accounts = db.collection(config.mongodbCollectionAccounts || 'accounts')
   const authLogs = db.collection(config.mongodbCollectionAuthLogs || 'authLogs')
   const rawMessages = db.collection(config.mongodbCollectionRawMessages || 'raw_messages')
+  const appSettings = db.collection(config.mongodbCollectionAppSettings || 'appSettings')
+  const crawlerMessages = db.collection(config.mongodbCollectionCrawlerMessages || 'crawlerMessages')
+  const magicLinks = db.collection(config.mongodbCollectionMagicLinks || 'magicLinks')
 
   const DAY = 24 * 60 * 60
 
@@ -70,6 +73,15 @@ async function ensureIndexes() {
     interactions.createIndex({ timestamp: 1 }, { expireAfterSeconds: 90 * DAY }),
     authLogs.createIndex({ timestamp: 1 }, { expireAfterSeconds: 30 * DAY }),
     rawMessages.createIndex({ createdAt: 1 }, { expireAfterSeconds: 7 * DAY }),
+
+    // App settings: one doc per settings domain (key-based).
+    appSettings.createIndex({ key: 1 }, { unique: true }),
+    // Crawler dedup: lookup by (publisher, message hash); auto-expire after 21 days.
+    crawlerMessages.createIndex({ publisherId: 1, textHash: 1 }),
+    crawlerMessages.createIndex({ createdAt: 1 }, { expireAfterSeconds: 21 * DAY }),
+    // Magic links: lookup by token hash; auto-expire at expiresAt.
+    magicLinks.createIndex({ tokenHash: 1 }, { unique: true }),
+    magicLinks.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ])
 
   console.info('[Indexes] All indexes ensured')

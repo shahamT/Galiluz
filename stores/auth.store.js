@@ -13,6 +13,8 @@ export const useAuthStore = defineStore('auth', () => {
    * (defaults applied; managers get every feature), so this just reads booleans.
    */
   const hasFeature = (key) => user.value?.features?.[key] === true
+  /** Per-publisher preference check (resolved map from /api/auth/me; UI gating only). */
+  const hasPreference = (key) => user.value?.preferences?.[key] === true
 
   function setUser(userData) {
     user.value = userData
@@ -36,5 +38,5 @@ export const useAuthStore = defineStore('auth', () => {
     authReady.value = false
   }
 
-  return { user, authReady, isLoggedIn, isManager, canManageAll, canManageOwn, hasFeature, setUser, login, logout, setAuthReady, resetAuthReady }
+  return { user, authReady, isLoggedIn, isManager, canManageAll, canManageOwn, hasFeature, hasPreference, setUser, login, logout, setAuthReady, resetAuthReady }
 })

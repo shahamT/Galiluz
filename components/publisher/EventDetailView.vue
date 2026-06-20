@@ -247,6 +247,7 @@
     :draft-key="route.query.draft || null"
     @close="showEditForm = false; clearDraftFromUrl()"
     @submitted="onEditSubmitted"
+    @delete="onFormDelete"
   />
 
   <PublisherEventStatusModal
@@ -348,6 +349,13 @@ async function onEditSubmitted() {
   capture('publisher_event_edited', { eventId: route.params.id })
   await refresh()
   router.replace({ query: { success: 'updated' } })
+}
+
+// Draft-only "delete" from inside the edit modal → close it and open the existing
+// type-to-confirm delete modal (which handles deletion + navigation away).
+function onFormDelete() {
+  showEditForm.value = false
+  nextTick(() => { showDeleteModal.value = true })
 }
 
 async function onStatusUpdated() {
