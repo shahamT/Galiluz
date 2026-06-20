@@ -127,6 +127,11 @@ envVarGroups:
         sync: false
       - key: GREEN_API_API_TOKEN_INSTANCE
         sync: false
+      # Shared secret Green API sends on incoming webhooks (Authorization: Bearer).
+      # REQUIRED for the crawler — the gateway webhook fails closed (503) without it.
+      # Must equal the webhookUrlToken set on the Green API instance via setSettings.
+      - key: GREEN_API_WEBHOOK_TOKEN
+        sync: false
       # Optional host overrides (per-instance hosts, e.g. https://7105.api.green-api.com)
       - key: GREEN_API_BASE_URL
         sync: false
