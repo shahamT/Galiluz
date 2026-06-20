@@ -40,15 +40,29 @@ export async function matchCrawlerEvent(
   formattedEvent: Record<string, any>,
   candidates: MatchCandidate[],
   messageText: string,
-  options: { openaiApiKey?: string; openaiModel?: string } = {},
+  options: { openaiApiKey?: string; openaiModel?: string; correlationId?: string } = {},
 ): Promise<{ matchedId: string | null; reason: string | null }> {
-  if (!candidates.length) return { matchedId: null, reason: 'no_candidates' }
+  const correlationId = options.correlationId || ''
+  const occ = formattedEvent.occurrences?.[0] || {}
+  const newEvent = {
+    title: formattedEvent.Title || '',
+    city: formattedEvent.location?.city || '',
+    date: occ.date || '',
+  }
+
+  // No candidates → the account has no future event (incl. drafts WITH a date) to
+  // compare against, so this is treated as new. A dateless prior draft lands here.
+  if (!candidates.length) {
+    console.info(`[crawler/match] ${correlationId} no candidates — treating as new`, JSON.stringify({ newEvent }))
+    return { matchedId: null, reason: 'no_candidates' }
+  }
 
   const apiKey = (options.openaiApiKey ?? process.env.OPENAI_API_KEY ?? '').trim()
   const model = (options.openaiModel ?? process.env.OPENAI_MODEL_WEB ?? 'gpt-4o').trim() || 'gpt-4o'
-  if (!apiKey) return { matchedId: null, reason: 'no_openai_key' }
-
-  const occ = formattedEvent.occurrences?.[0] || {}
+  if (!apiKey) {
+    console.warn(`[crawler/match] ${correlationId} no OpenAI key — treating as new`)
+    return { matchedId: null, reason: 'no_openai_key' }
+  }
   const candidatesText = candidates
     .map((c, i) => `Candidate ${i + 1}: ID=${c.id} | Title="${c.title}" | City="${c.city}" | Date=${c.date}`)
     .join('\n')
@@ -81,9 +95,12 @@ Is the NEW event the same as one of the candidates?`
     const matchedId = typeof parsed.matchedId === 'string' && candidates.some((c) => c.id === parsed.matchedId)
       ? parsed.matchedId
       : null
+    // Log the full comparison + the model's own reason so a wrong same/different
+    // call can be understood (and the prompt tuned) without guessing.
+    console.info(`[crawler/match] ${correlationId} decision`, JSON.stringify({ newEvent, candidates, matchedId, reason: parsed.reason || null }))
     return { matchedId, reason: parsed.reason || null }
   } catch (err) {
-    console.error('[crawler/match] OpenAI error:', err instanceof Error ? err.message : String(err))
+    console.error(`[crawler/match] ${correlationId} OpenAI error:`, err instanceof Error ? err.message : String(err))
     return { matchedId: null, reason: 'match_error' }
   }
 }

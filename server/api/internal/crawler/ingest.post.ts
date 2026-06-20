@@ -128,7 +128,7 @@ export default defineEventHandler(async (event) => {
     })
     .filter(Boolean) as Array<{ id: string; title: string; city: string; date: string }>
 
-  const match = await matchCrawlerEvent(formattedEvent, candidates, rawText, { openaiApiKey, openaiModel })
+  const match = await matchCrawlerEvent(formattedEvent, candidates, rawText, { openaiApiKey, openaiModel, correlationId })
   if (match.matchedId) return skip(`already_exists:${match.matchedId}`)
 
   // 8. Upload the message image (if any) to Cloudinary. The URL is sourced from
