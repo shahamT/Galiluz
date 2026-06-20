@@ -1,6 +1,11 @@
 import OpenAI from 'openai'
 import { sanitizeMessageForPrompt } from '~/server/utils/sanitizeMessageForPrompt'
 
+// Use Node's native fetch — the bundled SDK otherwise falls back to node-fetch v2,
+// which throws ERR_STREAM_PREMATURE_CLOSE on Node 22 while decompressing gzipped
+// responses (see packages/event-format/freeLanguageExtract.js for the full note).
+const nativeFetch = (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args)
+
 export interface MatchCandidate {
   id: string
   title: string
@@ -64,7 +69,7 @@ ${candidatesText}
 Is the NEW event the same as one of the candidates?`
 
   try {
-    const openai = new OpenAI({ apiKey, timeout: 20_000 })
+    const openai = new OpenAI({ apiKey, timeout: 20_000, maxRetries: 0, fetch: nativeFetch })
     const response = await openai.chat.completions.create({
       model,
       messages: [
