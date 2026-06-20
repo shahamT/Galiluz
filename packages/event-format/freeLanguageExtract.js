@@ -7,6 +7,7 @@ import { convertMessageToHtml } from './whatsappFormatToHtml.js'
 import { normalizeCityToListedOrCustom } from './index.js'
 import { normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 import { OCCURRENCE_RULES } from './occurrenceRules.js'
+import { isRetryableOpenAIError, getRetryDelayMs, sleep } from './openaiRetry.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
@@ -124,33 +125,46 @@ export async function detectEventFromFreeText(text, options = {}) {
     return { isEvent: false, reason: 'הודעה ריקה' }
   }
 
-  try {
-    const openai = new OpenAI({ apiKey, timeout: 15_000 })
-    const response = await openai.chat.completions.create({
-      model,
-      messages: [
-        { role: 'system', content: DETECTION_SYSTEM_PROMPT },
-        { role: 'user', content: `Does this message describe an event?\n\n${userContent}` },
-      ],
-      response_format: { type: 'json_schema', json_schema: DETECTION_SCHEMA },
-      max_tokens: 150,
-      temperature: 0.1,
-    })
-    const content = response.choices[0]?.message?.content
-    if (!content) {
-      log(correlationId, 'warn', 'detectEventFromFreeText: empty content')
-      return { isEvent: false, reason: 'לא התקבלה תשובה' }
+  // Retry transient failures (429/5xx + connection drops like "Premature close").
+  // maxRetries:0 disables the SDK's own retry so this loop is the single source of
+  // truth (predictable count + backoff + logging).
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const openai = new OpenAI({ apiKey, timeout: 15_000, maxRetries: 0 })
+      const response = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: DETECTION_SYSTEM_PROMPT },
+          { role: 'user', content: `Does this message describe an event?\n\n${userContent}` },
+        ],
+        response_format: { type: 'json_schema', json_schema: DETECTION_SCHEMA },
+        max_tokens: 150,
+        temperature: 0.1,
+      })
+      const content = response.choices[0]?.message?.content
+      if (!content) {
+        log(correlationId, 'warn', 'detectEventFromFreeText: empty content', { attempt })
+        return { isEvent: false, reason: 'לא התקבלה תשובה' }
+      }
+      const parsed = JSON.parse(content)
+      const isEvent = parsed.isEvent === true
+      const reason = parsed.reason != null ? String(parsed.reason).trim() || null : null
+      log(correlationId, 'info', 'detectEventFromFreeText: ok', { isEvent, reason })
+      return { isEvent, reason }
+    } catch (err) {
+      const retryable = isRetryableOpenAIError(err)
+      const msg = err instanceof Error ? err.message : String(err)
+      log(correlationId, 'error', 'detectEventFromFreeText failed', { attempt, retryable, error: msg })
+      if (attempt < MAX_ATTEMPTS && retryable) {
+        await sleep(getRetryDelayMs(err, attempt - 1))
+        continue
+      }
+      // Surface `transient` so callers can distinguish a transport/API failure from
+      // a genuine "not an event" verdict (e.g. to avoid recording it as processed).
+      return { isEvent: false, reason: `שגיאה: ${msg}`, transient: retryable }
     }
-    const parsed = JSON.parse(content)
-    const isEvent = parsed.isEvent === true
-    const reason = parsed.reason != null ? String(parsed.reason).trim() || null : null
-    log(correlationId, 'info', 'detectEventFromFreeText: ok', { isEvent, reason })
-    return { isEvent, reason }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    log(correlationId, 'error', 'detectEventFromFreeText failed', { error: msg })
-    return { isEvent: false, reason: `שגיאה: ${msg}` }
   }
+  return { isEvent: false, reason: 'שגיאה: retries exhausted', transient: true }
 }
 
 const FREE_LANG_FLAG_KEYS = ['rawOccurrences', 'rawPrice', 'rawLocation', 'rawMainCategory', 'rawCity', 'rawCityOutsideNorth', 'rawRegion']
@@ -341,7 +355,7 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const openai = new OpenAI({ apiKey, timeout: 60_000 })
+      const openai = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 0 })
       const response = await openai.chat.completions.create({
         model,
         messages: [
@@ -521,12 +535,17 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
       })
       return { rawEventSupplement, formattedEvent, flags }
     } catch (err) {
+      const retryable = isRetryableOpenAIError(err)
       const msg = err instanceof Error ? err.message : String(err)
-      log(correlationId, 'error', 'extractEventFromFreeText failed', { attempt, error: msg })
-      if (attempt >= MAX_ATTEMPTS) {
-        return { rawEventSupplement: null, formattedEvent: null, flags: [], errorReason: `openai_error: ${msg}` }
+      log(correlationId, 'error', 'extractEventFromFreeText failed', { attempt, retryable, error: msg })
+      if (attempt < MAX_ATTEMPTS && retryable) {
+        await sleep(getRetryDelayMs(err, attempt - 1))
+        continue
       }
+      // `transient` lets callers tell a transport/API failure (safe to retry later)
+      // from a deterministic failure, so a blip isn't recorded as a final verdict.
+      return { rawEventSupplement: null, formattedEvent: null, flags: [], errorReason: `openai_error: ${msg}`, transient: retryable }
     }
   }
-  return { rawEventSupplement: null, formattedEvent: null, flags: [], errorReason: 'openai_no_result' }
+  return { rawEventSupplement: null, formattedEvent: null, flags: [], errorReason: 'openai_no_result', transient: true }
 }
