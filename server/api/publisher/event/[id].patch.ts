@@ -112,7 +112,10 @@ export default defineEventHandler(async (event) => {
 
   const correlationId = randomBytes(4).toString('hex')
 
-  await col.updateOne({ _id: objectId }, { $set: { event: merged } })
+  // Stamp updatedAt on every edit — it's the "publisher touched this" signal that
+  // (with status/transfer, which also set it) keeps the crawler cleanup sweep from
+  // deleting a draft the publisher has actually worked on.
+  await col.updateOne({ _id: objectId }, { $set: { event: merged, updatedAt: new Date() } })
 
   if (changedFields.length > 0) {
     await logEventEdit({

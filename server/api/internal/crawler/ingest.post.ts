@@ -13,6 +13,7 @@ import { buildCrawlerDraftEvent } from '~/server/utils/buildCrawlerDraft'
 import { uploadBufferToCloudinary } from '~/server/utils/cloudinary'
 import { safeFetchImage } from '~/server/utils/safeImageFetch'
 import { issueMagicLink } from '~/server/utils/magicLink'
+import { maybeSweepExpiredCrawlerDrafts } from '~/server/utils/crawlerCleanup'
 import { logEventCreation } from '~/server/utils/eventLogs.service'
 import { getCategoriesList } from '~/consts/events.const.js'
 import { CITIES as CITIES_MAP } from '~/consts/regions.const.js'
@@ -63,6 +64,11 @@ function buildCrawlerNotification(name: string, title: string, link: string): st
  */
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
+
+  // Opportunistic cleanup: silently soft-delete crawler drafts never published within
+  // a week. Throttled (≤1/h) + fire-and-forget, so it rides normal crawler traffic
+  // without a separate scheduler and never delays this request.
+  maybeSweepExpiredCrawlerDrafts()
 
   const body = await readBody<{ groupChatId?: string; senderPhone?: string; text?: string; imageUrl?: string; mimeType?: string; idMessage?: string }>(event)
   const groupChatId = String(body?.groupChatId || '')
@@ -187,6 +193,9 @@ export default defineEventHandler(async (event) => {
     createdAt: new Date(),
     isActive: false,
     validDraft,
+    // Marks the event as crawler-created (for statistics + the unpublished-draft
+    // cleanup sweep). rawEvent.source carries the same signal as the source convention.
+    createdByCrawler: true,
     event: eventObj,
     rawEvent: { publisherId, source: 'whatsapp_crawler', rawText, groupChatId },
   }
