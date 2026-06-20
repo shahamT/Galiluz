@@ -37,10 +37,7 @@ function textHashOf(text: string): string {
 
 const skip = (reason: string) => ({ processed: false, reason })
 
-// Compare a new event against account events whose date falls in this recent+upcoming
-// window, so a duplicate of a just-passed or today's event is still caught (not only
-// future ones). Candidates are capped to bound the AI prompt.
-const MATCH_WINDOW_DAYS = 30
+// Cap dup-match candidates to bound the AI prompt size.
 const MAX_MATCH_CANDIDATES = 40
 
 function buildCrawlerNotification(name: string, title: string, link: string): string {
@@ -116,16 +113,22 @@ export default defineEventHandler(async (event) => {
   if (transient) return skip(`extract_error:${errorReason || 'n/a'}`)
   if (errorReason || !formattedEvent) { await recordSeen(); return skip(`extract_failed:${errorReason || 'n/a'}`) }
 
-  // A real event was extracted — record it now so a re-post within the window doesn't
-  // create a duplicate draft, regardless of the match/draft outcome below.
+  // A real event was extracted — record it so a re-post doesn't reprocess it.
   await recordSeen()
 
-  // 7. Skip if it matches an existing event in the account — published OR draft.
-  // Candidates are events with an occurrence in [today - MATCH_WINDOW_DAYS, ∞), so a
-  // duplicate of a just-passed/today's event is caught (not future-only). The AI makes
-  // the semantic same/different call from title + description + idea (crawlerEventMatch).
+  // Abort if the event already happened: when the AI extracted occurrences and ALL of
+  // them are in the past, there's nothing to publish. No occurrences at all → continue
+  // (the publisher can fill in the date); any future occurrence → continue.
   const today = getTodayIsrael()
-  const windowStart = new Date(new Date(`${today}T00:00:00Z`).getTime() - MATCH_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)
+  const occurrenceDates = ((formattedEvent.occurrences || []) as Array<{ date?: string }>)
+    .map((o) => o.date)
+    .filter(Boolean) as string[]
+  if (occurrenceDates.length && occurrenceDates.every((dt) => dt < today)) {
+    return skip('event_in_past')
+  }
+
+  // 7. Skip if it matches an existing FUTURE event in the account (published OR draft).
+  // The AI makes the semantic same/different call from title + description + idea.
   const publisherIds = await getAccountPublisherIds({ accountId: publisher.accountId, publisherId } as never)
   const eventsCol = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
   const accountEvents = await eventsCol
@@ -136,16 +139,10 @@ export default defineEventHandler(async (event) => {
     .toArray()
   const candidates = accountEvents
     .map((d: any) => {
-      const dates = (d.event?.occurrences || []).map((o: any) => o.date).filter(Boolean).sort()
-      const inWindow = dates.find((dt: string) => dt >= windowStart)
-      if (!inWindow) return null
-      return {
-        id: d._id.toString(),
-        title: d.event?.Title || '',
-        city: d.event?.location?.city || '',
-        date: inWindow,
-        shortDescription: d.event?.shortDescription || '',
-      }
+      const future = (d.event?.occurrences || []).map((o: any) => o.date).filter((dt: string) => dt && dt >= today).sort()[0]
+      return future
+        ? { id: d._id.toString(), title: d.event?.Title || '', city: d.event?.location?.city || '', date: future, shortDescription: d.event?.shortDescription || '' }
+        : null
     })
     .filter(Boolean)
     .slice(0, MAX_MATCH_CANDIDATES) as Array<{ id: string; title: string; city: string; date: string; shortDescription: string }>

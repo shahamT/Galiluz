@@ -82,7 +82,7 @@ Everything is opt-in and admin-gated; nothing is ever auto-published.
 | [server/utils/appSettings.ts](../../server/utils/appSettings.ts) | `getAppSetting(key)` / `setAppSetting(key, patch, actor)` |
 | [server/utils/publisherPreferences.ts](../../server/utils/publisherPreferences.ts) + [consts/preferences.const.js](../../consts/preferences.const.js) | Preference registry + resolver (`getPublisherPreferences`) |
 | [server/utils/sanitizeMessageForPrompt.ts](../../server/utils/sanitizeMessageForPrompt.ts) | Strip prompt-injection / noise from message text |
-| [server/utils/crawlerEventMatch.ts](../../server/utils/crawlerEventMatch.ts) | AI semantic compare (title+description+idea) of new event vs account's recent/upcoming events incl. drafts (fail-open) |
+| [server/utils/crawlerEventMatch.ts](../../server/utils/crawlerEventMatch.ts) | AI semantic compare (title+description+idea) of new event vs account's future events incl. drafts (fail-open) |
 | [server/utils/buildCrawlerDraft.ts](../../server/utils/buildCrawlerDraft.ts) | Map extractor output → stored event shape; compute `validDraft` (never rejects) |
 | [server/utils/safeImageFetch.ts](../../server/utils/safeImageFetch.ts) | **SSRF-hardened** fetch of the WhatsApp media URL before Cloudinary upload |
 | [server/utils/magicLink.ts](../../server/utils/magicLink.ts) + [server/api/auth/magic-link.get.ts](../../server/api/auth/magic-link.get.ts) | Issue / consume single-use login links |
@@ -136,6 +136,7 @@ fire-and-forget caller must not error-loop). Success returns
 | 8 | `detectEventFromFreeText` (AI, `OPENAI_MODEL_WEB`=gpt-4o) | transient → `detect_error:…` (**not recorded**); genuine non-event → record + `not_event:…` |
 | 9 | `extractEventFromFreeText` (AI) | transient → `extract_error:…` (**not recorded**); deterministic fail → record + `extract_failed:…` |
 | — | **record dedup** (real event reached) | — |
+| 9b | **past-event guard** — AI extracted occurrence(s) and ALL are `< today` | `event_in_past` (no occurrences → continue; any future → continue) |
 | 10 | `matchCrawlerEvent` vs account future events (fail-open) | matched → `already_exists:<id>` |
 | 11 | image → `safeFetchImage` → `uploadBufferToCloudinary` (best-effort; failure logs, draft still created) | — |
 | 12 | `buildCrawlerDraftEvent` → insert draft `{isActive:false, validDraft}` | — |
@@ -143,11 +144,11 @@ fire-and-forget caller must not error-loop). Success returns
 | 14 | `issueMagicLink(publisherId, '/publisher/events/<draftId>?modal=edit')` + gateway `send-message` (best-effort) | `notified:false` if it fails (draft still created) |
 
 Step 10 candidates: account-scoped (`getAccountPublisherIds`), `NOT_DELETED`,
-**published OR draft**, with an occurrence in `[today − MATCH_WINDOW_DAYS, ∞)` (a
-recent+upcoming window, not future-only, so a duplicate of a just-passed/today's
-event is still caught), capped at `MAX_MATCH_CANDIDATES`. The AI judges *same
-real-world event* from **title + description + general idea** (tolerant of reworded
-titles and imperfectly-extracted dates/cities) — not exact field equality.
+**published OR draft**, with a **future** occurrence (date ≥ Israel-today), capped at
+`MAX_MATCH_CANDIDATES`. (Past events can't be candidates, but step 9b already aborts a
+fully-past new event, so it never reaches here.) The AI judges *same real-world event*
+from **title + description + general idea** (tolerant of reworded titles and
+imperfectly-extracted dates/cities) — not exact field equality.
 
 ## 6. Authentication & security
 
