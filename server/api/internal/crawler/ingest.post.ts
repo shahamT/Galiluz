@@ -184,7 +184,9 @@ export default defineEventHandler(async (event) => {
   // the draft is already saved, so a notification failure must not fail the request).
   let notified = false
   try {
-    const link = await issueMagicLink(publisherId, `/publisher/events/${draftId}`)
+    // `?modal=edit` makes the details page open the edit modal on arrival
+    // (EventDetailView reads route.query.modal) — the publisher lands ready to review.
+    const link = await issueMagicLink(publisherId, `/publisher/events/${draftId}?modal=edit`)
     const gatewayUrl = (config.waGatewayUrl || process.env.WA_GATEWAY_URL || '').replace(/\/$/, '')
     const apiSecret = config.apiSecret || process.env.API_SECRET || ''
     // Dev convenience (mirrors the OTP terminal print): surface the link so it can

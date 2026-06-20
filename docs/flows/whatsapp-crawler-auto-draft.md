@@ -42,7 +42,7 @@ Everything is opt-in and admin-gated; nothing is ever auto-published.
         ▼
  publisher taps link → web GET /api/auth/magic-link?t=…   server/api/auth/magic-link.get.ts
         │  validate (single-use, ≤10min) → issue 1h galiluz_auth session
-        ▼  302 → /publisher/events/<draftId>  (review / edit / publish / delete)
+        ▼  302 → /publisher/events/<draftId>?modal=edit  (lands with the edit modal open)
 ```
 
 **Direction of the two internal hops is asymmetric** (this trips people up):
@@ -140,7 +140,7 @@ fire-and-forget caller must not error-loop). Success returns
 | 11 | image → `safeFetchImage` → `uploadBufferToCloudinary` (best-effort; failure logs, draft still created) | — |
 | 12 | `buildCrawlerDraftEvent` → insert draft `{isActive:false, validDraft}` | — |
 | 13 | `logEventCreation('draft_created')` | — |
-| 14 | `issueMagicLink(publisherId, '/publisher/events/<draftId>')` + gateway `send-message` (best-effort) | `notified:false` if it fails (draft still created) |
+| 14 | `issueMagicLink(publisherId, '/publisher/events/<draftId>?modal=edit')` + gateway `send-message` (best-effort) | `notified:false` if it fails (draft still created) |
 
 The account-scope for step 10 uses `getAccountPublisherIds` over `NOT_DELETED`
 future events (occurrence date ≥ Israel-today).
