@@ -215,3 +215,5 @@ envVarGroups:
     envVars:
       - key: WA_LOG_LEVEL
         value: info
+      - key: WEB_APP_URL           # web app base URL — gateway forwards crawler messages to its internal API
+        value: https://galiluz.co.il
