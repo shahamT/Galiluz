@@ -4,7 +4,7 @@
  * The page content (HTML converted to text) is sent to the AI, which returns only
  * the text relevant to the event, preserving format and content as on the website.
  */
-import OpenAI from 'openai'
+import { createOpenAIClient } from './openaiClient.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
@@ -87,7 +87,7 @@ ${truncated}`
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const openai = new OpenAI({ apiKey, timeout: 60_000 })
+      const openai = createOpenAIClient({ apiKey, timeout: 60_000 })
       const response = await openai.chat.completions.create({
         model,
         messages: [

@@ -3,7 +3,7 @@
  * Used by wa-bot only. Accepts rawEventWithAll and categoriesList; returns formattedEvent or errorReason.
  * Nuxt validates the result when wa-bot POSTs it.
  */
-import OpenAI from 'openai'
+import { createOpenAIClient } from './openaiClient.js'
 import { buildPublisherEventSchema, ALLOWED_FLAG_FIELD_KEYS } from './schema.js'
 import { normalizeOccurrenceTime, normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 import { sanitizeRawEventForPrompt } from './promptSanitize.js'
@@ -282,7 +282,7 @@ export async function formatPublisherEvent(rawEventWithAll, categoriesList, opti
     return { formattedEvent: null, errorReason: 'no_openai_key' }
   }
 
-  const openai = new OpenAI({ apiKey, timeout: 60_000 })
+  const openai = createOpenAIClient({ apiKey, timeout: 60_000 })
   const dateContext = getIsraelDateContext()
   const aiCall = await callOpenAIForPublisherFormat(rawEventWithAll, categoriesList, dateContext, correlationId, openai, model)
   if (!aiCall.result) {
@@ -411,7 +411,7 @@ export async function generateShortDescription(title, fullDescription, options =
   const userContent = `Event title: ${typeof title === 'string' ? title.trim() : ''}\n\nFull description:\n${typeof fullDescription === 'string' ? fullDescription : ''}`.slice(0, 8000)
 
   try {
-    const openai = new OpenAI({ apiKey, timeout: 30_000 })
+    const openai = createOpenAIClient({ apiKey, timeout: 30_000 })
     const response = await openai.chat.completions.create({
       model,
       messages: [
@@ -481,7 +481,7 @@ export async function normalizeCityForEdit(cityText, options = {}) {
   }
 
   try {
-    const openai = new OpenAI({ apiKey, timeout: 15_000 })
+    const openai = createOpenAIClient({ apiKey, timeout: 15_000 })
     const response = await openai.chat.completions.create({
       model,
       messages: [
@@ -582,7 +582,7 @@ export async function parseOccurrencesFromText(text, options = {}) {
   const finalUserContent = useFewShot ? `${OCCURRENCE_FEW_SHOT_EXAMPLES}\n\n${userContent}` : userContent
 
   try {
-    const openai = new OpenAI({ apiKey, timeout: 30_000 })
+    const openai = createOpenAIClient({ apiKey, timeout: 30_000 })
     const response = await openai.chat.completions.create({
       model,
       messages: [
@@ -674,7 +674,7 @@ export async function parsePriceFromText(text, options = {}) {
   }
 
   try {
-    const openai = new OpenAI({ apiKey, timeout: 15_000 })
+    const openai = createOpenAIClient({ apiKey, timeout: 15_000 })
     const response = await openai.chat.completions.create({
       model,
       messages: [
@@ -758,7 +758,7 @@ export async function parseUrlsFromText(text, options = {}) {
   }
 
   try {
-    const openai = new OpenAI({ apiKey, timeout: 15_000 })
+    const openai = createOpenAIClient({ apiKey, timeout: 15_000 })
     const response = await openai.chat.completions.create({
       model,
       messages: [
@@ -865,7 +865,7 @@ export async function verifyCityInNorthernIsrael(cityName, options = {}) {
   }
 
   try {
-    const openai = new OpenAI({ apiKey, timeout: 15_000 })
+    const openai = createOpenAIClient({ apiKey, timeout: 15_000 })
     const response = await openai.chat.completions.create({
       model,
       messages: [
@@ -899,5 +899,6 @@ export async function verifyCityInNorthernIsrael(cityName, options = {}) {
 export { normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 export { extractNavLinksFromRaw, htmlToWhatsAppMessage, parseFreeLanguageEditRequest, convertMessageToHtml }
 export { detectEventFromFreeText, extractEventFromFreeText } from './freeLanguageExtract.js'
+export { createOpenAIClient } from './openaiClient.js'
 export { extractEventTextFromPage } from './extractEventTextFromPage.js'
 export { selectEventRelevantImageUrls } from './selectEventRelevantImageUrls.js'

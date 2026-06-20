@@ -1,6 +1,6 @@
 # WhatsApp Crawler → Auto-Draft Events
 
-> Status: **deployed; end-to-end verified except a live OpenAI-connectivity blocker** (every `detect`/`extract` call to `api.openai.com` from the web service fails with `Premature close`, even across retries — see §11 *Open issue*). · Added 2026-06-20 · Key commits `c031cbe` (feature), `3713a60` (webhook fail-closed), `bc5edad` (gateway `WEB_APP_URL`), `46e3b1f` (OpenAI retry + dedup fix) · Owner-area: web + wa-gateway
+> Status: **live** — verified end-to-end in production. · Added 2026-06-20 · Key commits `c031cbe` (feature), `3713a60` (webhook fail-closed), `bc5edad` (gateway `WEB_APP_URL`), `46e3b1f` (OpenAI retry + dedup fix), `fea0674` (native-fetch fix — the prod blocker) · Owner-area: web + wa-gateway
 
 ## 1. Purpose & user story
 
@@ -195,9 +195,9 @@ settings via gateway `GET /internal/diagnostics`.
   hang up, fetch timeouts) as retryable — the original status-only check did not,
   which is what dropped a real event. Both functions return a `transient` flag so
   callers can distinguish a transport failure from a genuine verdict.
-  ⚠️ Retry only helps a **transient** drop. If *every* attempt fails with
-  `Premature close` (as observed in prod, 3/3), the cause is not load — it points to
-  a connection-reuse / egress issue at the HTTP layer. See §11 *Open issue*.
+- **Native fetch is mandatory** — every OpenAI client is built via
+  [createOpenAIClient()](../../packages/event-format/openaiClient.js), which pins the
+  SDK to Node's native fetch. See §11 for why (node-fetch v2 breaks gzip on Node 22).
 - **Dedup is recorded only after a definitive verdict.** The dedup row is written
   on: genuine non-event (step 8), deterministic extract failure (step 9), or a real
   event reaching draft creation. **Transient** detect/extract errors abort
@@ -247,35 +247,29 @@ settings via gateway `GET /internal/diagnostics`.
 | `[Crawler] cannot forward — WEB_APP_URL/API_SECRET not configured` | `WEB_APP_URL` missing in gateway env (or set after boot) | set it + **restart** the gateway |
 | `ingest → 200 {reason:"group_not_watched"}` | prod admin config differs from local | enable + add the group on the **live** site |
 | `ingest → 200 {reason:"publisher_not_opted_in"}` | sender not opted-in (prod DB) | opt the publisher in via admin |
-| `detect_error:…Premature close` / `extract_error:…Premature close` | OpenAI connection drop. If **3/3 attempts** fail → persistent (see *Open issue* below), not a one-off. **No dedup poisoning** (transient errors aren't recorded), so re-posting the same text re-evaluates. | resolve the connectivity issue below; meanwhile re-post triggers a fresh attempt |
+| `detect_error:…Premature close` / `extract_error:…Premature close` | The prod OpenAI gzip bug below (now fixed). If it recurs, a NEW OpenAI client may have bypassed the factory. | ensure the client is built via `createOpenAIClient()` (never `new OpenAI()` directly) |
 | `not_event:…Premature close` (pre-`46e3b1f` only) | transient drop with no retry, mis-recorded as a non-event verdict | retry + transient-flag added in `46e3b1f` |
 | Webhook works but no draft after a fix | gateway running a stale process | gateway config is boot-time only — redeploy/restart |
 
-### Open issue — persistent `Premature close` to `api.openai.com` (prod)
+### Resolved — `Premature close` on every OpenAI call (prod only) → node-fetch v2 + Node 22
 
-**Symptom:** every `detectEventFromFreeText` attempt (all 3 retries) fails with
-`Invalid response body while trying to fetch https://api.openai.com/v1/chat/completions: Premature close`,
-so the crawler returns `detect_error` and no draft is created. Observed from the
-**production web service**; not yet confirmed whether it reproduces locally.
+**Symptom (was):** every `detect`/`extract` call from the **production** web service
+failed with `Invalid response body while trying to fetch …/chat/completions: Premature close`
+(`ERR_STREAM_PREMATURE_CLOSE`), so AI-generate returned 503 and the crawler returned
+`detect_error`. It worked **locally**, which is what made it confusing.
 
-**What it is _not_:** not a logic bug (the full Green API → gateway → web hop chain
-works), not dedup poisoning (transient errors aren't recorded), and not fixed by the
-retry (all attempts fail identically — retry only helps a one-off).
+**Root cause:** the prod stack trace pointed at `.output/server/node_modules/node-fetch/lib/index.js`
+inside a `Gunzip` handler. In the **bundled** production output the OpenAI SDK fell
+back to **node-fetch v2**, which is incompatible with **Node 22's** stream internals
+and throws while gunzip-decompressing OpenAI's gzipped responses. The dev runtime
+uses Node's **native fetch** (undici), which decompresses correctly — hence prod-only.
+(It was *not* the key, the env, a proxy, or undici keep-alive — earlier guesses.)
 
-**Leading hypothesis:** undici (Node 22 global `fetch`) reusing a keep-alive socket
-that the upstream/intermediary has already half-closed → `ERR_STREAM_PREMATURE_CLOSE`
-on the next request. Constructing `new OpenAI()` per call does **not** help, because
-undici's connection pool is **process-global**, not per-client. A flaky/egress proxy
-on Render dropping idle connections would present the same way.
-
-**Candidate next steps (need a prod test — do not deploy blind):**
-1. Determine scope: does it reproduce locally? Is the publisher-facing web
-   AI-generate route (same SDK/endpoint) also affected in prod, or only the crawler?
-2. Configure a dedicated undici dispatcher with a short/disabled keep-alive for the
-   OpenAI client — e.g. `setGlobalDispatcher(new Agent({ keepAliveTimeout: 10_000, keepAliveMaxTimeout: 10_000 }))` at web startup, or pass a custom `fetch`/dispatcher to the SDK so stale sockets aren't reused.
-3. If it's Render egress, consider a longer client `timeout` + the above, or routing
-   through a stable path.
-Track resolution here and flip the top-of-doc Status back to **live** once verified.
+**Fix (`fea0674` + factory consolidation):** all OpenAI clients are now built via
+[createOpenAIClient()](../../packages/event-format/openaiClient.js), which passes
+`fetch: globalThis.fetch` so the SDK always uses native fetch. Latency also dropped
+from ~9s to ~1.5s. **Never call `new OpenAI()` directly — use the factory** so no
+call site can reintroduce the node-fetch fallback.
 
 ## 12. Gotchas & future work
 

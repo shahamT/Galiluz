@@ -2,24 +2,17 @@
  * Free-language event detection and extraction for wa-bot add flow.
  * Used when publisher pastes a single message with event details.
  */
-import OpenAI from 'openai'
 import { convertMessageToHtml } from './whatsappFormatToHtml.js'
 import { normalizeCityToListedOrCustom } from './index.js'
 import { normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 import { OCCURRENCE_RULES } from './occurrenceRules.js'
 import { isRetryableOpenAIError, getRetryDelayMs, sleep, describeOpenAIError } from './openaiRetry.js'
+import { createOpenAIClient } from './openaiClient.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
 const MAX_TEXT_LENGTH = 8000
 const LOG_PREFIX = '[event-format][freeLang]'
-
-// Force the OpenAI SDK onto Node's native fetch (undici). In the bundled prod
-// output the SDK otherwise falls back to node-fetch v2, which on Node 22 throws
-// ERR_STREAM_PREMATURE_CLOSE while gunzip-decompressing OpenAI's gzipped responses
-// (node-fetch v2 is incompatible with Node 22's stream internals). The wrapper
-// avoids any `this`-binding issues with passing globalThis.fetch directly.
-const nativeFetch = (...args) => globalThis.fetch(...args)
 
 function log(ctx, level, message, data) {
   const parts = [LOG_PREFIX]
@@ -137,7 +130,7 @@ export async function detectEventFromFreeText(text, options = {}) {
   // truth (predictable count + backoff + logging).
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const openai = new OpenAI({ apiKey, timeout: 15_000, maxRetries: 0, fetch: nativeFetch })
+      const openai = createOpenAIClient({ apiKey, timeout: 15_000, maxRetries: 0 })
       const response = await openai.chat.completions.create({
         model,
         messages: [
@@ -362,7 +355,7 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const openai = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 0, fetch: nativeFetch })
+      const openai = createOpenAIClient({ apiKey, timeout: 60_000, maxRetries: 0 })
       const response = await openai.chat.completions.create({
         model,
         messages: [
