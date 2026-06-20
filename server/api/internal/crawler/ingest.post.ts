@@ -37,6 +37,12 @@ function textHashOf(text: string): string {
 
 const skip = (reason: string) => ({ processed: false, reason })
 
+// Compare a new event against account events whose date falls in this recent+upcoming
+// window, so a duplicate of a just-passed or today's event is still caught (not only
+// future ones). Candidates are capped to bound the AI prompt.
+const MATCH_WINDOW_DAYS = 30
+const MAX_MATCH_CANDIDATES = 40
+
 function buildCrawlerNotification(name: string, title: string, link: string): string {
   return [
     `היי ${name || ''},`.trim(),
@@ -114,19 +120,35 @@ export default defineEventHandler(async (event) => {
   // create a duplicate draft, regardless of the match/draft outcome below.
   await recordSeen()
 
-  // 7. Skip if it matches an existing FUTURE event in the publisher's account.
+  // 7. Skip if it matches an existing event in the account — published OR draft.
+  // Candidates are events with an occurrence in [today - MATCH_WINDOW_DAYS, ∞), so a
+  // duplicate of a just-passed/today's event is caught (not future-only). The AI makes
+  // the semantic same/different call from title + description + idea (crawlerEventMatch).
   const today = getTodayIsrael()
+  const windowStart = new Date(new Date(`${today}T00:00:00Z`).getTime() - MATCH_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)
   const publisherIds = await getAccountPublisherIds({ accountId: publisher.accountId, publisherId } as never)
   const eventsCol = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
   const accountEvents = await eventsCol
-    .find({ 'event.publisherId': { $in: publisherIds }, ...NOT_DELETED }, { projection: { 'event.Title': 1, 'event.location.city': 1, 'event.occurrences': 1 } })
+    .find(
+      { 'event.publisherId': { $in: publisherIds }, ...NOT_DELETED },
+      { projection: { 'event.Title': 1, 'event.shortDescription': 1, 'event.location.city': 1, 'event.occurrences': 1 } },
+    )
     .toArray()
   const candidates = accountEvents
     .map((d: any) => {
-      const future = (d.event?.occurrences || []).map((o: any) => o.date).filter((dt: string) => dt && dt >= today).sort()[0]
-      return future ? { id: d._id.toString(), title: d.event?.Title || '', city: d.event?.location?.city || '', date: future } : null
+      const dates = (d.event?.occurrences || []).map((o: any) => o.date).filter(Boolean).sort()
+      const inWindow = dates.find((dt: string) => dt >= windowStart)
+      if (!inWindow) return null
+      return {
+        id: d._id.toString(),
+        title: d.event?.Title || '',
+        city: d.event?.location?.city || '',
+        date: inWindow,
+        shortDescription: d.event?.shortDescription || '',
+      }
     })
-    .filter(Boolean) as Array<{ id: string; title: string; city: string; date: string }>
+    .filter(Boolean)
+    .slice(0, MAX_MATCH_CANDIDATES) as Array<{ id: string; title: string; city: string; date: string; shortDescription: string }>
 
   const match = await matchCrawlerEvent(formattedEvent, candidates, rawText, { openaiApiKey, openaiModel, correlationId })
   if (match.matchedId) return skip(`already_exists:${match.matchedId}`)
