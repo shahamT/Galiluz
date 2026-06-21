@@ -22,10 +22,6 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: npm install && npm run build
-    # TEMPORARY (one-time): run the publishingAs→accounts.title migration once on deploy,
-    # before the new version goes live. Idempotent + no-downtime (a failure halts the deploy
-    # and the old version keeps serving). REMOVE this line once it has run (then redeploy).
-    preDeployCommand: node scripts/migrate-publishingas-to-account.js
     startCommand: node .output/server/index.mjs
     healthCheckPath: /api/health
     envVars:
