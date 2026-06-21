@@ -1,3 +1,6 @@
+// ⚠️ LEGACY — DISCONNECTED. Part of the retired in-bot publisher event flows. Publisher
+// actions in routes/webhook.js now reply with PUBLISHER.PORTAL_REDIRECT (web portal). This
+// file is no longer reached at runtime — kept for reference only. Do NOT re-wire.
 /**
  * Shared event edit flow: menu payload and field ids.
  * Used by event-add "עריכת פרטים" and future update-event flow.
