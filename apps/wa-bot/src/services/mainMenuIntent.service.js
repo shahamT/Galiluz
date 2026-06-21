@@ -2,7 +2,10 @@
  * Main menu intent classification: map free-language user message to a menu action.
  * Used when user sends text at welcome or publisher-choice step (if allowMainMenuFreeLanguage).
  */
-import { createOpenAIClient } from '@galiluz/event-format'
+// Import via the dependency's installed name ('event-format', per package.json's
+// file: key) — NOT the package's internal name '@galiluz/event-format', which only
+// resolves in dev via workspace hoisting and crashes the isolated Render build.
+import { createOpenAIClient } from 'event-format'
 import { LOG_PREFIXES } from '../consts/index.js'
 import { logger } from '../utils/logger.js'
 
