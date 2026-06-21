@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const [accountDocs, publisherDocs] = await Promise.all([
     accountsCol.find(NOT_DELETED, { projection: { _id: 1, title: 1 } }).toArray(),
     publishersCol
-      .find(NOT_DELETED, { projection: { _id: 1, waId: 1, accountId: 1, publishingAs: 1, fullName: 1, status: 1 } })
+      .find(NOT_DELETED, { projection: { _id: 1, waId: 1, accountId: 1, accountName: 1, fullName: 1, status: 1 } })
       .toArray(),
   ])
 
@@ -33,14 +33,18 @@ export default defineEventHandler(async (event) => {
     .sort((x, y) => collator.compare(x.name, y.name))
 
   const publishers = publisherDocs
-    .map((p) => ({
-      id: p._id.toString(),
-      name: p.fullName || p.publishingAs || p.waId || '',
-      phone: p.waId || '',
-      accountId: p.accountId || '',
-      accountName: p.accountId ? (accountNameById.get(p.accountId) || '') : '',
-      status: p.status || '',
-    }))
+    .map((p) => {
+      // Account title: the linked account (approved) or the pending-period carrier.
+      const accountName = p.accountId ? (accountNameById.get(p.accountId) || '') : (p.accountName || '')
+      return {
+        id: p._id.toString(),
+        name: p.fullName || accountName || p.waId || '',
+        phone: p.waId || '',
+        accountId: p.accountId || '',
+        accountName,
+        status: p.status || '',
+      }
+    })
     .sort((x, y) => collator.compare(x.name, y.name))
 
   return { accounts, publishers }

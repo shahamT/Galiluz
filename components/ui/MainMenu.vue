@@ -70,6 +70,14 @@
               </button>
             </template>
           </nav>
+          <div class="MainMenu-loginSection">
+            <NuxtLink to="/login" class="MainMenu-loginButton" @click="close">
+              {{ MAIN_MENU.publisherLogin }}
+            </NuxtLink>
+            <button type="button" class="MainMenu-registerCta" @click="onPublisherRegister">
+              {{ MAIN_MENU.publisherRegisterCta }}
+            </button>
+          </div>
           <div class="MainMenu-footer">
             <button type="button" class="MainMenu-item" @click="showFeedback = true; close()">
               <UiIcon name="rate_review" size="md" class="MainMenu-itemIcon" />
@@ -110,6 +118,12 @@ const emit = defineEmits(['update:modelValue'])
 
 const { canInstall, isIOS, isInstalled, showInstructions, triggerInstall } = useInstallPrompt()
 const showFeedback = ref(false)
+
+// Publisher registration CTA → the website registration page.
+function onPublisherRegister() {
+  navigateTo('/register')
+  close()
+}
 
 function onInstallClick() {
   if (isIOS.value) {
@@ -271,6 +285,70 @@ function close() {
   &-itemIcon {
     color: inherit;
     flex-shrink: 0;
+  }
+
+  // Publisher login/register — sits at the bottom of the menu area (above the
+  // footer's full-width divider), not inside the bottom (feedback/contact) section.
+  &-loginSection {
+    flex-shrink: 0;
+    padding: var(--spacing-md);
+  }
+
+  // Primary CTA — deliberately stands out from the ghost-style menu items.
+  &-loginButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border: none;
+    border-radius: var(--radius-md);
+    background-color: var(--brand-dark-green);
+    color: #fff;
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    font-family: var(--font-family-body);
+    text-decoration: none;
+    cursor: pointer;
+    transition: filter 0.2s ease;
+
+    &:hover,
+    &:active,
+    &:visited {
+      color: #fff;
+    }
+
+    &:hover,
+    &:active {
+      filter: brightness(0.93);
+    }
+
+    @include mobile {
+      min-height: 3.5rem;
+      font-size: var(--font-size-md);
+    }
+  }
+
+  // Secondary text button under the CTA.
+  &-registerCta {
+    display: block;
+    width: 100%;
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: none;
+    background: transparent;
+    color: var(--brand-dark-green);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-body);
+    text-align: center;
+    text-decoration: underline;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+
+    &:hover,
+    &:active {
+      opacity: 0.75;
+    }
   }
 }
 

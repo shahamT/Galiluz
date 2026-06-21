@@ -129,10 +129,13 @@ Account, approval state, and all auth state in one doc.
   approvedAt: Date, updatedAt: Date,
 
   fullName: String,
-  publishingAs: String,             // org / brand name shown in portal
-  profileName: String,              // WA profile name captured at registration
+  email: String,                    // web registration (validated); shown to the approver
+  accountName: String,              // the account name → becomes accounts.title on approval
+                                    //   (replaces the old publisher-level `publishingAs`)
   eventTypesDescription: String,    // onboarding free text
   approvedTerms: Boolean, approvedTermsAt: Date,
+  phoneVerified: Boolean,           // web registration: true after the OTP step
+  registrationSource: String,       // 'web' for website registrations (absent = bot)
   phone: String,                    // ghost records only (set equal to waId)
 
   // OTP state — written by send-otp, cleared on successful verify
@@ -158,7 +161,7 @@ Groups publishers under a business account: **one account → many publishers; e
 ```js
 {
   _id: ObjectId,
-  title: String,        // display name; seeded from publisher.publishingAs at creation
+  title: String,        // display name; seeded from publisher.accountName at approval (the account-name field)
   isActive: Boolean,    // default true; false = disabled
   createdAt: Date,
   deletedAt: Date,      // PRESENT only when soft-deleted (absent on live accounts, like events)

@@ -1,21 +1,13 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomBytes } from 'node:crypto'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { checkAuthRateLimit, checkPhoneRateLimit } from '~/server/utils/rateLimit'
 import { logAuthEvent } from '~/server/utils/authLog'
 import { getAccountFeatures } from '~/server/utils/accountFeatures'
 import { getPublisherPreferences } from '~/server/utils/publisherPreferences'
+import { resolveAccountTitle } from '~/server/utils/accountScope'
+import { normaliseIsraeliPhone, verifyStoredOtp } from '~/server/utils/otp'
 
-const MAX_ATTEMPTS = 5
-const BLOCK_MS = 30 * 60 * 1000      // 30 minutes
 const AUTH_KEY_EXPIRY_MS = 60 * 60 * 1000 // 1 hour
-
-function normaliseIsraeliPhone(raw: string): string | null {
-  const digits = raw.replace(/\D/g, '')
-  if (digits.startsWith('972') && digits.length === 12) return digits
-  if (digits.startsWith('05') && digits.length === 10) return '972' + digits.slice(1)
-  if (digits.startsWith('5') && digits.length === 9) return '972' + digits
-  return null
-}
 
 export default defineEventHandler(async (event) => {
   await checkAuthRateLimit(event)
@@ -32,9 +24,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<{ phone?: string; otp?: string }>(event)
-  const raw = typeof body?.phone === 'string' ? body.phone.trim() : ''
   const submittedOtp = typeof body?.otp === 'string' ? body.otp.trim() : ''
-  const waId = normaliseIsraeliPhone(raw)
+  const waId = normaliseIsraeliPhone(typeof body?.phone === 'string' ? body.phone : '')
 
   if (!waId || !submittedOtp || !/^\d{6}$/.test(submittedOtp)) {
     throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'invalid_input' })
@@ -48,54 +39,17 @@ export default defineEventHandler(async (event) => {
   const col = db.collection(config.mongodbCollectionPublishers || 'publishers')
 
   const doc = await col.findOne({ waId })
-
   if (!doc || doc.status !== 'approved') {
     throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'not_registered' })
   }
 
   const now = new Date()
-
-  if (doc.otpBlockedUntil && doc.otpBlockedUntil > now) {
-    const secondsLeft = Math.ceil((doc.otpBlockedUntil.getTime() - now.getTime()) / 1000)
-    await logAuthEvent(event, 'blocked', waId, { secondsLeft })
-    throw createError({ statusCode: 429, statusMessage: 'Too Many Requests', message: `blocked:${secondsLeft}` })
-  }
-
-  if (!doc.otp || !doc.otpExpiresAt || doc.otpExpiresAt <= now) {
-    throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'otp_expired' })
-  }
-
-  // Timing-safe OTP comparison
-  const secret = config.otpSecret || process.env.OTP_SECRET || ''
-  const expectedHash = createHmac('sha256', secret).update(submittedOtp).digest('hex')
-  const storedHash = doc.otp as string
-
-  const expectedBuf = Buffer.from(expectedHash, 'hex')
-  const storedBuf = Buffer.from(storedHash, 'hex')
-  const match = expectedBuf.length === storedBuf.length && timingSafeEqual(expectedBuf, storedBuf)
-
-  if (!match) {
-    const newAttempts = (doc.otpAttempts ?? 0) + 1
-    const blocked = newAttempts >= MAX_ATTEMPTS
-    await col.updateOne(
-      { waId },
-      {
-        $set: {
-          otpAttempts: newAttempts,
-          ...(blocked ? { otpBlockedUntil: new Date(now.getTime() + BLOCK_MS) } : {}),
-        },
-      },
-    )
-    const attemptsLeft = MAX_ATTEMPTS - newAttempts
-    await logAuthEvent(event, 'otp_failed', waId, { attemptsLeft, blocked })
-    if (blocked) {
-      throw createError({ statusCode: 429, statusMessage: 'Too Many Requests', message: `blocked:${BLOCK_MS / 1000}` })
-    }
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized', message: `invalid_otp:${attemptsLeft}` })
-  }
+  // Throws on block / expired / invalid (and writes the failed-attempt counter).
+  await verifyStoredOtp(col, waId, doc, submittedOtp, now)
 
   // OTP correct — issue session token
   const token = randomBytes(32).toString('hex')
+  const secret = config.otpSecret || process.env.OTP_SECRET || ''
   const authKey = createHmac('sha256', secret).update(token).digest('hex')
   const authKeyExpiresAt = new Date(now.getTime() + AUTH_KEY_EXPIRY_MS)
 
@@ -123,7 +77,7 @@ export default defineEventHandler(async (event) => {
     user: {
       waId: doc.waId,
       fullName: doc.fullName || '',
-      publishingAs: doc.publishingAs || '',
+      publishingAs: await resolveAccountTitle({ accountId: doc.accountId, accountName: doc.accountName, waId: doc.waId }),
       type: doc.type || 'publisher',
       // Resolved here so the client has entitlements immediately after login,
       // without waiting for a /api/auth/me round-trip.
