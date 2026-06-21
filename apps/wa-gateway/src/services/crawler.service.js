@@ -25,12 +25,19 @@ export async function refreshWatchedGroups() {
       return
     }
     const data = await res.json()
-    cache = {
-      enabled: data?.enabled === true,
-      groupChatIds: new Set(Array.isArray(data?.groupChatIds) ? data.groupChatIds : []),
-      synced: true,
+    const nextEnabled = data?.enabled === true
+    const nextIds = new Set(Array.isArray(data?.groupChatIds) ? data.groupChatIds : [])
+    // Log only when the watched config actually changes (first sync, enabled flip, or a
+    // group added/removed) — the 2-minute poll otherwise stays silent to avoid log noise.
+    const changed =
+      !cache.synced ||
+      cache.enabled !== nextEnabled ||
+      cache.groupChatIds.size !== nextIds.size ||
+      [...nextIds].some((id) => !cache.groupChatIds.has(id))
+    cache = { enabled: nextEnabled, groupChatIds: nextIds, synced: true }
+    if (changed) {
+      logger.info(LOG_PREFIXES.CRAWLER, `watched groups synced: enabled=${cache.enabled}, ${cache.groupChatIds.size} group(s)`)
     }
-    logger.info(LOG_PREFIXES.CRAWLER, `watched groups synced: enabled=${cache.enabled}, ${cache.groupChatIds.size} group(s)`)
   } catch (err) {
     logger.warn(LOG_PREFIXES.CRAWLER, `watched-groups sync error: ${err instanceof Error ? err.message : String(err)}`)
   }
