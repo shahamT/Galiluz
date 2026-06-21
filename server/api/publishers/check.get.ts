@@ -1,5 +1,6 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
+import { resolveAccountTitle } from '~/server/utils/accountScope'
 
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
@@ -30,7 +31,8 @@ export default defineEventHandler(async (event) => {
     if (!doc) return { status: 'not_found' as const }
     const status = doc.status === 'approved' ? 'approved' : doc.status === 'pending' ? 'pending' : 'not_found'
     const fullName = typeof doc.fullName === 'string' ? doc.fullName : ''
-    const publishingAs = typeof doc.publishingAs === 'string' ? doc.publishingAs : ''
+    // Account name now lives on accounts.title; keep the `publishingAs` key for the bot.
+    const publishingAs = await resolveAccountTitle({ accountId: doc.accountId, accountName: doc.accountName, waId: doc.waId })
     const type = doc.type === 'manager' ? 'manager' : 'publisher'
     return { status, fullName, publishingAs, type }
   } catch (err) {

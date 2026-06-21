@@ -6,10 +6,13 @@ export interface PublisherSession {
   publisherId: string
   waId: string
   fullName: string
+  /** @deprecated Account name relocated to accounts.title — empty for web publishers. Resolve the display title via resolveAccountTitle({accountId, accountName, waId}). */
   publishingAs: string
   type: 'publisher' | 'manager'
   /** Account this publisher belongs to. Absent on legacy docs pre-backfill. */
   accountId?: string
+  /** Pending-period account-name carrier (before an account exists). */
+  accountName?: string
   /** Per-publisher preference flags (raw, stored); resolve with getPublisherPreferences(). */
   preferences?: Record<string, unknown>
 }
@@ -56,7 +59,7 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
 
     const doc = await collection.findOne(
       { authKey: hash, authKeyExpiresAt: { $gt: new Date() } },
-      { projection: { _id: 1, waId: 1, fullName: 1, publishingAs: 1, type: 1, status: 1, accountId: 1, preferences: 1 } },
+      { projection: { _id: 1, waId: 1, fullName: 1, publishingAs: 1, accountName: 1, type: 1, status: 1, accountId: 1, preferences: 1 } },
     )
 
     if (!doc || doc.status !== 'approved') {
@@ -70,6 +73,7 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
       publishingAs: doc.publishingAs || '',
       type: doc.type === 'manager' ? 'manager' : 'publisher',
       accountId: doc.accountId || undefined,
+      accountName: doc.accountName || undefined,
       preferences: doc.preferences || {},
     }
 

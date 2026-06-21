@@ -112,10 +112,20 @@ export default defineEventHandler(async (event) => {
 
   const correlationId = randomBytes(4).toString('hex')
 
-  // Stamp updatedAt on every edit — it's the "publisher touched this" signal that
-  // (with status/transfer, which also set it) keeps the crawler cleanup sweep from
-  // deleting a draft the publisher has actually worked on.
-  await col.updateOne({ _id: objectId }, { $set: { event: merged, updatedAt: new Date() } })
+  // Stamp updatedAt on every edit — the "publisher touched this" signal that (with
+  // status/transfer) keeps the crawler cleanup from deleting a worked-on draft. A content
+  // change also clears approverNotifiedAt: the approver reviewed a now-stale version, so
+  // the NEXT time this event is published (draft → active) they get notified again. No
+  // notification fires here — only the flag is reset. (A plain re-publish of an unchanged
+  // event keeps the flag set and stays silent.)
+  const hadChanges = changedFields.length > 0
+  await col.updateOne(
+    { _id: objectId },
+    {
+      $set: { event: merged, updatedAt: new Date() },
+      ...(hadChanges ? { $unset: { approverNotifiedAt: '' } } : {}),
+    },
+  )
 
   if (changedFields.length > 0) {
     await logEventEdit({

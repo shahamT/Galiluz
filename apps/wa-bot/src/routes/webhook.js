@@ -23,6 +23,9 @@ import {
   BATCH_FLUSH_MS,
   MANAGER,
 } from '../consts/index.js'
+// LEGACY flows — the in-bot event add/edit flows are disconnected (publisher actions now
+// reply with PORTAL_REDIRECT via sendPublisherPortalRedirect). These remain imported only
+// for the retained reference code below. See the LEGACY banners atop the flow files.
 import {
   sendInitialMessage,
   sendEventAddMethodChoice,
@@ -113,6 +116,7 @@ function validateAndNormalizeIsraeliPhone(raw) {
   return null
 }
 
+// LEGACY — disconnected; no live caller (publisher flows now → sendPublisherPortalRedirect). Reference only.
 function sendManagerAskTargetPhone(phoneNumberId, from, intendedAction = null) {
   conversationState.set(from, {
     step: conversationState.STEPS.MANAGER_ASK_TARGET_PHONE,
@@ -127,6 +131,7 @@ function sendManagerAskTargetPhone(phoneNumberId, from, intendedAction = null) {
  * @param {Record<string, unknown>} loaded
  * @returns {Record<string, unknown>}
  */
+// LEGACY — disconnected; no live caller (publisher flows now → sendPublisherPortalRedirect). Reference only.
 function normalizeLoadedEventForEdit(loaded) {
   if (!loaded || typeof loaded !== 'object') return {}
   const loc = loaded.location && typeof loaded.location === 'object' ? loaded.location : {}
@@ -214,6 +219,7 @@ function handleDiscoverTimeChoice(phoneNumberId, from, timeChoice) {
     })
 }
 
+// LEGACY — disconnected; no live caller (publisher flows now → sendPublisherPortalRedirect). Reference only.
 async function handleEventUpdateChoice(phoneNumberId, from) {
   const state = conversationState.get(from)
   const publisherFrom = state.managerTargetPhone || from
@@ -234,6 +240,7 @@ async function handleEventUpdateChoice(phoneNumberId, from) {
   return sendInteractiveList(phoneNumberId, from, payload)
 }
 
+// LEGACY — disconnected; no live caller (publisher flows now → sendPublisherPortalRedirect). Reference only.
 async function handleEventDeleteChoice(phoneNumberId, from) {
   const state = conversationState.get(from)
   const publisherFrom = state.managerTargetPhone || from
@@ -254,6 +261,7 @@ async function handleEventDeleteChoice(phoneNumberId, from) {
   return sendInteractiveList(phoneNumberId, from, payload)
 }
 
+// LEGACY — disconnected; no live caller (publisher flows now → sendPublisherPortalRedirect). Reference only.
 async function handlePublishButton(phoneNumberId, from, profileName) {
   const result = await checkPublisher(from)
   if (result.connectionError) {
@@ -276,6 +284,21 @@ function handleBackToMenu(phoneNumberId, from) {
   return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)
 }
 
+// The in-bot publisher flows (registration + add/update/delete event) are retired — every
+// publisher entry point funnels here and replies with a single portal redirect (login +
+// register links). Clears state so the next message starts clean. URLs come from
+// galiluzAppUrl (localhost in dev, galiluz.co.il in prod); reply buttons can't carry URLs
+// so this is sent as text and WhatsApp auto-links them.
+function sendPublisherPortalRedirect(phoneNumberId, from) {
+  conversationState.clear(from)
+  const base = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
+  const body = PUBLISHER.PORTAL_REDIRECT.body
+    .replace('{loginUrl}', `${base}/login`)
+    .replace('{registerUrl}', `${base}/register`)
+  return sendText(phoneNumberId, from, body)
+}
+
+// LEGACY — disconnected; no live caller (publisher flows now → sendPublisherPortalRedirect). Reference only.
 function handlePublishSignMeUp(phoneNumberId, from, profileName) {
   conversationState.set(from, {
     step: conversationState.STEPS.PUBLISH_ASK_FULL_NAME,
@@ -295,6 +318,7 @@ function isPublisherRegisterTrigger(text) {
 // Send a new user straight into registration (no welcome/menu first); branch sensibly
 // for already-registered/pending users. Mirrors handlePublishButton but skips the
 // NOT_REGISTERED menu for new users by calling handlePublishSignMeUp directly.
+// LEGACY — disconnected; no live caller (publisher flows now → sendPublisherPortalRedirect). Reference only.
 async function handlePublisherRegisterTrigger(phoneNumberId, from, profileName) {
   const result = await checkPublisher(from)
   if (result.connectionError) {
@@ -311,16 +335,19 @@ async function handlePublisherRegisterTrigger(phoneNumberId, from, profileName) 
   return handlePublishSignMeUp(phoneNumberId, from, profileName)
 }
 
+// LEGACY — disconnected; no live caller (publisher flows now → sendPublisherPortalRedirect). Reference only.
 function handlePublishCommitNo(phoneNumberId, from) {
   conversationState.clear(from)
   return sendInteractiveButtons(phoneNumberId, from, PUBLISH.NOT_REGISTERED)
 }
 
+// LEGACY — disconnected; no live caller (publisher flows now → sendPublisherPortalRedirect). Reference only.
 function handlePublishCommitYes(phoneNumberId, from) {
   conversationState.set(from, { step: conversationState.STEPS.PUBLISH_ASK_TERMS_APPROVAL })
   return sendInteractiveButtons(phoneNumberId, from, PUBLISH.ASK_TERMS_APPROVAL)
 }
 
+// LEGACY — disconnected; no live caller (publisher flows now → sendPublisherPortalRedirect). Reference only.
 async function handlePublishTermsApproved(phoneNumberId, from) {
   const state = conversationState.get(from)
   const waId = from
@@ -341,39 +368,136 @@ async function handlePublishTermsApproved(phoneNumberId, from) {
     return sendText(phoneNumberId, from, PUBLISH.REGISTER_ERROR)
   }
   const thankYouPromise = sendInteractiveButtons(phoneNumberId, from, PUBLISH.THANK_YOU)
-  const approverWaId = config.publishersApproverWaNumber
-    ? normalizePhone(config.publishersApproverWaNumber)
-    : ''
-  if (approverWaId) {
-    storePublisherNameForApprover(approverWaId, waId, fullName)
-    const body = APPROVER.REQUEST_BODY_TEMPLATE.replace('{fullName}', fullName)
-      .replace('{publishingAs}', publishingAs)
-      .replace('{eventTypes}', eventTypesDescription)
-      .replace('{waId}', waId)
-    const buttons = [
-      { id: APPROVER.BUTTONS.approve.idPrefix + waId, title: APPROVER.BUTTONS.approve.title },
-      { id: APPROVER.BUTTONS.reject.idPrefix + waId, title: APPROVER.BUTTONS.reject.title },
-      {
-        id: APPROVER.BUTTONS.rejectNoReason.idPrefix + waId,
-        title: APPROVER.BUTTONS.rejectNoReason.title,
-      },
-    ]
-    const sendResult = await sendInteractiveButtons(phoneNumberId, approverWaId, { body, buttons })
-    if (sendResult.success && sendResult.messageId) {
-      messageIdToApproverWaId.set(sendResult.messageId, approverWaId)
-      lastApproverRequestPayloadByMessageId.set(sendResult.messageId, {
-        approverWaId,
-        body,
-        buttons,
-        publisherWaId: waId,
-        fullName,
-      })
-    }
-    if (!sendResult.success) {
-      logger.error(LOG_PREFIXES.WEBHOOK, 'Notify approver failed', sendResult.error)
-    }
-  }
+  await notifyApproverOfRegistration({ phoneNumberId, waId, fullName, accountName: publishingAs, eventTypesDescription })
   return thankYouPromise
+}
+
+/**
+ * Send the approver the Approve/Reject buttons for a publisher registration. Shared
+ * by the bot flow (above) AND the website registration flow (via the
+ * /internal/notify-approver endpoint), so both paths get the identical one-tap
+ * approval UX. The buttons call the same approve/reject API endpoints.
+ */
+export async function notifyApproverOfRegistration({ phoneNumberId, waId, fullName = '', accountName = '', eventTypesDescription = '', email = '' }) {
+  const approverWaId = config.publishersApproverWaNumber ? normalizePhone(config.publishersApproverWaNumber) : ''
+  if (!approverWaId) {
+    logger.warn(LOG_PREFIXES.WEBHOOK, 'No PUBLISHERS_APPROVER_WA_NUMBER configured — registration not surfaced to an approver')
+    return { success: false, error: 'no_approver' }
+  }
+  storePublisherNameForApprover(approverWaId, waId, fullName)
+  let body = APPROVER.REQUEST_BODY_TEMPLATE
+    .replace('{fullName}', fullName)
+    .replace('{publishingAs}', accountName)
+    .replace('{eventTypes}', eventTypesDescription)
+    .replace('{waId}', waId)
+  if (email) body += `\n*אימייל:* ${email}`
+  const buttons = [
+    { id: APPROVER.BUTTONS.approve.idPrefix + waId, title: APPROVER.BUTTONS.approve.title },
+    { id: APPROVER.BUTTONS.reject.idPrefix + waId, title: APPROVER.BUTTONS.reject.title },
+    { id: APPROVER.BUTTONS.rejectNoReason.idPrefix + waId, title: APPROVER.BUTTONS.rejectNoReason.title },
+  ]
+  const sendResult = await sendInteractiveButtons(phoneNumberId, approverWaId, { body, buttons })
+  if (sendResult.success && sendResult.messageId) {
+    messageIdToApproverWaId.set(sendResult.messageId, approverWaId)
+    lastApproverRequestPayloadByMessageId.set(sendResult.messageId, { approverWaId, body, buttons, publisherWaId: waId, fullName })
+  }
+  if (!sendResult.success) {
+    logger.error(LOG_PREFIXES.WEBHOOK, 'Notify approver failed', sendResult.error)
+  }
+  return sendResult
+}
+
+/**
+ * POST /internal/notify-approver (API_SECRET via x-api-secret) — the website
+ * registration flow calls this after phone verification so the approver receives
+ * the same Approve/Reject buttons as a bot registration. Uses the configured Cloud
+ * API phone number id (no incoming-webhook context).
+ */
+export function handleNotifyApprover(req, res) {
+  const secret = req.headers['x-api-secret'] || req.headers['x-api-key'] || ''
+  if (!config.galiluzAppApiKey || secret !== config.galiluzAppApiKey) {
+    res.writeHead(401, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'unauthorized' }))
+    return
+  }
+  const chunks = []
+  req.on('data', (c) => chunks.push(c))
+  req.on('end', async () => {
+    try {
+      const data = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}
+      const waId = normalizePhone(data.waId || '')
+      if (!waId) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'waId required' }))
+        return
+      }
+      await notifyApproverOfRegistration({
+        phoneNumberId: config.whatsapp.phoneNumberId,
+        waId,
+        fullName: data.fullName,
+        accountName: data.accountName,
+        eventTypesDescription: data.eventTypesDescription,
+        email: data.email,
+      })
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ success: true }))
+    } catch (err) {
+      logger.error(LOG_PREFIXES.WEBHOOK, 'notify-approver failed', err instanceof Error ? err.message : String(err))
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'internal' }))
+    }
+  })
+}
+
+/**
+ * POST /internal/notify-approver-event (API_SECRET via x-api-secret) — the WEB app calls
+ * this when an event becomes active (draft → published) so the approver gets the SAME
+ * "new event added" notification + delete button as bot-created events. The web builds
+ * the body (it owns the event shape); the bot just relays it with the delete button and
+ * stores the publisher phone + title for the delete flow.
+ */
+export function handleNotifyApproverEvent(req, res) {
+  const secret = req.headers['x-api-secret'] || req.headers['x-api-key'] || ''
+  if (!config.galiluzAppApiKey || secret !== config.galiluzAppApiKey) {
+    res.writeHead(401, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'unauthorized' }))
+    return
+  }
+  const chunks = []
+  req.on('data', (c) => chunks.push(c))
+  req.on('end', async () => {
+    try {
+      const data = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}
+      const eventId = typeof data.eventId === 'string' ? data.eventId : ''
+      const body = typeof data.body === 'string' ? data.body : ''
+      if (!eventId || !body) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'eventId and body required' }))
+        return
+      }
+      const approverWaId = config.publishersApproverWaNumber ? normalizePhone(config.publishersApproverWaNumber) : ''
+      if (!approverWaId) {
+        logger.warn(LOG_PREFIXES.WEBHOOK, 'No PUBLISHERS_APPROVER_WA_NUMBER — web event not surfaced to an approver')
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: false, error: 'no_approver' }))
+        return
+      }
+      approverEventNotifications.store(eventId, {
+        publisherPhone: typeof data.publisherPhone === 'string' ? data.publisherPhone : '',
+        eventTitle: typeof data.eventTitle === 'string' ? data.eventTitle : '',
+      })
+      await sendInteractiveButtons(config.whatsapp.phoneNumberId, approverWaId, {
+        body,
+        buttons: [{ id: `approver_delete_event_${eventId}`, title: APPROVER.DELETE_EVENT_BUTTON.title }],
+      })
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ success: true }))
+    } catch (err) {
+      logger.error(LOG_PREFIXES.WEBHOOK, 'notify-approver-event failed', err instanceof Error ? err.message : String(err))
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'internal' }))
+    }
+  })
 }
 
 async function handleApproverFlow(phoneNumberId, from, msg) {
@@ -405,10 +529,9 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       const ok = await approvePublisher(waId)
       conversationState.clear(from)
       if (ok.success) {
-        await sendInteractiveButtons(phoneNumberId, waId, {
-          body: PUBLISHER.APPROVED.body,
-          buttons: PUBLISHER.APPROVED.buttons,
-        })
+        // Bot event-creation is being retired → send approved publishers to the web portal.
+        const loginUrl = `${(config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')}/login`
+        await sendText(phoneNumberId, waId, PUBLISHER.APPROVED.body.replace('{loginUrl}', loginUrl))
       }
       await sendText(
         phoneNumberId,
@@ -554,12 +677,15 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
   const state = conversationState.get(from)
   const profileName = context.profileName
 
-  if (isEventAddStep(state.step)) {
-    return handleEventAddFlow(phoneNumberId, from, msg, state, {
-      profileName,
-      managerTargetPhone: state.managerTargetPhone || null,
-    })
-  }
+  // LEGACY: in-bot event-add state machine — disconnected. No entry sets EVENT_ADD_* steps
+  // anymore (publisher actions reply with PORTAL_REDIRECT), so this never matches. Kept for
+  // reference; see flows/eventAddFlow.js.
+  // if (isEventAddStep(state.step)) {
+  //   return handleEventAddFlow(phoneNumberId, from, msg, state, {
+  //     profileName,
+  //     managerTargetPhone: state.managerTargetPhone || null,
+  //   })
+  // }
 
   if (interactive?.type === 'button_reply') {
     const id = interactive.button_reply?.id
@@ -574,8 +700,8 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       return sendInteractiveButtons(phoneNumberId, from, DISCOVER.ASK_TIME)
     }
     if (id === 'publish') {
-      if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)
-      return handlePublishButton(phoneNumberId, from, profileName)
+      // LEGACY: in-bot publish flow retired → web portal redirect.
+      return sendPublisherPortalRedirect(phoneNumberId, from)
     }
     if (id === 'contact') {
       return sendText(phoneNumberId, from, CONTACT.MESSAGE)
@@ -583,40 +709,21 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if (id === 'back_to_menu' || id === 'back_to_main') {
       return handleBackToMenu(phoneNumberId, from)
     }
-    if (id === 'manager_upload_self') {
-      conversationState.set(from, { managerTargetPhone: undefined })
-      return handlePublishButton(phoneNumberId, from, profileName)
-    }
-    if (id === 'event_add_new') {
-      if (state.step === conversationState.STEPS.EVENT_ADD_SUCCESS) conversationState.clear(from)
-      if (state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION) return sendEventAddMethodChoice(phoneNumberId, from)
-      if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from, 'event_add_new')
-      const { status, fullName: publisherFullName, publishingAs: publisherPublishingAs } = await checkPublisher(from)
-      if (status === 'approved') {
-        conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION, publisherFullName: publisherFullName || '', publisherPublishingAs: publisherPublishingAs || '' })
-        return sendEventAddMethodChoice(phoneNumberId, from)
-      }
-      return handlePublishButton(phoneNumberId, from, profileName)
-    }
-    if (state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION) {
-      if (id === 'event_update') {
-        return handleEventUpdateChoice(phoneNumberId, from)
-      }
-      if (id === 'event_delete') {
-        return handleEventDeleteChoice(phoneNumberId, from)
-      }
-    }
-    if (id === 'publish_sign_me_up') {
-      return handlePublishSignMeUp(phoneNumberId, from, profileName)
-    }
-    if (id === 'publish_commit_no') {
-      return handlePublishCommitNo(phoneNumberId, from)
-    }
-    if (id === 'publish_commit_yes' && state.step === conversationState.STEPS.PUBLISH_ASK_COMMITMENT) {
-      return handlePublishCommitYes(phoneNumberId, from)
-    }
-    if (id === 'publish_terms_approved' && state.step === conversationState.STEPS.PUBLISH_ASK_TERMS_APPROVAL) {
-      return handlePublishTermsApproved(phoneNumberId, from)
+    // LEGACY: every in-bot publisher action (publish / add / update / delete event, and
+    // the registration buttons) now replies with the portal redirect. The handler
+    // functions + flow files are kept for reference (see their LEGACY banners) but are no
+    // longer called. `discover`, `contact`, `back_to_menu`, `today`/`tomorrow` stay live.
+    if (
+      id === 'manager_upload_self' ||
+      id === 'event_add_new' ||
+      id === 'event_update' ||
+      id === 'event_delete' ||
+      id === 'publish_sign_me_up' ||
+      id === 'publish_commit_no' ||
+      id === 'publish_commit_yes' ||
+      id === 'publish_terms_approved'
+    ) {
+      return sendPublisherPortalRedirect(phoneNumberId, from)
     }
     if (
       (id === 'today' || id === 'tomorrow') &&
@@ -632,6 +739,10 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
     if (listReplyId) return handleDiscoverListReply(phoneNumberId, from, listReplyId)
   }
 
+  /* LEGACY — disconnected. Publisher event-list selection (update/delete) is unreachable:
+     nothing sets EVENT_UPDATE_SELECT_EVENT / EVENT_DELETE_SELECT_EVENT anymore (publisher
+     actions reply with PORTAL_REDIRECT). Kept for reference; see flows/eventEditFlow.js.
+     The DISCOVER_CATEGORY list_reply above stays live.
   if (interactive?.type === 'list_reply') {
     const listReplyId = interactive.list_reply?.id || ''
     if (state.step === conversationState.STEPS.EVENT_UPDATE_SELECT_EVENT) {
@@ -685,13 +796,14 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       }
     }
   }
+  */
 
   if (msg.type === 'text' && msg.text?.body) {
     const textBody = String(msg.text.body).trim()
-    // Website "register as a publisher" deep link → jump straight into registration,
-    // ahead of intent classification and step routing, so a fresh user sees no menu first.
+    // Website "register as a publisher" deep link. LEGACY: in-bot registration retired →
+    // portal redirect (the message itself links to /register).
     if (textBody && isPublisherRegisterTrigger(textBody)) {
-      return handlePublisherRegisterTrigger(phoneNumberId, from, profileName)
+      return sendPublisherPortalRedirect(phoneNumberId, from)
     }
     const isWelcome = state.step === conversationState.STEPS.WELCOME
     const isPublisherChoice = state.step === conversationState.STEPS.PUBLISHER_CHOOSE_ACTION
@@ -713,50 +825,11 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
           if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
           return sendText(phoneNumberId, from, CONTACT.MESSAGE)
         }
-        if (intent === 'publish') {
-          if (isSuccessScreen) conversationState.clear(from)
-          if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
-          if (isManager(from)) return sendManagerAskTargetPhone(phoneNumberId, from)
-          return handlePublishButton(phoneNumberId, from, profileName)
-        }
-        if (intent === 'event_add_new') {
-          if (isSuccessScreen) conversationState.clear(from)
-          if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
-          if (isPublisherChoice) return sendEventAddMethodChoice(phoneNumberId, from)
-          if (isManager(from)) {
-            if (state.managerTargetPhone) return sendEventAddMethodChoice(phoneNumberId, from)
-            return sendManagerAskTargetPhone(phoneNumberId, from, 'event_add_new')
-          }
-          const { status, fullName: publisherFullName } = await checkPublisher(from)
-          if (status === 'approved') {
-            conversationState.set(from, { step: conversationState.STEPS.PUBLISHER_CHOOSE_ACTION, publisherFullName: publisherFullName || '' })
-            return sendEventAddMethodChoice(phoneNumberId, from)
-          }
-          return handlePublishButton(phoneNumberId, from, profileName)
-        }
-        if (intent === 'event_update') {
-          if (isSuccessScreen) conversationState.clear(from)
-          if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
-          if (isPublisherChoice) return handleEventUpdateChoice(phoneNumberId, from)
-          if (isManager(from)) {
-            if (state.managerTargetPhone) return handleEventUpdateChoice(phoneNumberId, from)
-            return sendManagerAskTargetPhone(phoneNumberId, from, 'event_update')
-          }
-          const { status } = await checkPublisher(from)
-          if (status === 'approved') return handleEventUpdateChoice(phoneNumberId, from)
-          return handlePublishButton(phoneNumberId, from, profileName)
-        }
-        if (intent === 'event_delete') {
-          if (isSuccessScreen) conversationState.clear(from)
-          if (isFirstMessageFlow) await sendText(phoneNumberId, from, MAIN_MENU.FIRST_MESSAGE_FLOW_ACK)
-          if (isPublisherChoice) return handleEventDeleteChoice(phoneNumberId, from)
-          if (isManager(from)) {
-            if (state.managerTargetPhone) return handleEventDeleteChoice(phoneNumberId, from)
-            return sendManagerAskTargetPhone(phoneNumberId, from, 'event_delete')
-          }
-          const { status } = await checkPublisher(from)
-          if (status === 'approved') return handleEventDeleteChoice(phoneNumberId, from)
-          return handlePublishButton(phoneNumberId, from, profileName)
+        // LEGACY: in-bot publisher intents (publish / add / update / delete event) retired
+        // → web portal redirect. `discover`, `contact`, `irrelevant`, `unclear` stay live.
+        // sendPublisherPortalRedirect clears state, so no separate clear is needed here.
+        if (intent === 'publish' || intent === 'event_add_new' || intent === 'event_update' || intent === 'event_delete') {
+          return sendPublisherPortalRedirect(phoneNumberId, from)
         }
         if (intent === 'irrelevant') {
           if (isSuccessScreen) {
@@ -799,6 +872,9 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
         return sendInteractiveButtons(phoneNumberId, from, MAIN_MENU.INTENT_UNCLEAR)
       }
     }
+    /* LEGACY — disconnected. Publisher text-input steps (delete-confirm, registration
+       questions, manager target-phone) are unreachable: no entry sets these steps anymore
+       (publisher actions reply with PORTAL_REDIRECT). Kept for reference; see flows/.
     if (state.step === conversationState.STEPS.EVENT_DELETE_CONFIRM) {
       if (textBody === EVENT_LIST.DELETE_CONFIRM_KEYWORD) {
         const eventId = state.eventDeleteSelectedId
@@ -852,22 +928,18 @@ async function processOneMessage(phoneNumberId, from, msg, context = {}) {
       if (intendedAction === 'event_delete') return handleEventDeleteChoice(phoneNumberId, from)
       return sendInteractiveButtons(phoneNumberId, from, PUBLISHER.HOW_TO_CONTINUE)
     }
+    */
   }
 
-  if (state.step === conversationState.STEPS.MANAGER_ASK_TARGET_PHONE) {
-    return sendManagerAskTargetPhone(phoneNumberId, from)
-  }
-
-  const publishSteps = [
-    conversationState.STEPS.PUBLISH_ASK_FULL_NAME,
-    conversationState.STEPS.PUBLISH_ASK_PUBLISHING_AS,
-    conversationState.STEPS.PUBLISH_ASK_EVENT_TYPES,
-    conversationState.STEPS.PUBLISH_ASK_COMMITMENT,
-    conversationState.STEPS.PUBLISH_ASK_TERMS_APPROVAL,
-  ]
-  if (publishSteps.includes(state.step) && msg.type !== 'text') {
-    return sendText(phoneNumberId, from, PUBLISH.EXPECT_TEXT)
-  }
+  // LEGACY — disconnected. Manager target-phone non-text guard + the publish-step
+  // "expecting text" guard are unreachable now (those steps are never set). Reference only.
+  // if (state.step === conversationState.STEPS.MANAGER_ASK_TARGET_PHONE) {
+  //   return sendManagerAskTargetPhone(phoneNumberId, from)
+  // }
+  // const publishSteps = [ PUBLISH_ASK_FULL_NAME … PUBLISH_ASK_TERMS_APPROVAL ]
+  // if (publishSteps.includes(state.step) && msg.type !== 'text') {
+  //   return sendText(phoneNumberId, from, PUBLISH.EXPECT_TEXT)
+  // }
 
   conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
   return sendInteractiveButtons(phoneNumberId, from, WELCOME.MAIN_MENU_RETURN)

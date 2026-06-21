@@ -1,3 +1,4 @@
+import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import type { PublisherSession } from '~/server/utils/requirePublisherAuth'
 
@@ -15,15 +16,17 @@ import type { PublisherSession } from '~/server/utils/requirePublisherAuth'
 interface PublisherDoc {
   _id: { toString(): string }
   accountId?: string
-  publishingAs?: string
+  accountName?: string
+  publishingAs?: string // legacy carrier — removed by migrate-publishingas-to-account.js
   waId?: string
 }
 
 /**
  * Ensure the publisher has an account; returns its accountId.
  * Idempotent: if the publisher already has `accountId`, it is returned unchanged.
- * Otherwise a new account is created (title = publishingAs, falling back to waId)
- * and stamped onto the publisher.
+ * Otherwise a new account is created (title = the publisher's `accountName`) and
+ * stamped onto the publisher. `publishingAs` is a transitional fallback for any
+ * bot-pending doc not yet touched by the migration; `waId` is the last resort.
  */
 export async function ensureAccountForPublisher(publisherDoc: PublisherDoc): Promise<string> {
   if (publisherDoc?.accountId) return publisherDoc.accountId
@@ -36,7 +39,7 @@ export async function ensureAccountForPublisher(publisherDoc: PublisherDoc): Pro
   // deletedAt is intentionally omitted (absent until soft-delete) so the
   // date-typed accounts validator accepts the insert.
   const { insertedId } = await accounts.insertOne({
-    title: publisherDoc.publishingAs || publisherDoc.waId || 'Account',
+    title: publisherDoc.accountName || publisherDoc.publishingAs || publisherDoc.waId || 'Account',
     isActive: true,
     createdAt: new Date(),
   })
@@ -44,6 +47,28 @@ export async function ensureAccountForPublisher(publisherDoc: PublisherDoc): Pro
 
   await publishers.updateOne({ _id: publisherDoc._id }, { $set: { accountId } })
   return accountId
+}
+
+/**
+ * Resolve a publisher's display "account title": the linked account's `title` when
+ * an `accountId` exists, else the pending-period `accountName`, else the waId. This
+ * is the single source for the API/session `publishingAs` field after the account-name
+ * relocation (publishers no longer store `publishingAs`).
+ */
+export async function resolveAccountTitle(input: { accountId?: string | null; accountName?: string | null; waId?: string | null }): Promise<string> {
+  const { accountId, accountName, waId } = input
+  if (accountId) {
+    try {
+      const config = useRuntimeConfig() as Record<string, string>
+      const { db } = await getMongoConnection()
+      const accounts = db.collection(config.mongodbCollectionAccounts || 'accounts')
+      const acc = await accounts.findOne({ _id: new ObjectId(accountId) }, { projection: { title: 1 } })
+      if (acc?.title) return String(acc.title)
+    } catch {
+      // invalid ObjectId / lookup failure → fall through to the carrier/waId
+    }
+  }
+  return accountName || waId || ''
 }
 
 /**

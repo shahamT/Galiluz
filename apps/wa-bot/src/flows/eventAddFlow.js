@@ -1,3 +1,8 @@
+// ⚠️ LEGACY — DISCONNECTED. The in-bot publisher event flows were retired; publishers now
+// manage events on the web portal. Every publisher entry point in routes/webhook.js replies
+// with PUBLISHER.PORTAL_REDIRECT (see sendPublisherPortalRedirect). Nothing in this file is
+// reached at runtime anymore — it is kept for reference only. Do NOT re-wire it; build new
+// publisher features on the web app instead.
 /**
  * Event-add flow: multi-step form for approved publishers.
  * Handles timeout, cancel (ביטול / back), validation, media upload, and submit.

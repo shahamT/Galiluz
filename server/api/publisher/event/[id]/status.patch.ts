@@ -4,6 +4,7 @@ import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { getAccountPublisherIds } from '~/server/utils/accountScope'
 import { logEventStatusChange } from '~/server/utils/eventLogs.service'
+import { notifyApproverOfEventActivation } from '~/server/utils/notifyApproverEvent'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
@@ -47,6 +48,16 @@ export default defineEventHandler(async (event) => {
       correlationId: randomBytes(4).toString('hex'),
       isManagerAction: session.type === 'manager' && !ownsEvent,
     })
+  }
+
+  // Publishing (draft → active): surface the event to the approver, same as the bot does
+  // for bot-created events. Guarded by approverNotifiedAt (stamped by the util on success):
+  // a plain re-publish of an unchanged event stays silent, but an edit clears the flag (see
+  // [id].patch.ts) so a republish after a content change re-notifies. Fire-and-forget.
+  if (body.isActive === true && doc.isActive !== true && !doc.approverNotifiedAt) {
+    notifyApproverOfEventActivation(doc).catch((err) =>
+      console.error('[publisher] approver event notify failed:', err instanceof Error ? err.message : String(err)),
+    )
   }
 
   return { success: true, isActive: body.isActive }

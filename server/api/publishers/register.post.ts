@@ -3,9 +3,11 @@ import { requireApiSecret } from '~/server/utils/requireApiSecret'
 
 interface RegisterBody {
   waId: string
-  profileName?: string
   fullName: string
-  publishingAs: string
+  // The account name. The wa-bot still sends it as `publishingAs`; we accept either
+  // and store it as `accountName` (it becomes accounts.title on approval).
+  accountName?: string
+  publishingAs?: string
   eventTypesDescription: string
   approvedTerms?: boolean
 }
@@ -16,16 +18,16 @@ export default defineEventHandler(async (event) => {
 
   const waId = typeof body?.waId === 'string' ? body.waId.trim() : ''
   const fullName = typeof body?.fullName === 'string' ? body.fullName.trim() : ''
-  const publishingAs = typeof body?.publishingAs === 'string' ? body.publishingAs.trim() : ''
+  const accountName = (typeof body?.accountName === 'string' ? body.accountName
+    : typeof body?.publishingAs === 'string' ? body.publishingAs : '').trim()
   const eventTypesDescription =
     typeof body?.eventTypesDescription === 'string' ? body.eventTypesDescription.trim() : ''
-  const profileName = typeof body?.profileName === 'string' ? body.profileName.trim() : undefined
 
-  if (!waId || !fullName || !publishingAs || !eventTypesDescription) {
+  if (!waId || !fullName || !accountName || !eventTypesDescription) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Bad Request',
-      message: 'waId, fullName, publishingAs, eventTypesDescription are required',
+      message: 'waId, fullName, accountName/publishingAs, eventTypesDescription are required',
     })
   }
 
@@ -58,9 +60,8 @@ export default defineEventHandler(async (event) => {
       { waId },
       {
         $set: {
-          profileName: profileName ?? null,
           fullName,
-          publishingAs,
+          accountName,
           eventTypesDescription,
           status: 'pending',
           type: 'publisher',

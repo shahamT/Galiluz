@@ -68,5 +68,12 @@ export function useTurnstile() {
     try { window.turnstile?.reset(widgetId) } catch { /* widget gone */ }
   }
 
-  return { enabled, render, reset }
+  /** Remove a widget entirely — call before its host element unmounts (e.g. a
+   *  multi-step form that re-renders the widget into a different element per step). */
+  function remove(widgetId) {
+    if (!enabled || widgetId === null || widgetId === undefined) return
+    try { window.turnstile?.remove(widgetId) } catch { /* already gone */ }
+  }
+
+  return { enabled, render, reset, remove }
 }

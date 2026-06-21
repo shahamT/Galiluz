@@ -105,6 +105,8 @@ export const DISCOVER = {
 }
 
 // --- PUBLISH ---
+// LEGACY — no longer reached. The in-bot publisher registration flow was retired; all
+// entries reply with PUBLISHER.PORTAL_REDIRECT. Kept for reference only.
 
 export const PUBLISH = {
   DEFAULT_PUBLISHER_LABEL: 'מפרסם',
@@ -186,13 +188,28 @@ export const APPROVER = {
 
 export const PUBLISHER = {
   APPROVED: {
+    // The bot's event-creation flow is being retired — direct approved publishers to the
+    // web publishers portal (login page) instead of the in-bot flow. {loginUrl} is
+    // injected at send time. (Reply buttons can't carry URLs, so this is sent as text.)
     body:
-      '*את/ה מאושר/ת!* (תרתי משמע 😉)\nמעכשיו את/ה יכול/ה לפרסם אירועים בגלילו"ז',
-    buttons: [
-      { id: 'publish', title: 'לפרסום אירוע' },
-      { id: 'back_to_main', title: 'בחזרה לתפריט הראשי' },
-    ],
+      '*את/ה מאושר/ת!* (תרתי משמע 😉)\nפרסמו את האירוע הראשון שלכם בגלילו"ז\n{loginUrl}',
   },
+  // Single redirect shown for every (now-legacy) publisher action — publish / update /
+  // delete an event, or register. The whole publisher lifecycle lives on the web portal
+  // now. {loginUrl}/{registerUrl} are injected at send time (reply buttons can't carry
+  // URLs, so this is sent as text and WhatsApp auto-links the URLs).
+  PORTAL_REDIRECT: {
+    body:
+      'כבר נרשמתם כמפרסמים לגלילו"ז?\n' +
+      'היכנסו עכשיו לאיזור האישי ופרסמו אירועים!\n' +
+      'עוד לא נרשמתם? הירשמו כמפרסמים\n\n' +
+      'כניסה לאיזור האישי 👇\n{loginUrl}\n\n' +
+      'הצטרפות כמפרסמים 👇\n{registerUrl}',
+  },
+  // LEGACY — no longer reached. The in-bot publisher flows (registration + add/update/
+  // delete event) were retired; all entry points now reply with PORTAL_REDIRECT above.
+  // The consts below are kept for reference only. See routes/webhook.js
+  // (sendPublisherPortalRedirect) and the LEGACY banners in flows/eventAddFlow.js.
   HOW_TO_CONTINUE: {
     body: 'איך תרצו להמשיך?',
     buttons: [
@@ -208,6 +225,7 @@ export const PUBLISHER = {
 }
 
 // --- EVENT LIST (update/delete flow) ---
+// LEGACY — no longer reached (in-bot update/delete retired → PUBLISHER.PORTAL_REDIRECT). Reference only.
 
 export const EVENT_LIST = {
   ALL_DAY_TEXT: 'כל היום',
@@ -233,6 +251,7 @@ export const EVENT_LIST = {
 }
 
 // --- EVENT ADD (define before EVENT_EDIT - cross-refs) ---
+// LEGACY — no longer reached (in-bot event add retired → PUBLISHER.PORTAL_REDIRECT). Reference only.
 
 const SKIP_MEDIA_FINISH_BUTTON_ID = 'event_add_skip'
 
@@ -555,6 +574,7 @@ export const EVENT_EDIT = {
 }
 
 // --- MANAGER (managers upload on behalf of another user) ---
+// LEGACY — no longer reached (in-bot on-behalf publishing retired → PUBLISHER.PORTAL_REDIRECT). Reference only.
 
 export const MANAGER = {
   ASK_TARGET_PHONE: {

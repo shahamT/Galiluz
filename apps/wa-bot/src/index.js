@@ -3,7 +3,7 @@ import { createServer } from 'http'
 import { config } from './config.js'
 import { logger } from './utils/logger.js'
 import { LOG_PREFIXES } from './consts/index.js'
-import { handleGet, handlePost } from './routes/webhook.js'
+import { handleGet, handlePost, handleNotifyApprover, handleNotifyApproverEvent } from './routes/webhook.js'
 
 function parseUrl(req) {
   try {
@@ -35,6 +35,16 @@ const server = createServer((req, res) => {
       handlePost(req, res)
       return
     }
+  }
+  // Internal (API_SECRET): web registration → send the approver Approve/Reject buttons.
+  if (pathname === '/internal/notify-approver' && req.method === 'POST') {
+    handleNotifyApprover(req, res)
+    return
+  }
+  // Internal (API_SECRET): web event publish → send the approver the "new event" + delete button.
+  if (pathname === '/internal/notify-approver-event' && req.method === 'POST') {
+    handleNotifyApproverEvent(req, res)
+    return
   }
   res.writeHead(404, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify({ error: 'Not found' }))

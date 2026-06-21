@@ -26,11 +26,14 @@
             />
           </div>
 
-          <p v-if="error && !notRegistered" class="LoginCard-error">{{ error }}</p>
+          <p v-if="cooldownMsg" class="LoginCard-error">{{ cooldownMsg }}</p>
+          <p v-else-if="error && !notRegistered" class="LoginCard-error">{{ error }}</p>
           <p v-if="notRegistered" class="LoginCard-error">
             המספר אינו רשום כמפרסם מאושר.
-            <a :href="PUBLISH_EVENT_WHATSAPP_LINK" target="_blank" rel="noopener noreferrer" class="LoginCard-errorLink">לחצו כאן להרשמה דרך הבוט</a>
+            <NuxtLink to="/register" class="LoginCard-errorLink">להרשמה כמפרסם חדש</NuxtLink>
           </p>
+
+          <div v-show="turnstileEnabled" ref="turnstileEl" class="LoginCard-turnstile" />
 
           <button type="submit" class="LoginCard-btn" :disabled="loading || !phone.trim() || waitingForCaptcha">
             <span v-if="loading" class="LoginCard-spinner" />
@@ -40,9 +43,9 @@
 
         <div class="LoginCard-register">
           <span class="LoginCard-registerText">עדיין לא נרשמתם כמפרסמים?</span>
-          <button type="button" class="LoginCard-registerLink" @click="showRegisterModal = true">
+          <NuxtLink to="/register" class="LoginCard-registerLink" @click="capture('publisher_register_cta_clicked', { source: 'login' })">
             לחצו כאן להרשמה מהירה!
-          </button>
+          </NuxtLink>
         </div>
       </template>
 
@@ -54,25 +57,12 @@
           <strong dir="ltr" class="LoginCard-subtitlePhone">{{ displayPhone }}</strong>
         </p>
 
-        <div class="LoginCard-otpRow" dir="ltr">
-          <input
-            v-for="(_, i) in 6"
-            :key="i"
-            :ref="(el) => { if (el) otpInputs[i] = el }"
-            v-model="otpDigits[i]"
-            type="text"
-            inputmode="numeric"
-            maxlength="1"
-            class="LoginCard-otpBox"
-            :class="{ 'LoginCard-otpBox--error': !!error }"
-            :disabled="loading"
-            @keydown="(e) => handleOtpKeydown(e, i)"
-            @input="(e) => handleOtpInput(e, i)"
-            @paste.prevent="handleOtpPaste"
-          />
-        </div>
+        <FormOtpInput ref="otpInputRef" v-model="otpCode" :disabled="loading" :has-error="!!error" @complete="handleVerifyOtp" />
 
         <p v-if="error" class="LoginCard-error">{{ error }}</p>
+        <p v-else-if="cooldownMsg" class="LoginCard-error">{{ cooldownMsg }}</p>
+
+        <div v-show="turnstileEnabled" ref="turnstileEl" class="LoginCard-turnstile" />
 
         <button class="LoginCard-btn" :disabled="loading || otpCode.length < 6" @click="handleVerifyOtp">
           <span v-if="loading" class="LoginCard-spinner" />
@@ -100,17 +90,7 @@
           <h1 class="LoginCard-title">ברוך הבא!</h1>
         </div>
       </template>
-
-      <!-- Turnstile lives outside the state blocks: both send and resend need a fresh token -->
-      <div v-show="turnstileEnabled && state !== 'success'" ref="turnstileEl" class="LoginCard-turnstile" />
     </div>
-
-    <UiRegisterPublisherModal
-      :open="showRegisterModal"
-      :href="PUBLISHER_REGISTER_WHATSAPP_LINK"
-      @register="goToRegister"
-      @close="showRegisterModal = false"
-    />
   </div>
 </template>
 
@@ -119,29 +99,24 @@ defineOptions({ name: 'LoginPage' })
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'כניסה | גלילו"ז' })
 
-import { PUBLISH_EVENT_WHATSAPP_LINK, PUBLISHER_REGISTER_WHATSAPP_LINK } from '~/consts/ui.const'
-
 const { sendOtp, verifyOtp } = useAuth()
 const { capture } = usePosthog()
 const authStore = useAuthStore()
-const { enabled: turnstileEnabled, render: renderTurnstile, reset: resetTurnstile } = useTurnstile()
+const { enabled: turnstileEnabled, render: renderTurnstile, reset: resetTurnstile, remove: removeTurnstile } = useTurnstile()
 
 const state = ref('phone') // 'phone' | 'otp' | 'success'
 const phone = ref('')
-const otpDigits = ref(Array(6).fill(''))
-const otpInputs = ref([])
+const otpCode = ref('')
+const otpInputRef = ref(null)
 const loading = ref(false)
 const error = ref('')
 const notRegistered = ref(false)
 const resendCountdown = ref(0)
+const cooldownError = ref(false) // a send hit the 60s cooldown → show the live countdown text
 let countdownTimer = null
 
-const showRegisterModal = ref(false)
-// The modal's CTA is a real <a> (reliable WhatsApp deep-link); here we only track + close.
-function goToRegister() {
-  capture('publisher_register_cta_clicked', { source: 'login' })
-  showRegisterModal.value = false
-}
+// Live "resend in N seconds" text — ticks down with resendCountdown and clears itself at 0.
+const cooldownMsg = computed(() => (cooldownError.value && resendCountdown.value > 0) ? `אפשר לשלוח קוד חדש בעוד ${resendCountdown.value} שניות` : '')
 
 // Cloudflare Turnstile: tokens are single-use — reset after every send attempt
 const turnstileEl = ref(null)
@@ -149,9 +124,8 @@ const turnstileToken = ref('')
 let turnstileWidgetId = null
 const waitingForCaptcha = computed(() => turnstileEnabled && !turnstileToken.value)
 
-onMounted(async () => {
-  if (!turnstileEnabled) return
-  turnstileWidgetId = await renderTurnstile(turnstileEl.value, {
+function mountTurnstile() {
+  return renderTurnstile(turnstileEl.value, {
     onToken: (token) => { turnstileToken.value = token },
     onExpire: () => { turnstileToken.value = '' },
     onError: (code) => {
@@ -164,6 +138,24 @@ onMounted(async () => {
       }
     },
   })
+}
+
+// The widget shows right above each state's button. The initial phone state mounts
+// it here; the watcher re-mounts it into the OTP state's element on transition (and
+// back), since each state renders its own element. The success state needs none.
+onMounted(async () => {
+  if (!turnstileEnabled) return
+  turnstileWidgetId = await mountTurnstile()
+})
+
+watch(state, async (s) => {
+  if (!turnstileEnabled) return
+  removeTurnstile(turnstileWidgetId)
+  turnstileWidgetId = null
+  turnstileToken.value = ''
+  if (s !== 'phone' && s !== 'otp') return
+  await nextTick()
+  turnstileWidgetId = await mountTurnstile()
 })
 
 function refreshTurnstile() {
@@ -171,7 +163,6 @@ function refreshTurnstile() {
   resetTurnstile(turnstileWidgetId)
 }
 
-const otpCode = computed(() => otpDigits.value.join(''))
 const displayPhone = computed(() => phone.value.replace(/^972/, '0'))
 
 function parseErrorMessage(err) {
@@ -187,6 +178,7 @@ function parseErrorMessage(err) {
     const mins = msg.split(':')[1]
     return `שלחתם יותר מדי קודים. נסו שוב בעוד ${mins} דקות`
   }
+  if (msg.startsWith('resend_cooldown:')) return `אפשר לשלוח קוד חדש בעוד ${msg.split(':')[1]} שניות`
   if (msg === 'captcha_failed') return 'אימות האבטחה נכשל. נסו שוב'
   if (msg === 'captcha_unavailable') return 'שירות האבטחה אינו זמין כרגע. נסו שוב בעוד רגע'
   if (msg === 'otp_expired') return 'הקוד פג תוקף. שלחו קוד חדש'
@@ -210,18 +202,26 @@ function startResendCountdown(seconds = 60) {
 async function handleSendOtp() {
   if (!phone.value.trim() || loading.value || waitingForCaptcha.value) return
   error.value = ''
+  cooldownError.value = false
   loading.value = true
   try {
     await sendOtp(phone.value, turnstileToken.value)
     state.value = 'otp'
     startResendCountdown()
     await nextTick()
-    otpInputs.value[0]?.focus()
+    otpInputRef.value?.focus()
   } catch (err) {
+    // Stayed on the phone state → reset the widget for a fresh token to retry.
     notRegistered.value = false
-    error.value = parseErrorMessage(err)
-  } finally {
+    const msg = err?.data?.message || ''
+    if (msg.startsWith('resend_cooldown:')) {
+      cooldownError.value = true
+      startResendCountdown(parseInt(msg.split(':')[1], 10))
+    } else {
+      error.value = parseErrorMessage(err)
+    }
     refreshTurnstile()
+  } finally {
     loading.value = false
   }
 }
@@ -229,15 +229,22 @@ async function handleSendOtp() {
 async function handleResend() {
   if (resendCountdown.value > 0 || loading.value || waitingForCaptcha.value) return
   error.value = ''
+  cooldownError.value = false
   loading.value = true
   try {
     await sendOtp(phone.value, turnstileToken.value)
-    otpDigits.value = Array(6).fill('')
+    otpCode.value = ''
     startResendCountdown()
     await nextTick()
-    otpInputs.value[0]?.focus()
+    otpInputRef.value?.focus()
   } catch (err) {
-    error.value = parseErrorMessage(err)
+    const msg = err?.data?.message || ''
+    if (msg.startsWith('resend_cooldown:')) {
+      cooldownError.value = true
+      startResendCountdown(parseInt(msg.split(':')[1], 10))
+    } else {
+      error.value = parseErrorMessage(err)
+    }
   } finally {
     refreshTurnstile()
     loading.value = false
@@ -264,50 +271,28 @@ async function handleVerifyOtp() {
     }, 800)
   } catch (err) {
     error.value = parseErrorMessage(err)
-    otpDigits.value = Array(6).fill('')
+    otpCode.value = ''
     await nextTick()
-    otpInputs.value[0]?.focus()
+    otpInputRef.value?.focus()
   } finally {
     loading.value = false
   }
 }
 
-function handleOtpInput(e, index) {
-  const val = e.target?.value?.replace(/\D/g, '').slice(-1) || ''
-  otpDigits.value[index] = val
-  if (val && index < 5) {
-    nextTick(() => otpInputs.value[index + 1]?.focus())
-  }
-  // Auto-submit is only triggered via handleOtpPaste to avoid double-submit on paste
-}
-
-function handleOtpKeydown(e, index) {
-  if (e.key === 'Backspace' && !otpDigits.value[index] && index > 0) {
-    nextTick(() => otpInputs.value[index - 1]?.focus())
-  }
-}
-
-function handleOtpPaste(e) {
-  const text = e.clipboardData?.getData('text') || ''
-  const digits = text.replace(/\D/g, '').slice(0, 6).split('')
-  digits.forEach((d, i) => { otpDigits.value[i] = d })
-  nextTick(() => {
-    const focusIdx = Math.min(digits.length, 5)
-    otpInputs.value[focusIdx]?.focus()
-    if (digits.length === 6) handleVerifyOtp()
-  })
-}
-
 function resetToPhone() {
   state.value = 'phone'
-  otpDigits.value = Array(6).fill('')
+  otpCode.value = ''
   error.value = ''
+  cooldownError.value = false
   notRegistered.value = false
   clearInterval(countdownTimer)
   resendCountdown.value = 0
 }
 
-onUnmounted(() => clearInterval(countdownTimer))
+onUnmounted(() => {
+  clearInterval(countdownTimer)
+  removeTurnstile(turnstileWidgetId)
+})
 </script>
 
 <style lang="scss">

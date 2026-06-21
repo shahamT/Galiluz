@@ -46,6 +46,8 @@ export const MAIN_MENU = {
   termsOfService: 'תנאי שימוש',
   sendFeedback: 'שלחו פידבק',
   contactUs: 'צרו קשר',
+  publisherLogin: 'כניסה למפרסמים',
+  publisherRegisterCta: 'מארגנים אירוע בצפון? הירשמו כמפרסמים',
 }
 
 // Support contact (not bot) – for menu "צרו קשר" link
@@ -65,6 +67,43 @@ export const PUBLISH_EVENT_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUM
 // phrase "רוצה להירשם כמפרסם" (apps/wa-bot routes that straight into registration).
 const PUBLISHER_REGISTER_PREFILL = 'אני רוצה להירשם כמפרסם בגלילו"ז'
 export const PUBLISHER_REGISTER_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(PUBLISHER_REGISTER_PREFILL)}`
+
+// Website publisher-registration page (/register) — replaces the bot deep-link.
+export const PUBLISHER_REGISTER_ROUTE = '/register'
+export const REGISTER_PAGE = {
+  title: 'הצטרפות כמפרסמים',
+  subtitle1: 'הפרסום בגלילו"ז חינמי לחלוטין!',
+  subtitle2: 'תהליך ההצטרפות קצרצר ואורך כדקה',
+  step1Title: 'פרטים אישיים',
+  step2Title: 'פרטי חשבון בגלילו"ז',
+  fullNameLabel: 'שם מלא',
+  emailLabel: 'אימייל',
+  phoneLabel: 'מספר טלפון',
+  accountNameLabel: 'שם החשבון',
+  accountNameHint: 'בשם מי אתם מפרסמים? שם העסק או סוג האירועים',
+  accountNamePlaceholder: "לדוגמה: פאב השכונה / יוזמה פרטית - ערבי שירה בציבור וכו'...",
+  eventTypesLabel: 'אילו אירועים אתם מתכוונים לפרסם?',
+  eventTypesHint: 'לדוגמה: \'הופעות ומסיבות\' / \'ערבי הקראת שירה\' וכו\'...',
+  termsPrefix: 'אני מאשר/ת את ',
+  termsLinkText: 'תנאי השימוש',
+  nextButton: 'המשך',
+  submitButton: 'שליחה ואימות טלפון',
+  otpTitle: 'אימות מספר הטלפון',
+  otpSubtitle: 'שלחנו קוד בן 6 ספרות לוואטסאפ של',
+  verifyButton: 'אימות',
+  changePhone: 'שינוי מספר',
+  changePhoneTitle: 'שינוי מספר טלפון',
+  changePhoneSubtitle: 'הזינו את המספר החדש ונשלח אליו קוד אימות חדש',
+  changePhoneConfirm: 'שליחת קוד למספר החדש',
+  changePhoneBack: 'חזרה למסך האימות',
+  resend: 'שליחה חוזרת',
+  successTitle: 'תודה שנרשמתם! 🎉',
+  successBody: 'הפרטים התקבלו ואנחנו נעבור עליהם בהקדם. ברגע שתאושרו תקבלו הודעת וואטסאפ ותוכלו להתחיל לפרסם אירועים בגלילו"ז.',
+  backToSchedule: 'בחזרה ללו"ז',
+  errAlreadyApproved: 'המספר שהזנת כבר שייך למפרסם רשום.',
+  loginLink: 'מעבר לכניסה',
+  errPendingExists: 'כבר נשלחה בקשת הרשמה עם המספר הזה והיא ממתינה לאישור.',
+}
 const BOT_START_PREFILL = 'היי'
 export const BOT_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(BOT_START_PREFILL)}`
 

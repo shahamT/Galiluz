@@ -2,6 +2,7 @@ import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { checkRateLimit } from '~/server/utils/rateLimit'
 import { getAccountFeatures } from '~/server/utils/accountFeatures'
 import { getPublisherPreferences } from '~/server/utils/publisherPreferences'
+import { resolveAccountTitle } from '~/server/utils/accountScope'
 
 export default defineEventHandler(async (event) => {
   await checkRateLimit(event)
@@ -9,7 +10,8 @@ export default defineEventHandler(async (event) => {
   return {
     waId: session.waId,
     fullName: session.fullName,
-    publishingAs: session.publishingAs,
+    // Account name lives on accounts.title now; keep the `publishingAs` key for the client.
+    publishingAs: await resolveAccountTitle({ accountId: session.accountId, accountName: session.accountName, waId: session.waId }),
     type: session.type,
     // Resolved account entitlements (managers → all enabled). Advisory only —
     // the server independently withholds gated data; this just drives UI gating.
