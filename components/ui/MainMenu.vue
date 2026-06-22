@@ -33,30 +33,12 @@
             </NuxtLink>
             <div class="MainMenu-separator" aria-hidden="true" />
             <NuxtLink
-              to="/publish-events"
-              class="MainMenu-item"
-              @click="close"
-            >
-              <UiIcon name="campaign" size="md" class="MainMenu-itemIcon" />
-              <span>{{ MAIN_MENU.publishEvents }}</span>
-            </NuxtLink>
-            <div class="MainMenu-separator" aria-hidden="true" />
-            <NuxtLink
               to="/about"
               class="MainMenu-item"
               @click="close"
             >
               <UiIcon name="auto_stories" size="md" class="MainMenu-itemIcon" />
               <span>{{ MAIN_MENU.about }}</span>
-            </NuxtLink>
-            <div class="MainMenu-separator" aria-hidden="true" />
-            <NuxtLink
-              to="/terms-of-service"
-              class="MainMenu-item"
-              @click="close"
-            >
-              <UiIcon name="description" size="md" class="MainMenu-itemIcon" />
-              <span>{{ MAIN_MENU.termsOfService }}</span>
             </NuxtLink>
             <template v-if="!isInstalled && (canInstall || isIOS)">
               <div class="MainMenu-separator" aria-hidden="true" />
@@ -94,6 +76,15 @@
               <span class="MainMenu-whatsappIcon" aria-hidden="true" />
               <span>{{ MAIN_MENU.contactUs }}</span>
             </a>
+            <div class="MainMenu-separator" aria-hidden="true" />
+            <NuxtLink
+              to="/terms-of-service"
+              class="MainMenu-item"
+              @click="close"
+            >
+              <UiIcon name="description" size="md" class="MainMenu-itemIcon" />
+              <span>{{ MAIN_MENU.termsOfService }}</span>
+            </NuxtLink>
           </div>
         </aside>
       </div>
