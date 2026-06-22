@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, configDefaults } from 'vitest/config'
 import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
@@ -9,5 +9,8 @@ export default defineConfig({
   },
   test: {
     include: ['tests/**/*.test.ts'],
+    // tests/eval/** is the manual OpenAI matcher eval (npm run eval:matcher) — keep it
+    // out of the default deterministic suite (no real API calls / token cost in CI).
+    exclude: [...configDefaults.exclude, 'tests/eval/**'],
   },
 })
