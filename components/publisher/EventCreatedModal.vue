@@ -10,7 +10,7 @@
           <span class="EventCreatedModal-icon">
             <UiIcon name="check_circle" size="lg" />
           </span>
-          <h2 class="EventCreatedModal-title">האירוע שיצרתם נשמר בהצלחה!</h2>
+          <h2 class="EventCreatedModal-title">האירוע נשמר בהצלחה!</h2>
           <p class="EventCreatedModal-subtitle">האירוע עוד לא מפורסם באתר (טיוטה)</p>
           <p class="EventCreatedModal-hint">לפרסום האירוע לחצו כאן:</p>
         </div>

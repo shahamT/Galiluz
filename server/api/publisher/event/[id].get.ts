@@ -92,6 +92,7 @@ export default defineEventHandler(async (event) => {
     id,
     title:            doc.event?.Title || '',
     isActive:         doc.isActive ?? false,
+    createdByCrawler: doc.createdByCrawler === true,
     multiDayEvent:    doc.event?.multiDayEvent !== false,
     shortDescription: doc.event?.shortDescription || '',
     fullDescription:  doc.event?.fullDescription || '',
