@@ -48,7 +48,7 @@
                 @click="onInstallClick"
               >
                 <UiIcon name="add_to_home_screen" size="md" class="MainMenu-itemIcon" />
-                <span>הוסף לדף הבית</span>
+                <span>הוספה</span>
               </button>
             </template>
           </nav>

@@ -486,10 +486,21 @@ export function handleNotifyApproverEvent(req, res) {
         publisherPhone: typeof data.publisherPhone === 'string' ? data.publisherPhone : '',
         eventTitle: typeof data.eventTitle === 'string' ? data.eventTitle : '',
       })
-      await sendInteractiveButtons(config.whatsapp.phoneNumberId, approverWaId, {
-        body,
-        buttons: [{ id: `approver_delete_event_${eventId}`, title: APPROVER.DELETE_EVENT_BUTTON.title }],
-      })
+      const buttons = [{ id: `approver_delete_event_${eventId}`, title: APPROVER.DELETE_EVENT_BUTTON.title }]
+      const sendResult = await sendInteractiveButtons(config.whatsapp.phoneNumberId, approverWaId, { body, buttons })
+      // Register in the same tracking maps as approval requests so a 131047 (24h window /
+      // blocked) failure queues this notification + fires the re-engagement template; the
+      // approver's reply then drains the queue and (re)delivers it with its delete button.
+      if (sendResult.success && sendResult.messageId) {
+        messageIdToApproverWaId.set(sendResult.messageId, approverWaId)
+        lastApproverRequestPayloadByMessageId.set(sendResult.messageId, {
+          approverWaId,
+          body,
+          buttons,
+          templateName: config.approverEventReengagementTemplateName,
+          templateLanguage: config.approverEventReengagementTemplateLanguage,
+        })
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ success: true }))
     } catch (err) {
@@ -1051,21 +1062,25 @@ function processWebhookBody(body) {
                 body: payload.body,
                 buttons: payload.buttons,
               })
+              // Template per item type: event notifications carry their own template name/language
+              // (set when queued); registration requests leave them unset → shared approver template.
+              const tplName = payload.templateName || config.approverReengagementTemplateName
+              const tplLang = payload.templateLanguage || config.approverReengagementTemplateLanguage
               const isFirst = list.length === 1
-              if (config.approverReengagementTemplateName && isFirst) {
+              if (tplName && isFirst) {
                 sendTemplate(
                   phoneNumberId,
                   payload.approverWaId,
-                  config.approverReengagementTemplateName,
-                  config.approverReengagementTemplateLanguage,
+                  tplName,
+                  tplLang,
                   { includeQuickReplyButton: true },
                 ).then((r) => {
                   if (!r.success) logger.error(LOG_PREFIXES.WEBHOOK, 'Approver re-engagement template failed', r.error)
                 })
               }
-            }
-            if (payload && !config.approverReengagementTemplateName) {
-              logger.warn(LOG_PREFIXES.WEBHOOK, 'Approver request failed with 131047 but APPROVER_REENGAGEMENT_TEMPLATE_NAME not set')
+              if (!tplName) {
+                logger.warn(LOG_PREFIXES.WEBHOOK, 'Approver request failed with 131047 but no re-engagement template set')
+              }
             }
           }
         }

@@ -210,6 +210,10 @@ envVarGroups:
         sync: false
       - key: APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE
         value: he
+      - key: APPROVER_EVENT_REENGAGEMENT_TEMPLATE_NAME      # optional — published-event re-engagement template; unset → reuses APPROVER_REENGAGEMENT_TEMPLATE_NAME
+        sync: false
+      - key: APPROVER_EVENT_REENGAGEMENT_TEMPLATE_LANGUAGE  # optional — unset → reuses APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE
+        sync: false
       - key: LOG_LEVEL
         value: info
       - key: ALLOW_MAIN_MENU_FREE_LANGUAGE

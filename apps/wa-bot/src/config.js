@@ -58,6 +58,10 @@ function loadConfig() {
     /** Template to send to approver when interactive approval message fails with 131047 (re-engagement). Create in Meta Business Manager and set name + language here. */
     approverReengagementTemplateName: (process.env.APPROVER_REENGAGEMENT_TEMPLATE_NAME || '').trim(),
     approverReengagementTemplateLanguage: (process.env.APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE || 'he').trim() || 'he',
+    /** Re-engagement template for PUBLISHED-EVENT approver notifications. Defaults to the shared
+     *  approver template; set these to point event notifications at a dedicated Meta template later. */
+    approverEventReengagementTemplateName: (process.env.APPROVER_EVENT_REENGAGEMENT_TEMPLATE_NAME || process.env.APPROVER_REENGAGEMENT_TEMPLATE_NAME || '').trim(),
+    approverEventReengagementTemplateLanguage: (process.env.APPROVER_EVENT_REENGAGEMENT_TEMPLATE_LANGUAGE || process.env.APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE || 'he').trim() || 'he',
     logLevel: process.env.LOG_LEVEL || 'info',
     /** When true, text at main menu is classified by AI and routed to flows. When false, text at menu just resends the menu (cost saving). Publisher flows (add/edit) always use AI. */
     allowMainMenuFreeLanguage: process.env.ALLOW_MAIN_MENU_FREE_LANGUAGE !== 'false',
