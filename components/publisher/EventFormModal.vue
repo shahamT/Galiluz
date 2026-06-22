@@ -368,7 +368,7 @@
             :disabled="formBusy"
           >
             <span v-if="isSubmitting" class="AddEventPage-submitSpinner" />
-            <template v-else>{{ props.mode === 'edit' ? 'עדכון אירוע ✓' : 'יצירת אירוע ✓' }}</template>
+            <template v-else>{{ props.mode === 'edit' ? 'שמור אירוע ✓' : 'יצירת אירוע ✓' }}</template>
           </button>
           <button v-else type="button" class="EventFormModal-footerBtn" @click="resetForm">
             פרסם אירוע נוסף

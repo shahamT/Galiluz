@@ -262,6 +262,7 @@
     v-if="showDeleteModal && event"
     :event-title="event.title"
     :event-id="event.id"
+    :simple="isCrawlerDraft"
     @close="showDeleteModal = false"
     @deleted="onDeleted"
   />
@@ -280,6 +281,12 @@
     :event-id="event.id"
     @close="showCreatedModal = false"
     @published="onCreatedModalPublished"
+  />
+
+  <PublisherEventPublishedModal
+    v-if="showPublishedModal && event"
+    :url="eventScheduleUrl || ''"
+    @close="showPublishedModal = false"
   />
 </template>
 
@@ -308,6 +315,7 @@ const activeView = ref('actions')
 
 const successBanner = ref('')
 const showCreatedModal = ref(false)
+const showPublishedModal = ref(false)
 let bannerTimer = null
 
 function flashBanner(text) {
@@ -336,8 +344,8 @@ const { capture } = usePosthog()
 async function onCreatedModalPublished() {
   showCreatedModal.value = false
   capture('publisher_event_status_changed', { eventId: route.params.id, isActive: true, source: 'created_modal' })
-  await refresh()
-  flashBanner('האירוע פורסם בהצלחה! 🎉')
+  await refresh() // event now active → eventScheduleUrl is populated for the success modal
+  showPublishedModal.value = true
 }
 
 function clearDraftFromUrl() {
@@ -348,7 +356,12 @@ async function onEditSubmitted() {
   showEditForm.value = false
   capture('publisher_event_edited', { eventId: route.params.id })
   await refresh()
-  router.replace({ query: { success: 'updated' } })
+  // Clear any stale ?modal=edit / ?draft / ?success left in the URL (e.g. the crawler magic link).
+  if (route.query.modal || route.query.draft || route.query.success) router.replace({ query: {} })
+  // Saving a still-draft event → encourage publishing (same modal as after create);
+  // an already-published event just confirms the update.
+  if (!event.value?.isActive) showCreatedModal.value = true
+  else flashBanner('האירוע עודכן בהצלחה!')
 }
 
 // Draft-only "delete" from inside the edit modal → close it and open the existing
@@ -360,8 +373,11 @@ function onFormDelete() {
 
 async function onStatusUpdated() {
   showStatusModal.value = false
-  capture('publisher_event_status_changed', { eventId: route.params.id, isActive: !event.value?.isActive })
-  refresh()
+  const wasActive = event.value?.isActive
+  capture('publisher_event_status_changed', { eventId: route.params.id, isActive: !wasActive })
+  await refresh()
+  // Draft → published: surface the success modal with the event link. (Publish → draft shows nothing new.)
+  if (!wasActive && event.value?.isActive) showPublishedModal.value = true
 }
 
 async function onTransferred() {
@@ -377,6 +393,10 @@ function onDeleted() {
 
 const { data: event, pending, refresh } = useAuthFetch(`/api/publisher/event/${route.params.id}`)
 
+// An unreviewed crawler-generated draft → delete with a plain "are you sure?" (no
+// type-the-title), since the publisher didn't author it. Published events stay hard-confirm.
+const isCrawlerDraft = computed(() => !!event.value?.createdByCrawler && event.value?.isActive === false)
+
 useHead(computed(() => ({ title: event.value ? `${event.value.title} | גלילו"ז` : 'פרטי אירוע | גלילו"ז' })))
 
 const linksWithClicks = computed(() => {
@@ -390,16 +410,25 @@ const linksWithClicks = computed(() => {
   }))
 })
 
-const firstFutureOccurrence = computed(() => {
+// The schedule feed flattens each occurrence into its own "flat event" with id
+// `${eventId}-${occurrenceIndex}` (utils/events.service.js), and the daily-view modal
+// opens by matching that flat id — so the deep link needs the occurrence-index suffix,
+// not the bare event id. Use the index of the first future occurrence in the (unfiltered,
+// stored-order) occurrences array, which matches the feed's flat index.
+const firstFutureOccurrenceIndex = computed(() => {
   const occs = event.value?.occurrences || []
   const today = new Date().toISOString().slice(0, 10)
-  return occs.find(o => o.date >= today) ?? null
+  return occs.findIndex(o => o.date >= today)
+})
+const firstFutureOccurrence = computed(() => {
+  const i = firstFutureOccurrenceIndex.value
+  return i >= 0 ? (event.value?.occurrences || [])[i] : null
 })
 
 const eventScheduleUrl = computed(() => {
   if (!event.value?.isActive || !firstFutureOccurrence.value) return null
   const origin = process.client ? window.location.origin : ''
-  return `${origin}/events/daily-view?date=${firstFutureOccurrence.value.date}&event=${event.value.id}`
+  return `${origin}/events/daily-view?date=${firstFutureOccurrence.value.date}&event=${event.value.id}-${firstFutureOccurrenceIndex.value}`
 })
 
 const canShare = computed(() => process.client && !!navigator.share)
