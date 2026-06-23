@@ -8,6 +8,7 @@ export const LOG_PREFIXES = {
   WEBHOOK: '[Webhook]',
   CRAWLER: '[Crawler]',
   BROADCAST: '[Broadcast]',
+  LOG: '[Log]',
   SHUTDOWN: '[Shutdown]',
   FATAL: '[FATAL]',
 }

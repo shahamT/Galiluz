@@ -13,6 +13,7 @@ import { buildCrawlerDraftEvent } from '~/server/utils/buildCrawlerDraft'
 import { uploadBufferToCloudinary } from '~/server/utils/cloudinary'
 import { safeFetchImage } from '~/server/utils/safeImageFetch'
 import { issueMagicLink } from '~/server/utils/magicLink'
+import { notifyLog } from '~/server/utils/notifyLog'
 import { maybeSweepExpiredCrawlerDrafts } from '~/server/utils/crawlerCleanup'
 import { logEventCreation } from '~/server/utils/eventLogs.service'
 import { getCategoriesList } from '~/consts/events.const.js'
@@ -252,30 +253,22 @@ export default defineEventHandler(async (event) => {
       })
       notified = true
 
-      // Only AFTER the publisher was notified, surface the draft to the approver too
-      // (plain gateway message; best-effort — its own catch keeps it from affecting the request).
-      const approverPhone = normalizePhone(config.publishersApproverWaNumber || process.env.PUBLISHERS_APPROVER_WA_NUMBER || '')
-      if (approverPhone) {
-        const account = await resolveAccountTitle({ accountId: publisher.accountId, accountName: publisher.accountName, waId })
-        const groupName =
-          (Array.isArray(crawler.groups)
-            ? (crawler.groups as Array<{ chatId?: string; name?: string }>).find((g) => g.chatId === groupChatId)?.name
-            : '') || groupChatId
-        const approverMsg = buildApproverDraftNotification({
-          title: String(eventObj.Title || ''),
-          account,
-          publisherName: String(publisher.fullName || ''),
-          phone: waId,
-          eventId: draftId,
-          groupName,
-        })
-        await $fetch(`${gatewayUrl}/internal/send-message`, {
-          method: 'POST',
-          headers: { 'x-api-secret': apiSecret },
-          body: { phone: approverPhone, message: approverMsg },
-          timeout: 15000,
-        }).catch((err) => console.error('[crawler/ingest] approver notify failed:', err instanceof Error ? err.message : String(err)))
-      }
+      // Only AFTER the publisher was notified, surface the new draft to the log group
+      // (plain notice; best-effort — notifyLog never throws).
+      const account = await resolveAccountTitle({ accountId: publisher.accountId, accountName: publisher.accountName, waId })
+      const groupName =
+        (Array.isArray(crawler.groups)
+          ? (crawler.groups as Array<{ chatId?: string; name?: string }>).find((g) => g.chatId === groupChatId)?.name
+          : '') || groupChatId
+      const logMsg = buildApproverDraftNotification({
+        title: String(eventObj.Title || ''),
+        account,
+        publisherName: String(publisher.fullName || ''),
+        phone: waId,
+        eventId: draftId,
+        groupName,
+      })
+      await notifyLog(logMsg)
     }
   } catch (err) {
     console.error('[crawler/ingest] notify failed:', err instanceof Error ? err.message : String(err))

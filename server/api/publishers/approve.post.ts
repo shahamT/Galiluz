@@ -1,6 +1,7 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
-import { ensureAccountForPublisher } from '~/server/utils/accountScope'
+import { ensureAccountForPublisher, resolveAccountTitle } from '~/server/utils/accountScope'
+import { notifyLog } from '~/server/utils/notifyLog'
 
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
@@ -34,21 +35,40 @@ export default defineEventHandler(async (event) => {
     const { db } = await getMongoConnection()
     const collection = db.collection(collectionName)
     const now = new Date()
-    const result = await collection.updateOne(
-      { waId },
-      { $set: { status: 'approved', updatedAt: now, approvedAt: now } },
-    )
-    if (result.matchedCount === 0) {
+
+    // Capture prior status first so the log notice fires once (pending → approved), never on
+    // a re-approve of an already-approved publisher.
+    const before = await collection.findOne({ waId })
+    if (!before) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Not Found',
         message: 'Publisher not found',
       })
     }
+    await collection.updateOne(
+      { waId },
+      { $set: { status: 'approved', updatedAt: now, approvedAt: now } },
+    )
 
     // Every approved publisher belongs to an account (auto-created, idempotent).
     const pubDoc = await collection.findOne({ waId })
     if (pubDoc) await ensureAccountForPublisher(pubDoc as Parameters<typeof ensureAccountForPublisher>[0])
+
+    // On a genuine first approval, post a notice to the log group (account title resolved
+    // after the account exists). Best-effort — notifyLog never throws.
+    if (before.status !== 'approved' && pubDoc) {
+      const accountTitle = await resolveAccountTitle({ accountId: pubDoc.accountId, accountName: pubDoc.accountName, waId })
+      const msg = [
+        'מפרסם חדש אושר✅',
+        `שם מלא: *${pubDoc.fullName || '-'}*`,
+        `מטעם: *${accountTitle || '-'}*`,
+        `סוג אירועים: *${pubDoc.eventTypesDescription || '-'}*`,
+        `מזהה וואטסאפ: *${waId || '-'}*`,
+        `אימייל: *${pubDoc.email || '-'}*`,
+      ].join('\n')
+      await notifyLog(msg)
+    }
 
     return { success: true }
   } catch (err: unknown) {

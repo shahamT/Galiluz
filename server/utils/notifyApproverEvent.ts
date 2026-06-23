@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { transformEventForFrontend } from '~/server/utils/eventsTransform'
 import { resolveAccountTitle } from '~/server/utils/accountScope'
+import { notifyLog } from '~/server/utils/notifyLog'
 import { getTimeInIsraelFromIso } from '~/utils/israelDate'
 
 /**
@@ -50,6 +51,10 @@ export async function notifyApproverOfEventActivation(doc: any): Promise<void> {
   }
 
   const body = buildBody(ev, eventId, publisherName, publishingAs, publisherPhone, config)
+
+  // Mirror the same notice to the log group (plain, no actions) — independent of the approver
+  // path below, so it posts even if the wa-bot is unconfigured/down.
+  notifyLog(body)
 
   if (!botUrl) {
     console.info(`[events] WA_BOT_URL unset — approver not notified for event ${eventId} (dev or not configured)`)
