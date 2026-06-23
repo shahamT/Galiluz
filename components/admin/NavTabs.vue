@@ -17,8 +17,8 @@
     </NuxtLink>
     <NuxtLink to="/admin/settings" class="AdminNavTabs-tab" :class="{ 'AdminNavTabs-tab--active': isSettings }">
       <UiIcon name="settings" size="sm" class="AdminNavTabs-tabIcon" />
-      <span class="AdminNavTabs-label">הגדרות</span>
-      <span class="AdminNavTabs-labelMobile">הגדרות</span>
+      <span class="AdminNavTabs-label">ניהול</span>
+      <span class="AdminNavTabs-labelMobile">ניהול</span>
     </NuxtLink>
   </nav>
 </template>
