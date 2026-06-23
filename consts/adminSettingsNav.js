@@ -4,4 +4,5 @@
  */
 export const ADMIN_SETTINGS_NAV = [
   { to: '/admin/settings/crawler', label: 'קראולר וואטסאפ — טיוטות אוטומטיות', icon: 'smart_toy' },
+  { to: '/admin/settings/broadcast-messages', label: 'שליחת הודעות למפרסמים', icon: 'send' },
 ]

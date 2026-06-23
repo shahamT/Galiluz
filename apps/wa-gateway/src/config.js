@@ -34,6 +34,15 @@ function loadConfig() {
       // Optional: token Green API sends on incoming webhooks (Authorization: Bearer). Verified if set.
       webhookToken: process.env.GREEN_API_WEBHOOK_TOKEN || '',
     },
+    // Broadcast pacing — Green API drives a regular WhatsApp number, so bulk sends must be
+    // throttled to avoid a ban. Sends are sequential with a randomized delay between each,
+    // plus a longer pause every batch. All optional; defaults are deliberately conservative.
+    broadcast: {
+      minDelayMs: parseInt(process.env.BROADCAST_MIN_DELAY_MS, 10) || 8000,
+      maxDelayMs: parseInt(process.env.BROADCAST_MAX_DELAY_MS, 10) || 20000,
+      batchSize: parseInt(process.env.BROADCAST_BATCH_SIZE, 10) || 25,
+      batchPauseMs: parseInt(process.env.BROADCAST_BATCH_PAUSE_MS, 10) || 60000,
+    },
   }
 
   if (isProduction) {
