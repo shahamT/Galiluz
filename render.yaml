@@ -225,3 +225,12 @@ envVarGroups:
         value: info
       - key: WEB_APP_URL           # web app base URL — gateway forwards crawler messages to its internal API
         value: https://galiluz.co.il
+      # Broadcast pacing (admin → publishers). All optional — code defaults are conservative.
+      - key: BROADCAST_MIN_DELAY_MS    # min delay between sends (default 8000)
+        sync: false
+      - key: BROADCAST_MAX_DELAY_MS    # max delay between sends (default 20000)
+        sync: false
+      - key: BROADCAST_BATCH_SIZE      # sends per batch before a longer pause (default 25)
+        sync: false
+      - key: BROADCAST_BATCH_PAUSE_MS  # pause between batches (default 60000)
+        sync: false

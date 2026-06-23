@@ -1,7 +1,7 @@
 <template>
   <div class="AdminSettings">
     <!-- Desktop: persistent sidebar of settings. Hidden on mobile (drill-in instead). -->
-    <aside class="AdminSettings-sidebar">
+    <aside class="AdminSettings-sidebar" :style="{ height: sidebarHeight }">
       <NuxtLink
         v-for="item in ADMIN_SETTINGS_NAV"
         :key="item.to"
@@ -25,6 +25,22 @@ import { ADMIN_SETTINGS_NAV } from '~/consts/adminSettingsNav.js'
 
 defineOptions({ name: 'AdminSettingsLayout' })
 const route = useRoute()
+
+// Pin the sidebar to the visible viewport: header + tabs sit above .AppShell-scroller (the
+// only scroll region), so the sidebar fills the scroller's height minus the content padding,
+// staying fully on screen regardless of how tall the page content is. Overflow scrolls inside.
+const sidebarHeight = ref('')
+function measureSidebar() {
+  if (typeof window === 'undefined') return
+  const scroller = document.querySelector('.AppShell-scroller')
+  if (!scroller || !scroller.clientHeight) return
+  sidebarHeight.value = `calc(${Math.round(scroller.clientHeight)}px - var(--spacing-xl) * 2)`
+}
+onMounted(() => {
+  nextTick(measureSidebar)
+  window.addEventListener('resize', measureSidebar)
+})
+onUnmounted(() => window.removeEventListener('resize', measureSidebar))
 </script>
 
 <style lang="scss">
@@ -49,8 +65,10 @@ const route = useRoute()
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-card);
     padding: var(--spacing-sm);
+    // Stay pinned in view; height is set inline to the scroller's visible area (see script).
     position: sticky;
-    top: var(--spacing-md);
+    top: var(--spacing-xl);
+    overflow-y: auto;
 
     // Drill-in on mobile: the list lives in the index page, not the sidebar.
     @include mobile { display: none; }
@@ -68,12 +86,19 @@ const route = useRoute()
     font-weight: 600;
     transition: background 0.15s, color 0.15s;
 
-    &:hover { background: var(--light-bg); }
+    // Override the global `a:hover` (which turns links blue).
+    &:hover {
+      background: var(--light-bg);
+      color: var(--color-text);
+    }
 
     &--active {
       background: var(--brand-dark-green);
       color: #fff;
-      &:hover { background: var(--brand-dark-green); }
+      &:hover {
+        background: var(--brand-dark-green);
+        color: #fff;
+      }
     }
   }
 

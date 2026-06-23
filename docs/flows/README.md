@@ -52,3 +52,4 @@ order so the docs are scannable.
 | Flow | Doc | Services |
 |---|---|---|
 | WhatsApp Crawler → auto-draft events | [whatsapp-crawler-auto-draft.md](whatsapp-crawler-auto-draft.md) | Green API · wa-gateway · web · OpenAI · Cloudinary |
+| Admin broadcast → WhatsApp message to publishers | [admin-broadcast-messages.md](admin-broadcast-messages.md) | web · wa-gateway · Green API · Cloudinary |

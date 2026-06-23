@@ -68,6 +68,15 @@ The file store ([rateLimitFileStore.ts](../server/utils/rateLimitFileStore.ts)) 
 | GET | `/api/publisher/stats` | Own; manager unscoped | Per-event stats rows, top 100 by views, titles joined from events. |
 | POST | `/api/publisher/media` | Any authenticated + RateLimit | Base64 upload → Cloudinary. 20MB max; MIME + extension allowlists, double-extension rejection, magic-byte check for non-HEIC images. Returns `{ cloudinaryURL, cloudinaryData, isMain: false }`. |
 
+### Admin (ManagerAuth — `requirePublisherAuth({ requireManager: true })`)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/admin/broadcast-media` | Manager-only image upload for broadcasts → Cloudinary. **Image-only** (JPG/PNG/WebP), **≤5MB**, magic-byte check, folder `broadcasts`. Returns `{ cloudinaryURL }`. |
+| POST | `/api/admin/broadcast` | Send a WhatsApp message to selected **approved** publishers. Body `{ publisherIds[], message, imageUrl? }`. Resolves recipients (approved, non-deleted), validates the worst-case image caption ≤1024, then hands a compact job (template + per-recipient `{accountName, fullName}`) to the gateway's `/internal/broadcast`, which paces the sends. Writes a `broadcasts` audit doc. Returns `{ success, queued }`. Personalization tags `<שם החשבון>`/`<שם המפרסם>` are replaced per recipient **by the gateway**. |
+
+> The gateway route **`POST /internal/broadcast`** (wa-gateway, ApiSecret) responds `202 { queued }` immediately and sends sequentially with randomized delays (`BROADCAST_*` env) — never a burst, since Green API drives an unofficial WhatsApp number. See [WHATSAPP_SERVICE.md](./WHATSAPP_SERVICE.md).
+
 ### wa-bot / internal (ApiSecret)
 
 | Method | Path | Purpose |
