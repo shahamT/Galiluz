@@ -63,7 +63,14 @@ export async function forwardToIngest(payload) {
       body: JSON.stringify(payload),
     })
     const data = await res.json().catch(() => ({}))
-    logger.info(LOG_PREFIXES.CRAWLER, `ingest → ${res.status}: ${JSON.stringify(data)}`)
+    if (!res.ok) {
+      logger.warn(LOG_PREFIXES.CRAWLER, `ingest → ${res.status}: ${JSON.stringify(data)}`)
+    } else if (data?.processed) {
+      logger.info(LOG_PREFIXES.CRAWLER, `🆕 draft created: "${data.title || '?'}" — ${data.publisherName || ''} (${data.waId || ''})`)
+    } else {
+      // duplicate / publisher_not_eligible / etc. — routine per-message skips, demoted to debug.
+      logger.debug(LOG_PREFIXES.CRAWLER, `ingest skip: ${data?.reason || 'unknown'}`)
+    }
   } catch (err) {
     logger.error(LOG_PREFIXES.CRAWLER, `ingest forward error: ${err instanceof Error ? err.message : String(err)}`)
   }

@@ -28,7 +28,7 @@ export async function handleLog(req, res) {
 
   try {
     const result = await sendMessage(chatId, message)
-    logger.info(LOG_PREFIXES.LOG, `posted to log group (idMessage: ${result?.idMessage || 'n/a'})`)
+    logger.info(LOG_PREFIXES.LOG, `📋 posted to log group (idMessage: ${result?.idMessage || 'n/a'})`)
     return sendJson(res, 200, { success: true, idMessage: result?.idMessage || null })
   } catch (err) {
     logger.error(LOG_PREFIXES.LOG, `log post failed: ${err instanceof Error ? err.message : String(err)}`)
