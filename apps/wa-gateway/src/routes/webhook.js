@@ -5,6 +5,9 @@ import { LOG_PREFIXES } from '../consts/index.js'
 import { config } from '../config.js'
 import { getWatchedCache, forwardToIngest } from '../services/crawler.service.js'
 
+/** Throttle the (noisy) quotaExceeded warning to once per minute. */
+let lastQuotaWarnAt = 0
+
 /** Constant-time string equality — avoids leaking the token via response timing. */
 function safeEqual(a, b) {
   const ab = Buffer.from(String(a))
@@ -48,12 +51,24 @@ export async function handleWebhook(req, res) {
   sendJson(res, 200, { ok: true })
 
   try {
-    logger.info(LOG_PREFIXES.WEBHOOK, `received typeWebhook=${body?.typeWebhook}`)
-    if (body?.typeWebhook !== 'incomingMessageReceived') return
+    const tw = body?.typeWebhook
+    if (tw === 'quotaExceeded') {
+      // Green API can fire this repeatedly while over quota. Throttle to one ⚠️/min; a send
+      // can be ACCEPTED (200 + idMessage) yet NOT delivered while the instance is over quota.
+      const ts = Date.now()
+      if (ts - lastQuotaWarnAt > 60000) {
+        lastQuotaWarnAt = ts
+        // Include the quotaData payload (method/used/total/status) so it can be shared with support.
+        logger.warn(LOG_PREFIXES.WEBHOOK, `Green API quotaExceeded — instance over plan quota; messages may be accepted but NOT delivered :: ${JSON.stringify(body.quotaData || body)}`)
+      }
+      return
+    }
+    // Only group incoming messages drive the crawler; everything else is trace-level noise.
+    if (tw !== 'incomingMessageReceived') { logger.debug(LOG_PREFIXES.WEBHOOK, `ignored typeWebhook=${tw}`); return }
 
     const senderData = body.senderData || {}
     const chatId = String(senderData.chatId || '')
-    if (!chatId.endsWith('@g.us')) { logger.info(LOG_PREFIXES.WEBHOOK, `skip non-group chatId=${chatId}`); return } // only group messages
+    if (!chatId.endsWith('@g.us')) { logger.debug(LOG_PREFIXES.WEBHOOK, `skip non-group chatId=${chatId}`); return } // only group messages
 
     const md = body.messageData || {}
     const text = md.textMessageData?.textMessage
@@ -68,13 +83,13 @@ export async function handleWebhook(req, res) {
     // (the web ingest re-validates authoritatively).
     const cache = getWatchedCache()
     if (cache.synced && (!cache.enabled || !cache.groupChatIds.has(chatId))) {
-      logger.info(LOG_PREFIXES.WEBHOOK, `skip ${chatId} (enabled=${cache.enabled}, watched=${cache.groupChatIds.has(chatId)})`)
+      logger.debug(LOG_PREFIXES.WEBHOOK, `skip ${chatId} (enabled=${cache.enabled}, watched=${cache.groupChatIds.has(chatId)})`)
       return
     }
 
-    if (!text && !imageUrl) { logger.info(LOG_PREFIXES.WEBHOOK, 'skip — no text/image'); return }
+    if (!text && !imageUrl) { logger.debug(LOG_PREFIXES.WEBHOOK, 'skip — no text/image'); return }
 
-    logger.info(LOG_PREFIXES.WEBHOOK, `forwarding group=${chatId} sender=${senderPhone}`)
+    logger.debug(LOG_PREFIXES.WEBHOOK, `forwarding group=${chatId} sender=${senderPhone}`)
     await forwardToIngest({ groupChatId: chatId, senderPhone, text, imageUrl, mimeType, idMessage: body.idMessage })
   } catch (err) {
     logger.error(LOG_PREFIXES.WEBHOOK, `processing error: ${err instanceof Error ? err.message : String(err)}`)

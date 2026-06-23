@@ -45,7 +45,7 @@ export async function handleOtp(req, res) {
 
   try {
     const result = await sendOtp(phone, otp)
-    logger.info(LOG_PREFIXES.OTP, `Sent to ${chatId} | instance=${state} | response=${JSON.stringify(result)}`)
+    logger.info(LOG_PREFIXES.OTP, `🔑 OTP sent to ${chatId} | instance=${state} | idMessage=${result?.idMessage || 'none'}`)
     if (!result?.idMessage) {
       logger.warn(LOG_PREFIXES.OTP, `No idMessage returned for ${chatId} — Green API likely rejected the send`)
     }

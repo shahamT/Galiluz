@@ -86,7 +86,7 @@ async function runBroadcast(broadcastId, recipients, message, imageUrl, fileName
       await sleep(wait)
     }
   }
-  logger.info(LOG_PREFIXES.BROADCAST, `done — sent ${sent}, failed ${failedIds.length}, total ${recipients.length}`)
+  logger.info(LOG_PREFIXES.BROADCAST, `📣 broadcast done — sent ${sent}, failed ${failedIds.length}, total ${recipients.length}`)
   await reportProgress(broadcastId, sent, failedIds, true) // authoritative final report
 }
 
@@ -123,7 +123,7 @@ export async function handleBroadcast(req, res) {
 
   // Acknowledge now; pace the actual sends in the background.
   sendJson(res, 202, { queued: recipients.length })
-  logger.info(LOG_PREFIXES.BROADCAST, `queued ${recipients.length} recipients${imageUrl ? ' (with image)' : ''}`)
+  logger.info(LOG_PREFIXES.BROADCAST, `📣 broadcast queued: ${recipients.length} recipients${imageUrl ? ' (with image)' : ''}`)
   runBroadcast(broadcastId, recipients, message, imageUrl, fileName).catch((err) =>
     logger.error(LOG_PREFIXES.BROADCAST, `run crashed: ${err instanceof Error ? err.message : String(err)}`),
   )

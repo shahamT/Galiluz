@@ -30,7 +30,7 @@ export async function handleSendMessage(req, res) {
 
   try {
     const result = await sendMessage(chatId, message)
-    logger.info(LOG_PREFIXES.CRAWLER, `notified ${chatId} (idMessage: ${result?.idMessage || 'n/a'})`)
+    logger.info(LOG_PREFIXES.CRAWLER, `📤 notified ${chatId} (idMessage: ${result?.idMessage || 'n/a'})`)
     return sendJson(res, 200, { success: true, idMessage: result?.idMessage || null })
   } catch (err) {
     logger.error(LOG_PREFIXES.CRAWLER, `send-message failed for ${chatId}: ${err instanceof Error ? err.message : String(err)}`)
