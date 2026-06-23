@@ -29,23 +29,43 @@ function renderMessage(template, { accountName = '', fullName = '' }) {
 }
 
 /**
+ * Report live progress back to the web (which owns Mongo) — same gateway→web pattern as the
+ * crawler. Best-effort: never throws, so a lost report can't break the send loop; the next
+ * report (or the final done=true) corrects the counts. No-op without a broadcastId / web url.
+ */
+async function reportProgress(broadcastId, sentCount, failedIds, done) {
+  if (!broadcastId || !config.webAppUrl || !config.apiSecret) return
+  try {
+    await fetch(`${config.webAppUrl}/api/internal/broadcast-progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': config.apiSecret },
+      body: JSON.stringify({ broadcastId, sentCount, failedIds, done }),
+    })
+  } catch (err) {
+    logger.warn(LOG_PREFIXES.BROADCAST, `progress report failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+/**
  * Paced send loop — sequential, with a randomized delay between each recipient and a
  * longer pause every batch, to keep the (unofficial) WhatsApp number under WhatsApp's
- * radar. Runs detached from the HTTP response (fire-and-forget); per-recipient errors
- * are logged and skipped. In-memory only: a gateway restart drops the remainder.
+ * radar. Runs detached from the HTTP response; per-recipient errors are recorded (the
+ * publisher id is collected in failedIds) and skipped. Reports progress to the web after
+ * each recipient + a final authoritative report. In-memory only: a restart drops the rest.
  */
-async function runBroadcast(recipients, message, imageUrl, fileName) {
+async function runBroadcast(broadcastId, recipients, message, imageUrl, fileName) {
   const { batchSize, batchPauseMs } = config.broadcast
   let sent = 0
-  let failed = 0
+  const failedIds = []
   for (let i = 0; i < recipients.length; i++) {
     const r = recipients[i]
     let chatId
     try {
       chatId = toChatId(r.phone)
     } catch {
-      failed++
+      failedIds.push(r.id)
       logger.warn(LOG_PREFIXES.BROADCAST, `skip recipient ${i + 1}: invalid phone`)
+      reportProgress(broadcastId, sent, failedIds, false)
       continue
     }
     const text = renderMessage(message, r)
@@ -54,9 +74,10 @@ async function runBroadcast(recipients, message, imageUrl, fileName) {
       else await sendMessage(chatId, text)
       sent++
     } catch (err) {
-      failed++
+      failedIds.push(r.id)
       logger.error(LOG_PREFIXES.BROADCAST, `send failed for recipient ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
     }
+    reportProgress(broadcastId, sent, failedIds, false) // fire-and-forget per-message update
     // Pace before the next recipient (no wait after the last one).
     if (i < recipients.length - 1) {
       const isBatchEnd = batchSize > 0 && (i + 1) % batchSize === 0
@@ -65,13 +86,15 @@ async function runBroadcast(recipients, message, imageUrl, fileName) {
       await sleep(wait)
     }
   }
-  logger.info(LOG_PREFIXES.BROADCAST, `done — sent ${sent}, failed ${failed}, total ${recipients.length}`)
+  logger.info(LOG_PREFIXES.BROADCAST, `done — sent ${sent}, failed ${failedIds.length}, total ${recipients.length}`)
+  await reportProgress(broadcastId, sent, failedIds, true) // authoritative final report
 }
 
 /**
  * POST /internal/broadcast  (API_SECRET-gated).
- * Body: { recipients: [{ phone, accountName?, fullName? }], message, imageUrl?, fileName? }.
- * Responds 202 immediately with the queued count; sends are paced in the background.
+ * Body: { broadcastId?, recipients: [{ id, phone, accountName?, fullName? }], message, imageUrl?, fileName? }.
+ * Responds 202 immediately with the queued count; sends are paced in the background and
+ * progress (sentCount + failed publisher ids) is reported back to the web per message.
  * Never logs message bodies or full phone numbers.
  */
 export async function handleBroadcast(req, res) {
@@ -82,12 +105,14 @@ export async function handleBroadcast(req, res) {
     return sendJson(res, 400, { error: err.message })
   }
 
+  const broadcastId = typeof body.broadcastId === 'string' ? body.broadcastId.trim() : ''
   const message = typeof body.message === 'string' ? body.message : ''
   const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl.trim() : ''
   const fileName = typeof body.fileName === 'string' && body.fileName.trim() ? body.fileName.trim() : 'image.jpg'
   const recipients = (Array.isArray(body.recipients) ? body.recipients : [])
     .filter((r) => r && typeof r.phone === 'string' && r.phone.trim())
     .map((r) => ({
+      id: typeof r.id === 'string' ? r.id : '',
       phone: r.phone.trim(),
       accountName: typeof r.accountName === 'string' ? r.accountName : '',
       fullName: typeof r.fullName === 'string' ? r.fullName : '',
@@ -99,7 +124,7 @@ export async function handleBroadcast(req, res) {
   // Acknowledge now; pace the actual sends in the background.
   sendJson(res, 202, { queued: recipients.length })
   logger.info(LOG_PREFIXES.BROADCAST, `queued ${recipients.length} recipients${imageUrl ? ' (with image)' : ''}`)
-  runBroadcast(recipients, message, imageUrl, fileName).catch((err) =>
+  runBroadcast(broadcastId, recipients, message, imageUrl, fileName).catch((err) =>
     logger.error(LOG_PREFIXES.BROADCAST, `run crashed: ${err instanceof Error ? err.message : String(err)}`),
   )
 }

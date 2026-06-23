@@ -37,6 +37,9 @@
       <div class="BroadcastMessages-actions">
         <p v-if="error" class="BroadcastMessages-error">{{ error }}</p>
         <p v-if="result" class="BroadcastMessages-success">{{ result }}</p>
+        <p v-if="sending" class="BroadcastMessages-progress">
+          נשלחו <strong>{{ progress.sent }}</strong> · נכשלו <strong>{{ progress.failed }}</strong> · מתוך {{ progress.total }}
+        </p>
         <button
           type="button"
           class="BroadcastMessages-send"
@@ -62,6 +65,11 @@ const allPublishers = ref([])
 const sending = ref(false)
 const error = ref('')
 const result = ref('')
+const progress = ref({ sent: 0, failed: 0, total: 0 })
+
+let pollTimer = null
+const POLL_MS = 2000
+const STALL_MS = 120000 // no progress change for this long → assume the run ended (gateway gone)
 
 const approvedPublishers = computed(() => allPublishers.value.filter((p) => p.status === 'approved'))
 
@@ -93,11 +101,51 @@ async function loadPublishers() {
   }
 }
 
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+}
+
+function finish(summary) {
+  stopPolling()
+  result.value = summary
+  sending.value = false
+  // Reset the form for the next broadcast.
+  selectedIds.value = []
+  message.value = ''
+  imageUrl.value = ''
+}
+
+// Poll the job status ~every 2s: keep the loading state and surface rising success/failed
+// counts until the gateway reports done — or until progress stalls (gateway gone).
+function startPolling(broadcastId) {
+  let lastChangeAt = Date.now()
+  let lastKey = ''
+  stopPolling()
+  pollTimer = setInterval(async () => {
+    try {
+      const s = await $fetch(`/api/admin/broadcast/${broadcastId}`)
+      progress.value = { sent: s?.sentCount ?? 0, failed: s?.failedCount ?? 0, total: s?.total ?? progress.value.total }
+      const key = `${progress.value.sent}/${progress.value.failed}`
+      if (key !== lastKey) { lastKey = key; lastChangeAt = Date.now() }
+      if (s?.status === 'done') {
+        finish(`הסתיים — נשלחו ${progress.value.sent}, נכשלו ${progress.value.failed}`)
+      } else if (s?.status === 'failed') {
+        stopPolling(); sending.value = false; error.value = 'שליחת ההודעות נכשלה'
+      } else if (Date.now() - lastChangeAt > STALL_MS) {
+        finish(`הסתיים (חלקי) — נשלחו ${progress.value.sent}, נכשלו ${progress.value.failed}`)
+      }
+    } catch {
+      // transient poll failure — keep trying until the stall guard or a later success
+    }
+  }, POLL_MS)
+}
+
 async function send() {
   if (!canSend.value) return
   sending.value = true
   error.value = ''
   result.value = ''
+  progress.value = { sent: 0, failed: 0, total: selectedIds.value.length }
   try {
     const res = await $fetch('/api/admin/broadcast', {
       method: 'POST',
@@ -107,19 +155,21 @@ async function send() {
         imageUrl: imageUrl.value || undefined,
       },
     })
-    result.value = `נשלח ל-${res?.queued ?? selectedIds.value.length} מפרסמים`
-    // Reset the form after a successful queue.
-    selectedIds.value = []
-    message.value = ''
-    imageUrl.value = ''
+    if (res?.broadcastId) {
+      progress.value.total = res.total ?? progress.value.total
+      startPolling(res.broadcastId)
+    } else {
+      // No id (shouldn't happen) — fall back to a queued confirmation.
+      finish(`נשלח ל-${res?.total ?? selectedIds.value.length} מפרסמים`)
+    }
   } catch (err) {
     error.value = err?.data?.message || 'שליחת ההודעות נכשלה'
-  } finally {
     sending.value = false
   }
 }
 
 onMounted(loadPublishers)
+onUnmounted(stopPolling)
 </script>
 
 <style lang="scss">
@@ -168,6 +218,12 @@ onMounted(loadPublishers)
 
   &-error { margin: 0; color: var(--color-error); font-size: var(--font-size-sm); font-weight: 600; }
   &-success { margin: 0; color: var(--brand-dark-green); font-size: var(--font-size-sm); font-weight: 700; }
+  &-progress {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
+    strong { color: var(--color-text); font-weight: 700; }
+  }
 
   &-send {
     display: flex;

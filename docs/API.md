@@ -73,9 +73,12 @@ The file store ([rateLimitFileStore.ts](../server/utils/rateLimitFileStore.ts)) 
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/admin/broadcast-media` | Manager-only image upload for broadcasts → Cloudinary. **Image-only** (JPG/PNG/WebP), **≤5MB**, magic-byte check, folder `broadcasts`. Returns `{ cloudinaryURL }`. |
-| POST | `/api/admin/broadcast` | Send a WhatsApp message to selected **approved** publishers. Body `{ publisherIds[], message, imageUrl? }`. Resolves recipients (approved, non-deleted), validates the worst-case image caption ≤1024, then hands a compact job (template + per-recipient `{accountName, fullName}`) to the gateway's `/internal/broadcast`, which paces the sends. Writes a `broadcasts` audit doc. Returns `{ success, queued }`. Personalization tags `<שם החשבון>`/`<שם המפרסם>` are replaced per recipient **by the gateway**. |
+| POST | `/api/admin/broadcast` | Send a WhatsApp message to selected **approved** publishers. Body `{ publisherIds[], message, imageUrl? }`. Resolves recipients (approved, non-deleted), validates the worst-case image caption ≤1024, **creates a `broadcasts` job doc** (`status:'sending'`), then hands a compact job (template + per-recipient `{id, accountName, fullName}` + `broadcastId`) to the gateway's `/internal/broadcast`, which paces the sends. Returns `{ success, broadcastId, total }`. Personalization tags `<שם החשבון>`/`<שם המפרסם>` are replaced per recipient **by the gateway**. On gateway-dispatch failure the doc is marked `failed` → 502. |
+| GET | `/api/admin/broadcast/[id]` | Live broadcast status (polled by the admin page while sending). Returns `{ status, sentCount, failedCount, recipientCount, total, completedAt }`. |
 
 > The gateway route **`POST /internal/broadcast`** (wa-gateway, ApiSecret) responds `202 { queued }` immediately and sends sequentially with randomized delays (`BROADCAST_*` env) — never a burst, since Green API drives an unofficial WhatsApp number. See [WHATSAPP_SERVICE.md](./WHATSAPP_SERVICE.md).
+
+> **Operational "log" group** — `POST /internal/log` (wa-gateway, ApiSecret) `{ message }` posts a plain, action-less notice to the configured `LOG_GROUP_CHAT_ID` (`<id>@g.us`; no-op if unset). The web helper `notifyLog()` ([server/utils/notifyLog.ts](../server/utils/notifyLog.ts)) sends to it for: **new approved publishers** ([approve.post.ts](../server/api/publishers/approve.post.ts)), **new published events** ([notifyApproverEvent.ts](../server/utils/notifyApproverEvent.ts), alongside the approver's interactive copy), and **new crawler drafts** ([ingest.post.ts](../server/api/internal/crawler/ingest.post.ts) — drafts go to the log, not the approver). Find the group chatId via `GET /internal/groups`.
 
 ### wa-bot / internal (ApiSecret)
 
@@ -90,6 +93,7 @@ The file store ([rateLimitFileStore.ts](../server/utils/rateLimitFileStore.ts)) 
 | GET | `/api/events/[id]` | Single event in frontend shape (for the wa-bot update flow — **not public**). Optional `?waId=` enforces `rawEvent.publisher.waId` ownership (404 on mismatch). |
 | GET | `/api/events/[id]/stats` | eventStats counters (deleted excluded; zeros when absent). Internal-only to prevent analytics enumeration. |
 | GET | `/api/events/by-publisher?waId=` | Publisher's active events with an occurrence today or later (Israel), sorted by earliest occurrence, limit 100. |
+| POST | `/api/internal/broadcast-progress` | wa-gateway → web: reports broadcast progress `{ broadcastId, sentCount, failedIds[], done }`; updates the `broadcasts` job doc (status → `done` on `done:true`). |
 | POST | `/api/internal/upload-media` | Base64 → Cloudinary upload (wa-bot media). |
 | POST | `/api/internal/delete-media` | Batch Cloudinary destroy: `items[] { publicId, resourceType? }`. |
 | GET | `/api/whatsapp-messages` | RateLimit + ApiSecret. Recent raw_messages payloads, `?limit=` capped. |

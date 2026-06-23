@@ -200,7 +200,7 @@ function applyList(type) {
       const stripped = l.replace(BULLET_RE, '').replace(NUMBER_RE, '')
       if (allMarked) return stripped // toggle off
       if (!stripped.trim()) return stripped // leave blank lines unmarked
-      if (type === 'bullet') return '- ' + stripped
+      if (type === 'bullet') return '* ' + stripped
       n++
       return n + '. ' + stripped
     })

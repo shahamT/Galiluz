@@ -61,6 +61,7 @@ export default defineEventHandler(async (event) => {
   const recipients = docs
     .filter((d) => d.waId)
     .map((d) => ({
+      id: d._id.toString(),
       phone: d.waId as string,
       accountName: d.accountId ? (accountTitleById.get(d.accountId) || '') : (d.accountName || ''),
       fullName: (d.fullName as string) || '',
@@ -81,33 +82,39 @@ export default defineEventHandler(async (event) => {
   const apiSecret = config.apiSecret || process.env.API_SECRET || ''
   if (!gatewayUrl) throw createError({ statusCode: 503, message: 'שירות ההודעות אינו זמין' })
 
+  // Durable record + live-progress job doc, created up front (status 'sending'). The gateway
+  // reports per-message progress back to /api/internal/broadcast-progress, which updates it.
+  const now = new Date()
+  const { insertedId } = await db.collection('broadcasts').insertOne({
+    createdBy: session.publisherId,
+    createdByName: session.fullName || '',
+    recipientIds: recipients.map((r) => r.id),
+    recipientCount: recipients.length,
+    messageTemplate: message,
+    hasImage: !!imageUrl,
+    imageUrl: imageUrl || null,
+    status: 'sending',
+    sentCount: 0,
+    failedIds: [] as string[],
+    createdAt: now,
+    updatedAt: now,
+  })
+  const broadcastId = insertedId.toString()
+
   // Hand the job to the always-on gateway (it responds 202 and paces the sends in the
-  // background). Compact payload: template + short name fields; the gateway renders tags.
+  // background). Compact payload: template + per-recipient {id, name fields}; gateway renders tags.
   try {
     await $fetch(`${gatewayUrl}/internal/broadcast`, {
       method: 'POST',
       headers: { 'x-api-secret': apiSecret },
-      body: { recipients, message, imageUrl: imageUrl || undefined, fileName: 'broadcast.jpg' },
+      body: { broadcastId, recipients, message, imageUrl: imageUrl || undefined, fileName: 'broadcast.jpg' },
       timeout: 20000,
     })
   } catch (err) {
     console.error('[admin/broadcast] gateway dispatch failed:', err instanceof Error ? err.message : String(err))
+    await db.collection('broadcasts').updateOne({ _id: insertedId }, { $set: { status: 'failed', updatedAt: new Date() } }).catch(() => {})
     throw createError({ statusCode: 502, message: 'שליחת ההודעות נכשלה' })
   }
 
-  // Lightweight audit — no per-recipient status (fire-and-forget model).
-  await db
-    .collection('broadcasts')
-    .insertOne({
-      createdBy: session.publisherId,
-      createdByName: session.fullName || '',
-      recipientCount: recipients.length,
-      hasImage: !!imageUrl,
-      imageUrl: imageUrl || null,
-      messageTemplate: message,
-      createdAt: new Date(),
-    })
-    .catch((err) => console.error('[admin/broadcast] audit insert failed:', err instanceof Error ? err.message : String(err)))
-
-  return { success: true, queued: recipients.length }
+  return { success: true, broadcastId, total: recipients.length }
 })

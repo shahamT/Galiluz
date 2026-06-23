@@ -38,7 +38,8 @@ Everything is opt-in and admin-gated; nothing is ever auto-published.
         │  log → issue magic link
         ▼  POST /internal/send-message {phone, message}   header x-api-secret
  wa-gateway → Green API sendMessage → publisher's WhatsApp (magic link)
-        │
+        │  (after notifying the publisher) notifyLog() → POST /internal/log
+        │  → Green API → the "log" GROUP (operational notice; NOT the approver)
         ▼
  publisher taps link → web GET /api/auth/magic-link?t=…   server/api/auth/magic-link.get.ts
         │  validate (single-use, ≤10min) → issue 1h galiluz_auth session

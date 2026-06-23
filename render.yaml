@@ -225,6 +225,8 @@ envVarGroups:
         value: info
       - key: WEB_APP_URL           # web app base URL — gateway forwards crawler messages to its internal API
         value: https://galiluz.co.il
+      - key: LOG_GROUP_CHAT_ID     # WhatsApp "log" group chatId (<id>@g.us) for operational notices; unset → log no-op
+        sync: false
       # Broadcast pacing (admin → publishers). All optional — code defaults are conservative.
       - key: BROADCAST_MIN_DELAY_MS    # min delay between sends (default 8000)
         sync: false

@@ -46,8 +46,17 @@ async function request(method, { httpMethod = 'POST', body = null, useMedia = fa
     throw new Error(`green_api_error:${method}:${res.status}`)
   }
   // Success: log the RESPONSE body (never the request payload — it may hold the
-  // OTP — and with secret fields like webhookUrlToken redacted).
-  logger.info(LOG_PREFIXES.GREEN_API, `${method} ok ${res.status} :: ${redactSecrets(text).slice(0, 1000)}`)
+  // OTP — and with secret fields like webhookUrlToken redacted). getContacts returns the
+  // whole contact list (large + PII) — log only its size, not the entries.
+  let logBody
+  if (method === 'getContacts') {
+    let count = 0
+    try { const arr = JSON.parse(text); if (Array.isArray(arr)) count = arr.length } catch { /* ignore */ }
+    logBody = `${count} contacts`
+  } else {
+    logBody = redactSecrets(text).slice(0, 1000)
+  }
+  logger.info(LOG_PREFIXES.GREEN_API, `${method} ok ${res.status} :: ${logBody}`)
   try { return text ? JSON.parse(text) : {} } catch { return { raw: text } }
 }
 

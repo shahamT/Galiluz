@@ -25,6 +25,9 @@ function loadConfig() {
     apiSecret: process.env.API_SECRET || '',
     // Web app base URL — the crawler forwards messages to its internal API.
     webAppUrl: (process.env.WEB_APP_URL || process.env.GALILUZ_APP_URL || '').replace(/\/$/, ''),
+    // Dedicated WhatsApp "log" group chatId (<id>@g.us) — operational notices (approved
+    // publishers, published events, crawler drafts) are posted here. Unset → log sends no-op.
+    logGroupChatId: (process.env.LOG_GROUP_CHAT_ID || '').trim(),
     greenApi: {
       idInstance: process.env.GREEN_API_ID_INSTANCE || '',
       apiToken: process.env.GREEN_API_API_TOKEN_INSTANCE || '',
