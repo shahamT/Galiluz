@@ -42,15 +42,26 @@
           <UiIcon name="add" size="sm" /> הוספת קבוצה
         </button>
       </div>
-      <ul v-if="groups.length" class="CrawlerSettings-list">
-        <li v-for="g in groups" :key="g.chatId" class="CrawlerSettings-item">
-          <UiIcon name="groups" size="sm" class="CrawlerSettings-itemIcon" />
-          <span class="CrawlerSettings-itemName">{{ g.name || g.chatId }}</span>
-          <button type="button" class="CrawlerSettings-remove" aria-label="הסרה" @click="removeGroup(g.chatId)">
-            <UiIcon name="delete" size="sm" />
-          </button>
-        </li>
-      </ul>
+      <template v-if="groups.length">
+        <input
+          v-if="groups.length > PAGE_SIZE"
+          v-model="groupSearch"
+          type="text"
+          class="CrawlerSettings-search"
+          placeholder="חיפוש קבוצה…"
+        />
+        <ul v-if="filteredGroups.length" class="CrawlerSettings-list">
+          <li v-for="g in pagedGroups" :key="g.chatId" class="CrawlerSettings-item">
+            <UiIcon name="groups" size="sm" class="CrawlerSettings-itemIcon" />
+            <span class="CrawlerSettings-itemName">{{ g.name || g.chatId }}</span>
+            <button type="button" class="CrawlerSettings-remove" aria-label="הסרה" @click="removeGroup(g.chatId)">
+              <UiIcon name="delete" size="sm" />
+            </button>
+          </li>
+        </ul>
+        <p v-else class="CrawlerSettings-empty">לא נמצאו קבוצות.</p>
+        <UiPaginator v-model:page="groupPage" :total="filteredGroups.length" :page-size="PAGE_SIZE" />
+      </template>
       <p v-else class="CrawlerSettings-empty">לא נוספו קבוצות עדיין.</p>
     </section>
 
@@ -67,18 +78,29 @@
         @update:model-value="onPublisherPicked"
       />
 
-      <ul v-if="optedInPublishers.length" class="CrawlerSettings-list CrawlerSettings-list--pubs">
-        <li v-for="p in optedInPublishers" :key="p.id" class="CrawlerSettings-item">
-          <UiIcon name="person" size="sm" class="CrawlerSettings-itemIcon" />
-          <span class="CrawlerSettings-itemName">
-            {{ p.fullName || p.publishingAs || p.waId }}
-            <span class="CrawlerSettings-itemSub" dir="ltr">{{ formatPhone(p.waId) }}</span>
-          </span>
-          <button type="button" class="CrawlerSettings-remove" aria-label="כיבוי" @click="setPublisher(p.id, false)">
-            <UiIcon name="delete" size="sm" />
-          </button>
-        </li>
-      </ul>
+      <template v-if="optedInPublishers.length">
+        <input
+          v-if="optedInPublishers.length > PAGE_SIZE"
+          v-model="pubSearch"
+          type="text"
+          class="CrawlerSettings-search"
+          placeholder="חיפוש מפרסם…"
+        />
+        <ul v-if="filteredPubs.length" class="CrawlerSettings-list CrawlerSettings-list--pubs">
+          <li v-for="p in pagedPubs" :key="p.id" class="CrawlerSettings-item">
+            <UiIcon name="person" size="sm" class="CrawlerSettings-itemIcon" />
+            <span class="CrawlerSettings-itemName">
+              {{ p.fullName || p.publishingAs || p.waId }}
+              <span class="CrawlerSettings-itemSub" dir="ltr">{{ formatPhone(p.waId) }}</span>
+            </span>
+            <button type="button" class="CrawlerSettings-remove" aria-label="כיבוי" @click="setPublisher(p.id, false)">
+              <UiIcon name="delete" size="sm" />
+            </button>
+          </li>
+        </ul>
+        <p v-else class="CrawlerSettings-empty">לא נמצאו מפרסמים.</p>
+        <UiPaginator v-model:page="pubPage" :total="filteredPubs.length" :page-size="PAGE_SIZE" />
+      </template>
       <p v-else class="CrawlerSettings-empty">אין מפרסמים מופעלים.</p>
     </section>
 
@@ -106,6 +128,38 @@ const optedInIds = computed(() => new Set(optedInPublishers.value.map((p) => p.i
 const selectablePublishers = computed(() =>
   allPublishers.value.filter((p) => p.status === 'approved' && !optedInIds.value.has(p.id)),
 )
+
+// Tracked-list search + pagination (client-side; both lists are already fully loaded).
+const PAGE_SIZE = 10
+
+const groupSearch = ref('')
+const groupPage = ref(1)
+const filteredGroups = computed(() => {
+  const q = groupSearch.value.trim().toLowerCase()
+  if (!q) return groups.value
+  return groups.value.filter((g) => (g.name || g.chatId || '').toLowerCase().includes(q))
+})
+const groupPages = computed(() => Math.max(1, Math.ceil(filteredGroups.value.length / PAGE_SIZE)))
+const pagedGroups = computed(() => filteredGroups.value.slice((groupPage.value - 1) * PAGE_SIZE, groupPage.value * PAGE_SIZE))
+
+const pubSearch = ref('')
+const pubPage = ref(1)
+const filteredPubs = computed(() => {
+  const q = pubSearch.value.trim().toLowerCase()
+  if (!q) return optedInPublishers.value
+  return optedInPublishers.value.filter((p) => {
+    const name = (p.fullName || p.publishingAs || p.waId || '').toLowerCase()
+    return name.includes(q) || (p.waId || '').includes(q)
+  })
+})
+const pubPages = computed(() => Math.max(1, Math.ceil(filteredPubs.value.length / PAGE_SIZE)))
+const pagedPubs = computed(() => filteredPubs.value.slice((pubPage.value - 1) * PAGE_SIZE, pubPage.value * PAGE_SIZE))
+
+// Reset to page 1 on a new search; clamp the page if the list shrinks (search / remove).
+watch(groupSearch, () => { groupPage.value = 1 })
+watch(groupPages, (n) => { if (groupPage.value > n) groupPage.value = n })
+watch(pubSearch, () => { pubPage.value = 1 })
+watch(pubPages, (n) => { if (pubPage.value > n) pubPage.value = n })
 
 function formatPhone(waId) {
   return (waId || '').replace(/^972/, '0')
@@ -257,5 +311,18 @@ onMounted(() => {
     &:hover { background: rgba(0,0,0,0.06); color: var(--color-error); }
   }
   &-empty { margin: 0; color: var(--color-text-muted); font-size: var(--font-size-sm); }
+
+  &-search {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-body);
+    color: var(--color-text);
+    direction: rtl;
+    &:focus { border-color: var(--brand-dark-green); outline: none; }
+    &::placeholder { color: var(--color-text-muted); }
+  }
 }
 </style>
