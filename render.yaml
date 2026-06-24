@@ -22,6 +22,10 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: npm install && npm run build
+    # TEMPORARY (one-time): backfill event.publisherPhone from the publisher's waId before the
+    # new version goes live. Idempotent + no-downtime (a failure halts the deploy, old version
+    # keeps serving). REMOVE this line once it has run, then redeploy.
+    preDeployCommand: node scripts/backfill-event-publisher-phone.js
     startCommand: node .output/server/index.mjs
     healthCheckPath: /api/health
     envVars:
