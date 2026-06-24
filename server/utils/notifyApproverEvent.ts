@@ -121,7 +121,7 @@ function buildBody(
   const eventLink = `${siteUrl}/direct?event=${encodeURIComponent(eventId)}`
 
   const lines = [
-    '*אירוע חדש נוסף למערכת*',
+    '*אירוע חדש פורסם במערכת*',
     `*שם:* ${title}`,
     `*תיאור קצר:* ${shortDesc}`,
     `*תאריך:* ${dateTime}`,
