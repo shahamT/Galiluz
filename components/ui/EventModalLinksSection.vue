@@ -12,7 +12,7 @@
       <span class="EventModal-linkButtonText">{{ link.Title }}</span>
     </a>
 
-    <!-- Contact Publisher Button -->
+    <!-- Contact Publisher Button — only when a number is available (else hidden, not disabled) -->
     <a
       v-if="showContactPublisher && whatsappLink"
       :href="whatsappLink"
@@ -24,14 +24,6 @@
       <img src="/icons/whatsapp-icon.svg" alt="WhatsApp" class="EventModal-whatsappIcon" />
       <span class="EventModal-linkButtonText">{{ MODAL_TEXT.contactPublisher }}</span>
     </a>
-    <button
-      v-else-if="showContactPublisher"
-      disabled
-      class="EventModal-linkButton EventModal-linkButton--whatsapp EventModal-linkButton--disabled"
-    >
-      <img src="/icons/whatsapp-icon.svg" alt="WhatsApp" class="EventModal-whatsappIcon" />
-      <span class="EventModal-linkButtonText">{{ MODAL_TEXT.contactPublisher }}</span>
-    </button>
   </div>
 </template>
 

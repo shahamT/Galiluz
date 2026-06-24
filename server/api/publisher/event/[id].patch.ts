@@ -6,12 +6,14 @@ import { getAccountPublisherIds } from '~/server/utils/accountScope'
 import { normalizePublisherFormattedEvent, validatePublisherFormattedEvent } from '~/server/utils/eventValidation'
 import { sanitizeEventFields } from '~/server/utils/sanitizeEventFields'
 import { logEventEdit } from '~/server/utils/eventLogs.service'
+import { normalizeIsraeliPhone } from '~/server/utils/israeliPhone'
+import { resolveExposedContactPhone } from '~/server/utils/contactPhone'
 import { EVENT_CATEGORIES } from '~/consts/events.const.js'
 import { CITIES } from '~/consts/regions.const.js'
 import { convertOccurrenceTimes } from '~/server/utils/convertOccurrenceTimes'
 
 const VALID_CATEGORY_IDS = Object.keys(EVENT_CATEGORIES)
-const TRACKABLE_FIELDS = ['Title', 'shortDescription', 'fullDescription', 'categories', 'mainCategory', 'occurrences', 'location', 'price', 'urls', 'media', 'multiDayEvent']
+const TRACKABLE_FIELDS = ['Title', 'shortDescription', 'fullDescription', 'categories', 'mainCategory', 'occurrences', 'location', 'price', 'urls', 'media', 'multiDayEvent', 'showContactPhone', 'customContactPhone']
 
 /** Resolve cityType, trusting the incoming value, then the existing one, then deriving from CITIES. */
 function resolveCityType(loc: Record<string, unknown>, existingLoc: Record<string, unknown>): 'listed' | 'custom' {
@@ -64,6 +66,17 @@ export default defineEventHandler(async (event) => {
   if (body.price !== undefined)                  updates.price            = body.price === null ? null : Number(body.price)
   if (Array.isArray(body.urls))                  updates.urls             = body.urls
   if (Array.isArray(body.media))                 updates.media            = body.media
+  if (typeof body.showContactPhone === 'boolean') updates.showContactPhone = body.showContactPhone
+  if (typeof body.customContactPhone === 'string') {
+    const raw = body.customContactPhone.trim()
+    if (!raw) {
+      updates.customContactPhone = ''
+    } else {
+      const normalized = normalizeIsraeliPhone(raw)
+      if (!normalized) throw createError({ statusCode: 400, message: 'מספר טלפון לא תקין' })
+      updates.customContactPhone = normalized
+    }
+  }
 
   if (Array.isArray(body.categories) || typeof body.mainCategory === 'string') {
     const main = String(updates.mainCategory ?? existing.mainCategory ?? '')
@@ -108,6 +121,22 @@ export default defineEventHandler(async (event) => {
   const validation = validatePublisherFormattedEvent(merged)
   if (!validation.valid) {
     throw createError({ statusCode: 422, message: validation.reason || 'שגיאת אימות' })
+  }
+
+  // Re-derive the exposed contact number when the contact intent changed (handles
+  // switching own↔custom↔hidden). 'own' needs the event publisher's current waId.
+  if ('showContactPhone' in updates || 'customContactPhone' in updates) {
+    let ownWaId = ''
+    if (typeof merged.publisherId === 'string' && ObjectId.isValid(merged.publisherId)) {
+      const pub = await db.collection(config.mongodbCollectionPublishers || 'publishers')
+        .findOne({ _id: new ObjectId(merged.publisherId) }, { projection: { waId: 1 } })
+      ownWaId = typeof pub?.waId === 'string' ? pub.waId : ''
+    }
+    merged.publisherPhone = resolveExposedContactPhone({
+      showContactPhone: merged.showContactPhone,
+      customContactPhone: merged.customContactPhone,
+      ownWaId,
+    })
   }
 
   const correlationId = randomBytes(4).toString('hex')

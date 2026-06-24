@@ -48,11 +48,10 @@
         <UiIcon name="search" size="sm" class="AdminPublisherFilter-searchIcon" />
         <input
           ref="searchRef"
-          :value="activeTab === 'accounts' ? accountSearch : publisherSearch"
+          v-model="search"
           type="search"
           class="AdminPublisherFilter-input"
           :placeholder="activeTab === 'accounts' ? 'חיפוש חשבון...' : 'חיפוש מפרסם, טלפון או חשבון...'"
-          @input="onSearchInput($event.target.value)"
         />
       </div>
 
@@ -119,8 +118,8 @@ const emit = defineEmits(['update:modelValue'])
 
 const open = ref(false)
 const activeTab = ref('accounts')
-const accountSearch = ref('')
-const publisherSearch = ref('')
+// One shared query across both tabs, so switching account⇄publisher keeps filtering by it.
+const search = ref('')
 const triggerRef = ref(null)
 const panelRef = ref(null)
 const searchRef = ref(null)
@@ -132,19 +131,14 @@ function toggle() {
   if (open.value) nextTick(() => searchRef.value?.focus())
 }
 
-function onSearchInput(value) {
-  if (activeTab.value === 'accounts') accountSearch.value = value
-  else publisherSearch.value = value
-}
-
 const filteredAccounts = computed(() => {
-  const q = accountSearch.value.trim().toLowerCase()
+  const q = search.value.trim().toLowerCase()
   if (!q) return props.accounts
   return props.accounts.filter(a => (a.name || '').toLowerCase().includes(q))
 })
 
 const filteredPublishers = computed(() => {
-  const q = publisherSearch.value.trim().toLowerCase()
+  const q = search.value.trim().toLowerCase()
   if (!q) return props.publishers
   return props.publishers.filter(p =>
     (p.name || '').toLowerCase().includes(q)

@@ -1,6 +1,7 @@
 import { formatEventTime, formatEventPrice, resolveCityName } from '~/utils/events.helpers'
+import { getEventDateString } from '~/utils/events.service'
 import { getDateInIsraelFromIso } from '~/utils/israelDate'
-import { formatEventDateAndDay } from '~/utils/date.helpers'
+import { formatEventDateAndDay, areDatesConsecutive, formatEventDateRange } from '~/utils/date.helpers'
 import { isVideoUrl, getCloudinaryVideoThumbnailUrl } from '~/utils/media.helpers'
 import { MODAL_TEXT } from '~/consts/ui.const'
 
@@ -90,6 +91,15 @@ export function useEventModalData(selectedEvent, selectedOccurrence) {
   })
 
   const eventDateAndDay = computed(() => {
+    // Multi-day event whose occurrences are all consecutive (no gaps) → show the
+    // full first→last span on every occurrence (e.g. "יום שישי, 3.7 - יום ראשון, 5.7").
+    const occs = Array.isArray(selectedEvent.value?.occurrences) ? selectedEvent.value.occurrences : []
+    if (selectedEvent.value?.multiDayEvent && occs.length > 1) {
+      const dates = occs.map(getEventDateString).filter(Boolean).sort()
+      if (dates.length > 1 && areDatesConsecutive(dates)) {
+        return formatEventDateRange(dates[0], dates[dates.length - 1])
+      }
+    }
     const dateStr = calendarStartDate.value
     return dateStr ? formatEventDateAndDay(dateStr) : ''
   })

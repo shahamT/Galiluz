@@ -65,6 +65,8 @@ export function buildCrawlerDraftEvent(
     media: Array.isArray(media) ? media : [],
     publisherId,
     originalCreatorPublisherId: publisherId,
+    showContactPhone: true,
+    customContactPhone: '',
     publisherPhone,
   }
 

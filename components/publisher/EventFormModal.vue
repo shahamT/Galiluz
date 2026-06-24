@@ -339,6 +339,39 @@
                 <UiIcon name="add" size="sm" />
                 הוספת קישור
               </button>
+
+              <!-- WhatsApp contact-number visibility -->
+              <div class="AddEventPage-contactPhone">
+                <label class="AddEventPage-toggle">
+                  <input v-model="form.showContactPhone" type="checkbox" />
+                  <span class="AddEventPage-toggleTrack" />
+                  <span>הצג מספר ליצירת קשר בוואטסאפ</span>
+                </label>
+
+                <div v-if="form.showContactPhone" class="AddEventPage-contactPhoneOptions">
+                  <label class="EventFormModal-onBehalfRadio">
+                    <input v-model="form.contactSource" type="radio" value="own" @change="clearError('customPhone')" />
+                    <span>הצג את המספר שלי</span>
+                  </label>
+                  <label class="EventFormModal-onBehalfRadio">
+                    <input v-model="form.contactSource" type="radio" value="custom" />
+                    <span>הצג מספר אחר</span>
+                  </label>
+
+                  <FormField v-if="form.contactSource === 'custom'" label="מספר ליצירת קשר" required :error="errors.customPhone">
+                    <input
+                      v-model="form.customPhone"
+                      type="tel"
+                      class="FormInput"
+                      dir="ltr"
+                      inputmode="tel"
+                      placeholder="05X-XXXXXXX"
+                      @input="clearError('customPhone')"
+                      @blur="validateCustomPhone"
+                    />
+                  </FormField>
+                </div>
+              </div>
             </section>
 
             <!-- 7. מדיה -->
@@ -467,6 +500,9 @@ const form = reactive({
   isFree: false,
   links: [],
   media: [],
+  showContactPhone: true,   // show a WhatsApp contact button on the event
+  contactSource: 'own',     // 'own' = the publisher's number | 'custom'
+  customPhone: '',          // when contactSource === 'custom'
 })
 
 const errors = reactive({})
@@ -548,7 +584,14 @@ watch(() => form.mainCategory, (newMain) => {
   form.categories = form.categories.filter(c => c !== newMain)
 })
 
+// Auto-default the multi-day flag as the user changes the number of occurrences:
+// a lone occurrence is trivially "multi-day"; growing from one to many defaults the
+// flag OFF (treat as separate single-day events) until the user opts in. Suppressed
+// during programmatic prefill (edit / draft restore) so a saved `true` survives the
+// occurrences being loaded — see initFromData / restoreFromDraft.
+let suppressMultiDayDefault = false
 watch(() => form.occurrences.length, (len, prevLen) => {
+  if (suppressMultiDayDefault) return
   if (len <= 1) {
     form.multiDayEvent = true
   } else if (prevLen <= 1) {
@@ -627,6 +670,17 @@ function validateLink(i, field) {
   linkErrors.splice(i, 1, e)
 }
 function clearError(key) { errors[key] = '' }
+
+// Custom contact number is required + must be a valid Israeli number, only when shown + custom.
+function validateCustomPhone() {
+  if (form.showContactPhone && form.contactSource === 'custom') {
+    errors.customPhone = !form.customPhone.trim()
+      ? 'יש להזין מספר טלפון'
+      : (normalizeIsraeliPhone(form.customPhone) ? '' : 'מספר טלפון לא תקין')
+  } else {
+    errors.customPhone = ''
+  }
+}
 function onPriceBlur() {
   const n = parseFloat(form.price)
   form.price = isNaN(n) ? null : n
@@ -652,10 +706,14 @@ function initFromData(data) {
   form.shortDescription = data.shortDescription || ''
   form.description = data.fullDescription || ''
   const today = todayLocal()
+  // Suppress the occurrences-length auto-default while loading saved occurrences;
+  // otherwise the watcher would reset multiDayEvent to false right after we restore it.
+  suppressMultiDayDefault = true
   form.occurrences = data.occurrences?.length
     ? data.occurrences.map(o => ({ _key: nextKey(), date: o.date || '', hasTime: o.hasTime !== false, startTime: normalizeTime(o.startTime), endTime: normalizeTime(o.endTime), _frozen: (o.date || '') < today }))
     : [freshOccurrence()]
   form.multiDayEvent = data.multiDayEvent !== false
+  nextTick(() => { suppressMultiDayDefault = false })
   form.mainCategory = data.mainCategory || ''
   form.categories = (data.categories || []).filter(c => c !== data.mainCategory)
   form.locationName = data.location?.locationName || ''
@@ -668,6 +726,9 @@ function initFromData(data) {
   form.isFree = data.price === 0
   form.price = data.price === 0 ? null : (data.price ?? null)
   form.links = (data.urls || []).filter(Boolean).map(u => ({ _key: nextKey(), type: u.type || 'link', label: u.Title || '', url: u.Url || '' }))
+  form.showContactPhone = data.showContactPhone !== false
+  form.contactSource = data.customContactPhone ? 'custom' : 'own'
+  form.customPhone = data.customContactPhone || ''
   existingMedia.value = data.media || []
   const cityKey = data.location?.city || ''
   const cityType = data.location?.cityType
@@ -687,8 +748,10 @@ function restoreFromDraft(draft) {
   form.title = d.title || ''
   form.shortDescription = d.shortDescription || ''
   form.description = d.description || ''
+  suppressMultiDayDefault = true
   form.occurrences = (d.occurrences?.length ? d.occurrences : [freshOccurrence()]).map(o => ({ ...o, _key: nextKey() }))
   form.multiDayEvent = d.multiDayEvent !== false
+  nextTick(() => { suppressMultiDayDefault = false })
   form.mainCategory = d.mainCategory || ''
   form.categories = d.categories || []
   form.locationName = d.locationName || ''
@@ -702,6 +765,9 @@ function restoreFromDraft(draft) {
   form.isFree = d.isFree ?? (d.price === 0)
   if (form.isFree) form.price = null
   form.links = (d.links || []).map(l => ({ ...l, _key: nextKey() }))
+  form.showContactPhone = d.showContactPhone !== false
+  form.contactSource = d.contactSource || (d.customPhone ? 'custom' : 'own')
+  form.customPhone = d.customPhone || ''
   form.media = []
   existingMedia.value = draft.existingMedia || []
 }
@@ -854,6 +920,11 @@ function validate() {
     if (Object.keys(e).length) { linkErrors[i] = e; ok = false }
     else linkErrors[i] = {}
   })
+
+  if (form.showContactPhone && form.contactSource === 'custom') {
+    if (!form.customPhone.trim()) { errors.customPhone = 'יש להזין מספר טלפון'; ok = false }
+    else if (!normalizeIsraeliPhone(form.customPhone)) { errors.customPhone = 'מספר טלפון לא תקין'; ok = false }
+  }
 
   return ok
 }
@@ -1041,6 +1112,8 @@ function buildEventPayload(f, allMedia) {
     price: f.isFree ? 0 : (f.price ?? null),
     urls:  f.links.map(l => ({ Title: l.label, Url: l.type === 'link' ? normalizeUrl(l.url) : l.url, type: l.type })),
     media: allMedia,
+    showContactPhone:   f.showContactPhone,
+    customContactPhone: (f.showContactPhone && f.contactSource === 'custom') ? f.customPhone : '',
   }
   if (onBehalfMode.value === 'existing' && onBehalfPublisher.value?.id)
     payload.onBehalfPublisherId = onBehalfPublisher.value.id
@@ -1390,6 +1463,21 @@ function resetForm() {
     transition: background 0.15s, border-color 0.15s;
     align-self: flex-start;
     &:hover { background: var(--brand-dark-green-tint); border-style: solid; }
+  }
+
+  &-contactPhone {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
+  }
+  &-contactPhoneOptions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding-inline-start: var(--spacing-md);
   }
 
   &-navLinks {
