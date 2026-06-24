@@ -204,7 +204,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // 9. Build + save the draft (validDraft flags completeness; never rejected).
-  const { eventObj, validDraft } = buildCrawlerDraftEvent(formattedEvent, publisherId, media)
+  const { eventObj, validDraft } = buildCrawlerDraftEvent(formattedEvent, publisherId, media, waId)
   const doc = {
     createdAt: new Date(),
     isActive: false,

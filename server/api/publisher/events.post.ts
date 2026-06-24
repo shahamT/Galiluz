@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
   const onBehalfPublisherId = typeof body.onBehalfPublisherId === 'string' ? body.onBehalfPublisherId.trim() : ''
   const onBehalfPhone        = typeof body.onBehalfPhone === 'string' ? body.onBehalfPhone.trim() : ''
   let effectivePublisherId   = session.publisherId
+  let effectiveWaId          = session.waId // publisher's WhatsApp number → event.publisherPhone (public contact link)
   let isManagerAction        = false
 
   if (onBehalfPublisherId || onBehalfPhone) {
@@ -50,9 +51,17 @@ export default defineEventHandler(async (event) => {
       if (!ObjectId.isValid(onBehalfPublisherId))
         throw createError({ statusCode: 400, message: 'מזהה מפרסם לא תקין' })
       effectivePublisherId = onBehalfPublisherId
+      // Resolve the target publisher's waId for the public contact link.
+      const config2 = useRuntimeConfig() as Record<string, string>
+      const { db: db2 } = await getMongoConnection()
+      const target = await db2
+        .collection(config2.mongodbCollectionPublishers || 'publishers')
+        .findOne({ _id: new ObjectId(onBehalfPublisherId) }, { projection: { waId: 1 } })
+      effectiveWaId = typeof target?.waId === 'string' ? target.waId : ''
     } else {
       const normalized = normalizeIsraeliPhone(onBehalfPhone)
       if (!normalized) throw createError({ statusCode: 400, message: 'מספר טלפון לא תקין' })
+      effectiveWaId = normalized
 
       const config2 = useRuntimeConfig() as Record<string, string>
       const { db: db2 } = await getMongoConnection()
@@ -106,7 +115,7 @@ export default defineEventHandler(async (event) => {
     media:       Array.isArray(body.media) ? body.media : [],
     publisherId: effectivePublisherId,
     originalCreatorPublisherId: effectivePublisherId,
-    publisherPhone: '',
+    publisherPhone: effectiveWaId,
   }
 
   normalizePublisherFormattedEvent(eventObj, VALID_CATEGORY_IDS)

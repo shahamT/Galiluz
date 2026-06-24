@@ -28,6 +28,7 @@ export function buildCrawlerDraftEvent(
   formattedEvent: Record<string, any>,
   publisherId: string,
   media: unknown[] = [],
+  publisherPhone = '',
 ): CrawlerDraftResult {
   const loc = formattedEvent.location || {}
 
@@ -64,7 +65,7 @@ export function buildCrawlerDraftEvent(
     media: Array.isArray(media) ? media : [],
     publisherId,
     originalCreatorPublisherId: publisherId,
-    publisherPhone: '',
+    publisherPhone,
   }
 
   normalizePublisherFormattedEvent(eventObj, VALID_CATEGORY_IDS)
