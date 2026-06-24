@@ -6,7 +6,13 @@
 
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
 
+// If no token arrives within this window, treat it as a failure. Catches the silent cases —
+// a blocked/hung script or a challenge that never completes (ad-blocker, in-app webview) —
+// which otherwise emit no signal and leave the submit button disabled with no explanation.
+const CHALLENGE_TIMEOUT_MS = 15000
+
 let scriptPromise = null
+let challengeTimer = null
 
 function loadScript() {
   if (window.turnstile) return Promise.resolve()
@@ -37,27 +43,43 @@ export function useTurnstile() {
    */
   async function render(el, { onToken, onExpire, onError }) {
     if (!enabled || !el) return null
+    clearTimeout(challengeTimer)
+    let settled = false
+    let myTimer = null
+    // Fires once on a terminal failure (timeout / blocked script) — never throws, lets the
+    // page show a clear message instead of leaving the button silently disabled.
+    const fail = (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(myTimer)
+      onError?.(code)
+    }
+    // Arm BEFORE loading so a hung/blocked script also resolves to a failure.
+    myTimer = setTimeout(() => fail('timeout'), CHALLENGE_TIMEOUT_MS)
+    challengeTimer = myTimer
     try {
       await loadScript()
       return window.turnstile.render(el, {
         sitekey: siteKey,
         language: 'he',
         theme: 'light',
-        callback: onToken,
+        // Resilience: let Turnstile auto-recover transient blips on its own.
+        retry: 'auto',
+        'retry-interval': 8000,
+        'refresh-expired': 'auto',
+        callback: (token) => { settled = true; clearTimeout(myTimer); onToken?.(token) },
         'expired-callback': onExpire,
-        // Surface the error code instead of silently clearing the token and
-        // leaving the send button disabled forever. Common code: 110200 =
-        // "domain not allowed" — the production hostname is missing from the
-        // widget's allowed-hostnames list in the Cloudflare dashboard.
-        // Returning falsy lets Turnstile auto-retry recoverable errors.
+        // Recoverable codes auto-retry; just clear the token and let the timeout above be the
+        // terminal signal (so we don't flash an error on a blip that would self-heal).
         'error-callback': (code) => {
           console.error('[Turnstile] widget error code:', code)
-          onError?.(code)
           onExpire?.()
         },
       })
     } catch (err) {
+      // Script blocked/failed to load (ad-blocker, in-app webview, network) — surface it.
       console.error('[Turnstile]', err?.message || err)
+      fail('load_failed')
       return null
     }
   }
@@ -65,6 +87,7 @@ export function useTurnstile() {
   /** Tokens are single-use — reset after every send attempt to get a fresh one. */
   function reset(widgetId) {
     if (!enabled || widgetId === null || widgetId === undefined) return
+    clearTimeout(challengeTimer)
     try { window.turnstile?.reset(widgetId) } catch { /* widget gone */ }
   }
 
@@ -72,6 +95,7 @@ export function useTurnstile() {
    *  multi-step form that re-renders the widget into a different element per step). */
   function remove(widgetId) {
     if (!enabled || widgetId === null || widgetId === undefined) return
+    clearTimeout(challengeTimer)
     try { window.turnstile?.remove(widgetId) } catch { /* already gone */ }
   }
 

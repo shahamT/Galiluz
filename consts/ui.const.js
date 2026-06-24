@@ -1,5 +1,12 @@
 // UI component constants
 
+// Shown on login/register when Cloudflare Turnstile can't load or never issues a token
+// (blocked by an ad-blocker / privacy extension, an in-app webview, or an unsupported browser).
+export const TURNSTILE_FAILED_MSG = 'אימות האבטחה שלכם נכשל - ייתכן ואתם משתמשים בדפדפן שאינו נתמך / תוספים לדפדפן שפוגעים ביכולת שלנו לאמת אתכם. אנא נסו דפדפן אחר / כבו את התוספים בדפדפן ונסו שוב'
+// Proactive, non-blocking hint shown when the page is opened inside an in-app webview
+// (WhatsApp/Instagram/Facebook etc.), where Turnstile often can't run.
+export const OPEN_IN_BROWSER_HINT = 'מומלץ לפתוח את הדף בדפדפן (Chrome / Safari) כדי להשלים את ההרשמה'
+
 // Responsive breakpoint for mobile/desktop switch (in pixels)
 // Breakpoints for responsive behavior
 export const MOBILE_BREAKPOINT = 768 // Main mobile breakpoint for layouts and navigation
