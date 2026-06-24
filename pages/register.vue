@@ -58,7 +58,9 @@
           <p v-if="cooldownMsg" class="RegisterCard-error">{{ cooldownMsg }}</p>
           <p v-else-if="submitError" class="RegisterCard-error">{{ submitError }}</p>
 
+          <p v-if="turnstileEnabled && inAppBrowser" class="RegisterCard-hint">{{ OPEN_IN_BROWSER_HINT }}</p>
           <div v-show="turnstileEnabled" ref="turnstileEl" class="RegisterCard-turnstile" />
+          <p v-if="captchaError" class="RegisterCard-error">{{ captchaError }}</p>
 
           <button type="submit" class="RegisterCard-btn" :disabled="loading || waitingForCaptcha || !accountValid">
             <span v-if="loading" class="RegisterCard-spinner" />
@@ -80,7 +82,9 @@
         <p v-if="otpError" class="RegisterCard-error">{{ otpError }}</p>
         <p v-else-if="cooldownMsg" class="RegisterCard-error">{{ cooldownMsg }}</p>
 
+        <p v-if="turnstileEnabled && inAppBrowser" class="RegisterCard-hint">{{ OPEN_IN_BROWSER_HINT }}</p>
         <div v-show="turnstileEnabled" ref="turnstileEl" class="RegisterCard-turnstile" />
+        <p v-if="captchaError" class="RegisterCard-error">{{ captchaError }}</p>
 
         <button class="RegisterCard-btn" :disabled="loading || otpCode.length < 6" @click="handleVerify">
           <span v-if="loading" class="RegisterCard-spinner" />
@@ -114,7 +118,9 @@
           <p v-else-if="conflict === 'pending_exists'" class="RegisterCard-error">{{ REGISTER_PAGE.errPendingExists }}</p>
           <p v-if="cooldownMsg" class="RegisterCard-error">{{ cooldownMsg }}</p>
 
+          <p v-if="turnstileEnabled && inAppBrowser" class="RegisterCard-hint">{{ OPEN_IN_BROWSER_HINT }}</p>
           <div v-show="turnstileEnabled" ref="turnstileEl" class="RegisterCard-turnstile" />
+          <p v-if="captchaError" class="RegisterCard-error">{{ captchaError }}</p>
 
           <button type="submit" class="RegisterCard-btn" :disabled="loading || waitingForCaptcha || !newPhoneValid">
             <span v-if="loading" class="RegisterCard-spinner" />
@@ -142,7 +148,7 @@ defineOptions({ name: 'RegisterPage' })
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'הצטרפות כמפרסמים | גלילו"ז' })
 
-import { REGISTER_PAGE } from '~/consts/ui.const'
+import { REGISTER_PAGE, TURNSTILE_FAILED_MSG, OPEN_IN_BROWSER_HINT } from '~/consts/ui.const'
 
 const { checkPhone, startRegistration, verifyRegistration } = useRegister()
 const { enabled: turnstileEnabled, render: renderTurnstile, reset: resetTurnstile, remove: removeTurnstile } = useTurnstile()
@@ -166,16 +172,23 @@ let countdownTimer = null
 // Turnstile (single shared widget; the OTP send is the paid action)
 const turnstileEl = ref(null)
 const turnstileToken = ref('')
+const captchaError = ref('')    // shown next to the widget when it can't load / issue a token
+const inAppBrowser = ref(false) // WhatsApp/IG/FB webview — Turnstile often can't run there
 let turnstileWidgetId = null
 const waitingForCaptcha = computed(() => turnstileEnabled && !turnstileToken.value)
 
+// In-app webviews (publishers often open the register link from WhatsApp) frequently can't
+// run Turnstile — surface a proactive hint to open in a real browser.
+onMounted(() => {
+  inAppBrowser.value = /FBAN|FBAV|Instagram|Line|WhatsApp|; wv\)/i.test(navigator.userAgent || '')
+})
+
 function mountTurnstile() {
   return renderTurnstile(turnstileEl.value, {
-    onToken: (token) => { turnstileToken.value = token },
+    onToken: (token) => { turnstileToken.value = token; captchaError.value = '' },
     onExpire: () => { turnstileToken.value = '' },
-    onError: (code) => {
-      if (String(code).startsWith('110')) submitError.value = 'אימות האבטחה אינו זמין כרגע. נסו שוב מאוחר יותר.'
-    },
+    // Any terminal failure (blocked script / timeout / widget error) → guide the user.
+    onError: () => { captchaError.value = TURNSTILE_FAILED_MSG },
   })
 }
 
@@ -188,6 +201,7 @@ watch(state, async (s) => {
   removeTurnstile(turnstileWidgetId)
   turnstileWidgetId = null
   turnstileToken.value = ''
+  captchaError.value = ''
   if (s !== 'account' && s !== 'otp' && s !== 'changePhone') return
   await nextTick()
   turnstileWidgetId = await mountTurnstile()
@@ -632,6 +646,18 @@ onUnmounted(() => {
     justify-content: center;
     min-height: 0;
     iframe { max-width: 100%; }
+  }
+
+  &-hint {
+    margin: 0;
+    width: 100%;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
+    line-height: 1.5;
+    background: var(--brand-dark-green-tint-light);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm);
+    text-align: center;
   }
 
   &-success {

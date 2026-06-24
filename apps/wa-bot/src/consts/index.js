@@ -169,7 +169,7 @@ export const APPROVER = {
   },
   CONFIRM_APPROVED: '*{fullName}* אושר כמפרסם בהצלחה ✅',
   CONFIRM_REJECTED: '*{fullName}* לא אושר/ה כמפרסם/ת ❌.',
-  EVENT_NOTIFICATION_HEADING: '*אירוע חדש נוסף למערכת*',
+  EVENT_NOTIFICATION_HEADING: '*אירוע חדש פורסם במערכת*',
   DELETE_EVENT_BUTTON: { id: 'approver_delete_event', title: 'מחיקת אירוע 🗑️' },
   DELETE_EVENT_ASK: {
     body: 'שלח הסבר למפרסם? אם כן שלח את ההסבר בהודעה',

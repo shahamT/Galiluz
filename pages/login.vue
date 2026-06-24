@@ -13,6 +13,7 @@
         <form class="LoginCard-form" @submit.prevent="handleSendOtp">
           <div class="LoginCard-field">
             <input
+              id="phone"
               ref="phoneInput"
               v-model="phone"
               type="tel"
@@ -22,6 +23,7 @@
               dir="ltr"
               inputmode="tel"
               autocomplete="tel"
+              aria-label="מספר טלפון"
               :disabled="loading"
             />
           </div>
@@ -33,7 +35,9 @@
             <NuxtLink to="/register" class="LoginCard-errorLink">להרשמה כמפרסם חדש</NuxtLink>
           </p>
 
+          <p v-if="turnstileEnabled && inAppBrowser" class="LoginCard-hint">{{ OPEN_IN_BROWSER_HINT }}</p>
           <div v-show="turnstileEnabled" ref="turnstileEl" class="LoginCard-turnstile" />
+          <p v-if="captchaError" class="LoginCard-error">{{ captchaError }}</p>
 
           <button type="submit" class="LoginCard-btn" :disabled="loading || !phone.trim() || waitingForCaptcha">
             <span v-if="loading" class="LoginCard-spinner" />
@@ -62,7 +66,9 @@
         <p v-if="error" class="LoginCard-error">{{ error }}</p>
         <p v-else-if="cooldownMsg" class="LoginCard-error">{{ cooldownMsg }}</p>
 
+        <p v-if="turnstileEnabled && inAppBrowser" class="LoginCard-hint">{{ OPEN_IN_BROWSER_HINT }}</p>
         <div v-show="turnstileEnabled" ref="turnstileEl" class="LoginCard-turnstile" />
+        <p v-if="captchaError" class="LoginCard-error">{{ captchaError }}</p>
 
         <button class="LoginCard-btn" :disabled="loading || otpCode.length < 6" @click="handleVerifyOtp">
           <span v-if="loading" class="LoginCard-spinner" />
@@ -95,6 +101,8 @@
 </template>
 
 <script setup>
+import { TURNSTILE_FAILED_MSG, OPEN_IN_BROWSER_HINT } from '~/consts/ui.const'
+
 defineOptions({ name: 'LoginPage' })
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'כניסה | גלילו"ז' })
@@ -103,6 +111,11 @@ const { sendOtp, verifyOtp } = useAuth()
 const { capture } = usePosthog()
 const authStore = useAuthStore()
 const { enabled: turnstileEnabled, render: renderTurnstile, reset: resetTurnstile, remove: removeTurnstile } = useTurnstile()
+
+// Browser autofill for a phone is unreliable on an SPA form (it never sees a real submit
+// to learn the number, and only offers from a saved Addresses profile). So we remember the
+// last-used number ourselves and pre-fill it on return — deterministic, device-local.
+const LAST_PHONE_KEY = 'galiluz:lastPhone'
 
 const state = ref('phone') // 'phone' | 'otp' | 'success'
 const phone = ref('')
@@ -121,28 +134,33 @@ const cooldownMsg = computed(() => (cooldownError.value && resendCountdown.value
 // Cloudflare Turnstile: tokens are single-use — reset after every send attempt
 const turnstileEl = ref(null)
 const turnstileToken = ref('')
+const captchaError = ref('')    // shown next to the widget when it can't load / issue a token
+const inAppBrowser = ref(false) // WhatsApp/IG/FB webview — Turnstile often can't run there
 let turnstileWidgetId = null
 const waitingForCaptcha = computed(() => turnstileEnabled && !turnstileToken.value)
 
 function mountTurnstile() {
   return renderTurnstile(turnstileEl.value, {
-    onToken: (token) => { turnstileToken.value = token },
+    onToken: (token) => { turnstileToken.value = token; captchaError.value = '' },
     onExpire: () => { turnstileToken.value = '' },
-    onError: (code) => {
-      // 110xxx = fatal config error (e.g. 110200 = hostname not in the widget's
-      // allowed list). These don't self-recover, so surface a message instead of
-      // leaving the send button silently disabled. Transient codes (network etc.)
-      // are left to Turnstile's own auto-retry.
-      if (String(code).startsWith('110')) {
-        error.value = 'אימות האבטחה אינו זמין כרגע. נסו שוב מאוחר יותר.'
-      }
-    },
+    // Any terminal failure (blocked script / timeout / widget error) → guide the user
+    // (unsupported browser or a blocking extension) instead of a silently-disabled button.
+    onError: () => { captchaError.value = TURNSTILE_FAILED_MSG },
   })
 }
 
 // The widget shows right above each state's button. The initial phone state mounts
 // it here; the watcher re-mounts it into the OTP state's element on transition (and
 // back), since each state renders its own element. The success state needs none.
+// Pre-fill the last-used phone (client-only; localStorage may be blocked in private mode).
+onMounted(() => {
+  try {
+    const saved = localStorage.getItem(LAST_PHONE_KEY)
+    if (saved && !phone.value) phone.value = saved
+  } catch { /* localStorage unavailable — ignore */ }
+  inAppBrowser.value = /FBAN|FBAV|Instagram|Line|WhatsApp|; wv\)/i.test(navigator.userAgent || '')
+})
+
 onMounted(async () => {
   if (!turnstileEnabled) return
   turnstileWidgetId = await mountTurnstile()
@@ -153,6 +171,7 @@ watch(state, async (s) => {
   removeTurnstile(turnstileWidgetId)
   turnstileWidgetId = null
   turnstileToken.value = ''
+  captchaError.value = ''
   if (s !== 'phone' && s !== 'otp') return
   await nextTick()
   turnstileWidgetId = await mountTurnstile()
@@ -206,6 +225,7 @@ async function handleSendOtp() {
   loading.value = true
   try {
     await sendOtp(phone.value, turnstileToken.value)
+    try { localStorage.setItem(LAST_PHONE_KEY, phone.value.trim()) } catch { /* ignore */ }
     state.value = 'otp'
     startResendCountdown()
     await nextTick()
@@ -521,6 +541,18 @@ onUnmounted(() => {
 
     // Cloudflare renders a fixed-size iframe; keep it from overflowing the card
     iframe { max-width: 100%; }
+  }
+
+  &-hint {
+    margin: 0;
+    width: 100%;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
+    line-height: 1.5;
+    background: var(--brand-dark-green-tint-light);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm);
+    text-align: center;
   }
 
   &-success {
