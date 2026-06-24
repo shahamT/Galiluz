@@ -211,6 +211,43 @@ export function formatEventDateAndDay(dateString) {
 }
 
 /**
+ * Checks whether a set of YYYY-MM-DD date strings forms a gapless run of
+ * consecutive calendar days. Invalid/duplicate dates are ignored; needs ≥2
+ * distinct valid days to qualify.
+ * @param {string[]} dateStrings - Array of date strings (any order)
+ * @returns {boolean} True if the distinct dates are consecutive with no gaps
+ */
+export function areDatesConsecutive(dateStrings) {
+  const dates = [...new Set(
+    (dateStrings || [])
+      .map(d => String(d || '').trim().slice(0, 10))
+      .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)),
+  )].sort()
+  if (dates.length < 2) return false
+  for (let i = 1; i < dates.length; i++) {
+    const next = parseDateString(dates[i - 1])
+    next.setDate(next.getDate() + 1)            // step one calendar day (DST-safe)
+    if (formatDateToYYYYMMDD(next) !== dates[i]) return false
+  }
+  return true
+}
+
+/**
+ * Formats a date span for the event modal, e.g. "יום שישי, 3.7 - יום ראשון, 5.7".
+ * Collapses to a single label when start === end (or end is invalid/missing).
+ * @param {string} startDateString - Start date (YYYY-MM-DD)
+ * @param {string} endDateString - End date (YYYY-MM-DD)
+ * @returns {string} Formatted range, single label, or '' if start is invalid
+ */
+export function formatEventDateRange(startDateString, endDateString) {
+  const start = formatEventDateAndDay(startDateString)
+  const end = formatEventDateAndDay(endDateString)
+  if (!start) return ''
+  if (!end || end === start) return start
+  return `${start} - ${end}`
+}
+
+/**
  * Format minutes from midnight (0–1440) as "HH:MM"
  * @param {number} minutes - Minutes from midnight
  * @returns {string} Formatted time string

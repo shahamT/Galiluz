@@ -3,6 +3,7 @@ import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { NOT_DELETED } from '~/server/utils/eventsQuery'
 import { getEventLogsCollection } from '~/server/utils/eventLogs.service'
+import { resolveExposedContactPhone } from '~/server/utils/contactPhone'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event, { requireManager: true })
@@ -31,11 +32,19 @@ export default defineEventHandler(async (event) => {
   if (!targetPub) throw createError({ statusCode: 404, message: 'publisher not found' })
 
   const previousPublisherId = doc.event?.publisherId || ''
+  const newWaId = (targetPub as any).waId || (targetPub as any).phone || ''
 
   // Update event.publisherId and mirror to rawEvent fields used by the wa-bot's by-publisher query.
   // Retroactively stamp originalCreatorPublisherId if not yet set (legacy events).
   const $setFields: Record<string, unknown> = {
     'event.publisherId': targetPublisherId,
+    // Re-derive the public contact number for the NEW publisher, honoring the event's intent:
+    // 'own' → new publisher's waId, custom → keep the custom number, hidden → stays hidden.
+    'event.publisherPhone': resolveExposedContactPhone({
+      showContactPhone: doc.event?.showContactPhone,
+      customContactPhone: doc.event?.customContactPhone,
+      ownWaId: newWaId,
+    }),
     updatedAt: new Date(),
   }
   if (!doc.event?.originalCreatorPublisherId && previousPublisherId) {
@@ -46,7 +55,6 @@ export default defineEventHandler(async (event) => {
   }
   if (doc.rawEvent?.publisher && typeof doc.rawEvent.publisher === 'object') {
     $setFields['rawEvent.publisher.publisherId'] = targetPublisherId
-    const newWaId = (targetPub as any).waId || (targetPub as any).phone || ''
     if (newWaId) $setFields['rawEvent.publisher.waId'] = newWaId
   }
 

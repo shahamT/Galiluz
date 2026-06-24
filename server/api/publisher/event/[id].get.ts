@@ -115,6 +115,9 @@ export default defineEventHandler(async (event) => {
       endTime:   o.endTime || null,
     })),
     price: doc.event?.price ?? null,
+    // Contact-number controls (for the edit form; default to shown/own on legacy events).
+    showContactPhone: doc.event?.showContactPhone !== false,
+    customContactPhone: doc.event?.customContactPhone || '',
     urls:  (doc.event?.urls || []).map((u: any) => ({ Title: u.Title, Url: u.Url, type: u.type })),
     media: (doc.event?.media || []).map((m: any) => ({
       cloudinaryURL: m.cloudinaryURL || m.url || '',

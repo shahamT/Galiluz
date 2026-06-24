@@ -5,19 +5,13 @@ import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { normalizePublisherFormattedEvent, validatePublisherFormattedEvent } from '~/server/utils/eventValidation'
 import { sanitizeEventFields } from '~/server/utils/sanitizeEventFields'
 import { logEventCreation } from '~/server/utils/eventLogs.service'
+import { normalizeIsraeliPhone } from '~/server/utils/israeliPhone'
+import { resolveExposedContactPhone } from '~/server/utils/contactPhone'
 import { EVENT_CATEGORIES } from '~/consts/events.const.js'
 import { CITIES } from '~/consts/regions.const.js'
 import { convertOccurrenceTimes } from '~/server/utils/convertOccurrenceTimes'
 
 const VALID_CATEGORY_IDS = Object.keys(EVENT_CATEGORIES)
-
-function normalizeIsraeliPhone(raw: string): string | null {
-  const digits = String(raw).replace(/\D/g, '')
-  if (digits.startsWith('972') && digits.length === 12) return digits
-  if (digits.startsWith('05') && digits.length === 10) return '972' + digits.slice(1)
-  if (digits.startsWith('5') && digits.length === 9) return '972' + digits
-  return null
-}
 
 /** Resolve a location's cityType, trusting the client value but deriving from CITIES as a fallback. */
 function resolveCityType(loc: Record<string, unknown>): 'listed' | 'custom' {
@@ -86,6 +80,16 @@ export default defineEventHandler(async (event) => {
   const loc = (body.location as Record<string, unknown>) || {}
   const occurrences = convertOccurrenceTimes(Array.isArray(body.occurrences) ? body.occurrences : [])
 
+  // Contact-number controls: show/hide + optional custom number (validated to a wa.me-valid
+  // Israeli number). The exposed publisherPhone is derived from these (see contactPhone util).
+  const showContactPhone = body.showContactPhone !== false
+  let customContactPhone = ''
+  if (showContactPhone && typeof body.customContactPhone === 'string' && body.customContactPhone.trim()) {
+    const normalized = normalizeIsraeliPhone(body.customContactPhone)
+    if (!normalized) throw createError({ statusCode: 400, message: 'מספר טלפון לא תקין' })
+    customContactPhone = normalized
+  }
+
   // Build the event object in the expected shape
   const allCategories = Array.from(new Set([
     ...(typeof body.mainCategory === 'string' ? [body.mainCategory] : []),
@@ -115,7 +119,9 @@ export default defineEventHandler(async (event) => {
     media:       Array.isArray(body.media) ? body.media : [],
     publisherId: effectivePublisherId,
     originalCreatorPublisherId: effectivePublisherId,
-    publisherPhone: effectiveWaId,
+    showContactPhone,
+    customContactPhone,
+    publisherPhone: resolveExposedContactPhone({ showContactPhone, customContactPhone, ownWaId: effectiveWaId }),
   }
 
   normalizePublisherFormattedEvent(eventObj, VALID_CATEGORY_IDS)

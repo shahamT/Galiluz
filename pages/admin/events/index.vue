@@ -97,7 +97,7 @@ useHead({ title: 'אירועים | ניהול | גלילו"ז' })
 
 const { capture } = usePosthog()
 const PAGE_SIZE = 8
-const filter = ref('all')
+const filter = ref('future')
 const search = ref('')
 const debouncedSearch = useDebounce(search, 200)
 const showEventForm = ref(false)

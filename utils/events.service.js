@@ -61,6 +61,7 @@ export function flattenEventsByOccurrence(events) {
       result.push({
         ...eventRest,
         ...occ,
+        occurrences,              // keep all occurrences for multi-day range display
         id: `${event.id}-${i}`,
         sourceEventId: event.id,
       })
