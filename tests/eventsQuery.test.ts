@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildEventsQuery, NOT_DELETED, parseDatesParam, parseCategoriesParam } from '~/server/utils/eventsQuery'
+// @ts-expect-error — plain JS consts, no types
+import { CITIES } from '~/consts/regions.const.js'
 
 const CUTOFF = new Date('2026-06-01T00:00:00.000Z')
 
@@ -33,9 +35,28 @@ describe('buildEventsQuery', () => {
     expect(hasLte).toBe(false)
   })
 
-  it('adds region filter only for known regions', () => {
-    const withRegion = andConditions(buildEventsQuery(CUTOFF, [], [], 'golan'))
-    expect(withRegion).toContainEqual({ 'event.location.region': 'golan' })
+  it('region filter matches the stored region OR a listed-city id in that region', () => {
+    const conditions = andConditions(buildEventsQuery(CUTOFF, [], [], 'golan'))
+    const regionClause = conditions.find(
+      (c) => Array.isArray((c as { $or?: unknown[] }).$or)
+        && (c as { $or: Record<string, unknown>[] }).$or.some((o) => o['event.location.region'] === 'golan'),
+    ) as { $or: Record<string, unknown>[] } | undefined
+    expect(regionClause).toBeTruthy()
+    expect(regionClause!.$or).toContainEqual({ 'event.location.region': 'golan' })
+
+    const cityClause = regionClause!.$or.find((o) => o['event.location.city']) as
+      | { 'event.location.city': { $in: string[] } }
+      | undefined
+    expect(cityClause).toBeTruthy()
+    const ids = cityClause!['event.location.city'].$in
+    expect(ids.length).toBeGreaterThan(0)
+    // Every id resolves to the requested region, and a known golan city is present.
+    for (const id of ids) expect((CITIES as Record<string, { region: string }>)[id].region).toBe('golan')
+    const aGolanCity = Object.keys(CITIES).find((id) => (CITIES as Record<string, { region: string }>)[id].region === 'golan')
+    expect(ids).toContain(aGolanCity)
+  })
+
+  it('omits the region filter for unknown regions', () => {
     const withBadRegion = andConditions(buildEventsQuery(CUTOFF, [], [], 'mars'))
     expect(JSON.stringify(withBadRegion)).not.toContain('mars')
   })

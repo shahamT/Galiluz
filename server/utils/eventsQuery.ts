@@ -1,4 +1,5 @@
 import { getIsraelDayUtcRange } from '~/server/utils/israelDateRange'
+import { CITIES } from '~/consts/regions.const.js'
 
 const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/
 
@@ -80,7 +81,20 @@ export function buildEventsQuery(
   }
 
   if (region && (region === 'center' || region === 'golan' || region === 'upper')) {
-    andConditions.push({ 'event.location.region': region })
+    // `event.location.region` is stored only for CUSTOM cities. LISTED cities store
+    // a city ID in `event.location.city` and resolve their region from CITIES at read
+    // time (see resolveLocationForFrontend / client-side eventMatchesRegions). Match
+    // both so server-side region filtering mirrors the website — otherwise listed-city
+    // events (the vast majority) are silently excluded.
+    const listedCityIdsInRegion = Object.keys(CITIES).filter(
+      (id) => (CITIES as Record<string, { region?: string }>)[id]?.region === region,
+    )
+    andConditions.push({
+      $or: [
+        { 'event.location.region': region },
+        { 'event.location.city': { $in: listedCityIdsInRegion } },
+      ],
+    })
   }
 
   return { $and: andConditions }
