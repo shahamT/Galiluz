@@ -40,6 +40,7 @@ async function ensureIndexes() {
   const appSettings = db.collection(config.mongodbCollectionAppSettings || 'appSettings')
   const crawlerMessages = db.collection(config.mongodbCollectionCrawlerMessages || 'crawlerMessages')
   const magicLinks = db.collection(config.mongodbCollectionMagicLinks || 'magicLinks')
+  const memberships = db.collection(config.mongodbCollectionMemberships || 'memberships')
 
   const DAY = 24 * 60 * 60
 
@@ -48,6 +49,8 @@ async function ensureIndexes() {
     events.createIndex({ isActive: 1, deletedAt: 1, 'event.occurrences.startTime': 1 }),
     events.createIndex({ 'event.publisherId': 1 }),
     events.createIndex({ 'rawEvent.publisher.waId': 1 }),
+    // Tenant-key scoping (multi-tenant RBAC): account-scoped event reads.
+    events.createIndex({ 'event.accountId': 1, deletedAt: 1 }),
 
     // Interactions (moved from interact.post.ts)
     interactions.createIndex({ eventId: 1, action: 1, timestamp: -1 }),
@@ -82,6 +85,12 @@ async function ensureIndexes() {
     // Magic links: lookup by token hash; auto-expire at expiresAt.
     magicLinks.createIndex({ tokenHash: 1 }, { unique: true }),
     magicLinks.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+
+    // Memberships (publisher↔account↔role). Unique pair = one role per (user, account);
+    // {accountId} = members of an account, {publisherId} = a user's accounts (session build).
+    memberships.createIndex({ publisherId: 1, accountId: 1 }, { unique: true }),
+    memberships.createIndex({ accountId: 1 }),
+    memberships.createIndex({ publisherId: 1 }),
   ])
 
   // Crawler dedup lookup key MUST be unique so the ingest claim (insertOne → E11000 on a
@@ -129,6 +138,7 @@ async function ensureSchemaValidation() {
             properties: {
               Title: { bsonType: 'string' },
               publisherId: { bsonType: 'string' },
+              accountId: { bsonType: 'string' },
               occurrences: {
                 bsonType: 'array',
                 items: {
@@ -181,6 +191,8 @@ async function ensureSchemaValidation() {
           required: ['title'],
           properties: {
             title: { bsonType: 'string' },
+            // 'business' (default, owns events) | 'platform' (the single Galiluz-management org).
+            kind: { bsonType: 'string' },
             isActive: { bsonType: 'bool' },
             deletedAt: { bsonType: 'date' },
             createdAt: { bsonType: 'date' },
@@ -195,5 +207,31 @@ async function ensureSchemaValidation() {
     console.warn('[Schema] accounts validator skipped (collection not created yet):', err instanceof Error ? err.message : err)
   }
 
-  console.info('[Schema] Validators applied to events + publishers + accounts')
+  // memberships: publisher↔account↔role join. May not exist yet on a fresh DB.
+  const membershipsName = config.mongodbCollectionMemberships || 'memberships'
+  try {
+    await db.command({
+      collMod: membershipsName,
+      validationLevel: 'moderate',
+      validationAction: 'error',
+      validator: {
+        $jsonSchema: {
+          bsonType: 'object',
+          required: ['publisherId', 'accountId', 'role'],
+          properties: {
+            publisherId: { bsonType: 'string' },
+            accountId: { bsonType: 'string' },
+            // business: 'owner'|'admin'; platform: 'super_admin'|'viewer' (scoped by account.kind).
+            role: { bsonType: 'string' },
+            status: { bsonType: 'string' },
+            createdAt: { bsonType: 'date' },
+          },
+        },
+      },
+    })
+  } catch (err) {
+    console.warn('[Schema] memberships validator skipped (collection not created yet):', err instanceof Error ? err.message : err)
+  }
+
+  console.info('[Schema] Validators applied to events + publishers + accounts + memberships')
 }

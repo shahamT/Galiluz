@@ -4,6 +4,7 @@ import { validatePublisherFormattedEvent, normalizePublisherFormattedEvent } fro
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
 import { logEventCreation } from '~/server/utils/eventLogs.service'
+import { ensureAccountForPublisher } from '~/server/utils/accountScope'
 
 const LOG_PREFIX = '[EventsAPI] Create'
 
@@ -62,6 +63,7 @@ export default defineEventHandler(async (event) => {
   }
 
   let publisherId: string | null = null
+  let accountId: string | null = null
   const publisher = rawEvent.publisher as PublisherInfo | undefined
   const waId = publisher?.waId && typeof publisher.waId === 'string' ? publisher.waId : ''
 
@@ -72,6 +74,7 @@ export default defineEventHandler(async (event) => {
       const pubDoc = await publishersCol.findOne({ waId })
       if (pubDoc && pubDoc._id) {
         publisherId = pubDoc._id.toString()
+        accountId = await ensureAccountForPublisher({ _id: pubDoc._id, accountId: pubDoc.accountId, accountName: pubDoc.accountName, waId: pubDoc.waId })
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -98,6 +101,7 @@ export default defineEventHandler(async (event) => {
   normalizePublisherFormattedEvent(formattedEvent, validCategoryIds)
   if (publisherId) formattedEvent.publisherId = publisherId
   if (publisherId) formattedEvent.originalCreatorPublisherId = publisherId
+  if (accountId) formattedEvent.accountId = accountId
   const phone = typeof publisher?.phone === 'string' ? publisher.phone.replace(/\D/g, '').trim() : ''
   if (phone) formattedEvent.publisherPhone = phone
   if (formattedEvent.multiDayEvent === undefined) formattedEvent.multiDayEvent = true

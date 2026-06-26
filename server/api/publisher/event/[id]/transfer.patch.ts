@@ -4,6 +4,7 @@ import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { NOT_DELETED } from '~/server/utils/eventsQuery'
 import { getEventLogsCollection } from '~/server/utils/eventLogs.service'
 import { resolveExposedContactPhone } from '~/server/utils/contactPhone'
+import { ensureAccountForPublisher } from '~/server/utils/accountScope'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event, { requireManager: true })
@@ -32,12 +33,16 @@ export default defineEventHandler(async (event) => {
   if (!targetPub) throw createError({ statusCode: 404, message: 'publisher not found' })
 
   const previousPublisherId = doc.event?.publisherId || ''
+  const previousAccountId = doc.event?.accountId || ''
   const newWaId = (targetPub as any).waId || (targetPub as any).phone || ''
+  // The event moves to the TARGET's account (tenant key); ensure that account + owner membership exist.
+  const newAccountId = await ensureAccountForPublisher({ _id: new ObjectId(targetPublisherId), accountId: (targetPub as any).accountId, accountName: (targetPub as any).accountName, waId: newWaId })
 
-  // Update event.publisherId and mirror to rawEvent fields used by the wa-bot's by-publisher query.
+  // Update event.publisherId + accountId and mirror to rawEvent fields used by the wa-bot's by-publisher query.
   // Retroactively stamp originalCreatorPublisherId if not yet set (legacy events).
   const $setFields: Record<string, unknown> = {
     'event.publisherId': targetPublisherId,
+    'event.accountId': newAccountId,
     // Re-derive the public contact number for the NEW publisher, honoring the event's intent:
     // 'own' → new publisher's waId, custom → keep the custom number, hidden → stays hidden.
     'event.publisherPhone': resolveExposedContactPhone({
@@ -68,6 +73,7 @@ export default defineEventHandler(async (event) => {
       action: 'event_transferred',
       publisherId: targetPublisherId,
       previousPublisherId,
+      previousAccountId,
       waId: session.waId,
       actingManagerPublisherId: session.publisherId,
       isManagerAction: true,

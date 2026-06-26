@@ -29,6 +29,7 @@ export function buildCrawlerDraftEvent(
   publisherId: string,
   media: unknown[] = [],
   publisherPhone = '',
+  accountId = '',
 ): CrawlerDraftResult {
   const loc = formattedEvent.location || {}
 
@@ -63,6 +64,7 @@ export function buildCrawlerDraftEvent(
           .filter((u: { Url: string }) => u.Url)
       : [],
     media: Array.isArray(media) ? media : [],
+    accountId,
     publisherId,
     originalCreatorPublisherId: publisherId,
     showContactPhone: true,

@@ -7,6 +7,7 @@ import { sanitizeEventFields } from '~/server/utils/sanitizeEventFields'
 import { logEventCreation } from '~/server/utils/eventLogs.service'
 import { normalizeIsraeliPhone } from '~/server/utils/israeliPhone'
 import { resolveExposedContactPhone } from '~/server/utils/contactPhone'
+import { ensureAccountForPublisher } from '~/server/utils/accountScope'
 import { EVENT_CATEGORIES } from '~/consts/events.const.js'
 import { CITIES } from '~/consts/regions.const.js'
 import { convertOccurrenceTimes } from '~/server/utils/convertOccurrenceTimes'
@@ -35,6 +36,9 @@ export default defineEventHandler(async (event) => {
   const onBehalfPhone        = typeof body.onBehalfPhone === 'string' ? body.onBehalfPhone.trim() : ''
   let effectivePublisherId   = session.publisherId
   let effectiveWaId          = session.waId // publisher's WhatsApp number → event.publisherPhone (public contact link)
+  // Tenant key that OWNS the event: self → the caller's active account; on-behalf → the TARGET
+  // publisher's account (created on the fly for a brand-new ghost).
+  let effectiveAccountId     = session.activeAccountId || session.accountId || ''
   let isManagerAction        = false
 
   if (onBehalfPublisherId || onBehalfPhone) {
@@ -45,13 +49,14 @@ export default defineEventHandler(async (event) => {
       if (!ObjectId.isValid(onBehalfPublisherId))
         throw createError({ statusCode: 400, message: 'מזהה מפרסם לא תקין' })
       effectivePublisherId = onBehalfPublisherId
-      // Resolve the target publisher's waId for the public contact link.
+      // Resolve the target publisher's waId (contact link) + account (tenant key).
       const config2 = useRuntimeConfig() as Record<string, string>
       const { db: db2 } = await getMongoConnection()
       const target = await db2
         .collection(config2.mongodbCollectionPublishers || 'publishers')
-        .findOne({ _id: new ObjectId(onBehalfPublisherId) }, { projection: { waId: 1 } })
+        .findOne({ _id: new ObjectId(onBehalfPublisherId) }, { projection: { waId: 1, accountId: 1, accountName: 1 } })
       effectiveWaId = typeof target?.waId === 'string' ? target.waId : ''
+      effectiveAccountId = await ensureAccountForPublisher({ _id: new ObjectId(onBehalfPublisherId), accountId: target?.accountId, accountName: target?.accountName, waId: target?.waId })
     } else {
       const normalized = normalizeIsraeliPhone(onBehalfPhone)
       if (!normalized) throw createError({ statusCode: 400, message: 'מספר טלפון לא תקין' })
@@ -63,6 +68,7 @@ export default defineEventHandler(async (event) => {
       const existing = await publishersCol.findOne({ waId: normalized })
       if (existing) {
         effectivePublisherId = existing._id.toString()
+        effectiveAccountId = await ensureAccountForPublisher({ _id: existing._id, accountId: existing.accountId, accountName: existing.accountName, waId: existing.waId })
       } else {
         const ghostResult = await publishersCol.insertOne({
           waId: normalized,
@@ -73,6 +79,8 @@ export default defineEventHandler(async (event) => {
           createdAt: new Date(),
         })
         effectivePublisherId = ghostResult.insertedId.toString()
+        // New ghost → give it its own account + owner membership so the event is tenanted.
+        effectiveAccountId = await ensureAccountForPublisher({ _id: ghostResult.insertedId, waId: normalized })
       }
     }
   }
@@ -117,6 +125,7 @@ export default defineEventHandler(async (event) => {
     price:       body.price !== undefined ? (body.price === null ? null : Number(body.price)) : null,
     urls:        Array.isArray(body.urls) ? body.urls : [],
     media:       Array.isArray(body.media) ? body.media : [],
+    accountId:   effectiveAccountId,
     publisherId: effectivePublisherId,
     originalCreatorPublisherId: effectivePublisherId,
     showContactPhone,

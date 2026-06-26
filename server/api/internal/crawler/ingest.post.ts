@@ -4,7 +4,7 @@ import { requireApiSecret } from '~/server/utils/requireApiSecret'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { getAppSetting } from '~/server/utils/appSettings'
 import { getPublisherPreferences } from '~/server/utils/publisherPreferences'
-import { getAccountPublisherIds, resolveAccountTitle } from '~/server/utils/accountScope'
+import { getAccountPublisherIds, resolveAccountTitle, ensureAccountForPublisher } from '~/server/utils/accountScope'
 import { getTodayIsrael } from '~/server/utils/eventFirstOccurrence'
 import { NOT_DELETED } from '~/server/utils/eventsQuery'
 import { sanitizeMessageForPrompt } from '~/server/utils/sanitizeMessageForPrompt'
@@ -234,7 +234,9 @@ export default defineEventHandler(async (event) => {
   }
 
   // 9. Build + save the draft (validDraft flags completeness; never rejected).
-  const { eventObj, validDraft } = buildCrawlerDraftEvent(formattedEvent, publisherId, media, waId)
+  // accountId = the publisher's account (tenant key); ensures the account + owner membership exist.
+  const accountId = await ensureAccountForPublisher({ _id: publisher._id, accountId: publisher.accountId, accountName: publisher.accountName, waId })
+  const { eventObj, validDraft } = buildCrawlerDraftEvent(formattedEvent, publisherId, media, waId, accountId)
   const doc = {
     createdAt: new Date(),
     isActive: false,
