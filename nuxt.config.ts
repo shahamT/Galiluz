@@ -123,6 +123,13 @@ export default defineNuxtConfig({
 
   nitro: {
     routeRules: {
+      // PostHog reverse proxy: route analytics through our own domain so ad/tracker
+      // blockers (which block *.posthog.com) don't drop events. Keep the '/gz-relay'
+      // prefix in sync with POSTHOG_PROXY_PREFIX in plugins/posthog.client.js.
+      // Static asset bundle (posthog-js, recorder) comes from the EU assets host:
+      '/gz-relay/static/**': { proxy: 'https://eu-assets.i.posthog.com/static/**' },
+      // Everything else (capture /e, /decide, /flags, session replay /s, …) → EU ingest host:
+      '/gz-relay/**': { proxy: 'https://eu.i.posthog.com/**' },
       '/direct': { cache: false },
       '/**': {
         headers: {
