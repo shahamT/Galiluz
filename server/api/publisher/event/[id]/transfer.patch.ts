@@ -7,7 +7,7 @@ import { resolveExposedContactPhone } from '~/server/utils/contactPhone'
 import { ensureAccountForPublisher } from '~/server/utils/accountScope'
 
 export default defineEventHandler(async (event) => {
-  const session = await requirePublisherAuth(event, { requireManager: true })
+  const session = await requirePublisherAuth(event, { requireSuperAdmin: true })
   const id = getRouterParam(event, 'id')
   if (!id) throw createError({ statusCode: 400, message: 'id required' })
 

@@ -9,7 +9,7 @@ import { PREFERENCE_KEYS } from '~/consts/preferences.const.js'
  * ghosts can never be opted in.
  */
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requireManager: true })
+  await requirePublisherAuth(event, { requireSuperAdmin: true })
 
   const id = getRouterParam(event, 'id')
   if (!id || !ObjectId.isValid(id)) throw createError({ statusCode: 400, message: 'invalid id' })

@@ -22,7 +22,7 @@ function renderMessage(template: string, accountName: string, fullName: string):
  * gateway, which paces the sends. Returns immediately with the queued count.
  */
 export default defineEventHandler(async (event) => {
-  const session = await requirePublisherAuth(event, { requireManager: true })
+  const session = await requirePublisherAuth(event, { requireSuperAdmin: true })
 
   const body = await readBody<{ publisherIds?: unknown; message?: unknown; imageUrl?: unknown }>(event)
   const publisherIds = Array.isArray(body?.publisherIds)

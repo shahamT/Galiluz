@@ -21,18 +21,23 @@ so each deploy is safe alone on continuously-deployed prod.
       `type==='manager'` still counts as super_admin during rollout); dual-write owner/super_admin
       memberships on approval/ghost/on-behalf/transfer; `event.accountId` stamped on every create path
       and moved on transfer; `managers.get` tolerant (membership OR `type`). **Reads unchanged.**
-- [ ] **MIGRATE — data-only.** Run [scripts/backfill-memberships.js](../scripts/backfill-memberships.js)
+- [x] **MIGRATE — data-only (applied to dev clone; PROD PENDING).** [scripts/backfill-memberships.js](../scripts/backfill-memberships.js)
       (`--dry-run` first → verify counts → apply → re-run expecting 0). Creates the platform account,
       `super_admin` memberships for managers, `owner` memberships for accounted publishers, accounts for
       accountless event-owners, and stamps `event.accountId` on every non-deleted event (orphans reported,
-      never guessed). Idempotent. **Run on prod after Deploy 1 is live; run on the dev clone before testing Deploy 2.**
-- [ ] **Deploy 2 — SWITCH READS (behavior-identical).** `getAccountPublisherIds` reads memberships;
-      event reads/ownership use `event.accountId === session.activeAccountId` (super_admin bypass); platform
-      gating uses `platformRole` (admin mutations → `requireSuperAdmin`, admin reads → `requirePlatformStaff`);
-      `getAccountFeatures` bypasses on `platformRole`; client `authStore` exposes `isSuperAdmin`/`isPlatformStaff`
-      (keep `isManager`/`canManageAll` aliases). Keep a one-line fallback for any unstamped straggler event.
-- [ ] **Deploy 3 — RENAME SURFACE.** Client/server use `platformRole`/`isSuperAdmin`/`isPlatformStaff`;
-      cosmetic "manager → super admin" strings where safe.
+      never guessed). Idempotent. Dev clone: 1 super_admin + 67 owner memberships, 115 events stamped,
+      3 orphans (legacy events with no publisherId). **Still TODO: run on prod AFTER Deploy 1 is live and BEFORE Deploy 2 ships.**
+- [x] **Deploy 2 — SWITCH READS (code committed; ships after the prod backfill).** `getAccountPublisherIds`
+      reads memberships; event reads/ownership use `event.accountId === session.activeAccountId` (super_admin
+      bypass, straggler fallback to the publisher-set); per-event/dashboard/stats gating uses
+      `session.isSuperAdmin`; admin reads → `requirePlatformStaff` (mutations stay on the `requireManager`
+      alias until Deploy 3); `getAccountFeatures` bypasses on `platformRole==='super_admin'`; client
+      `authStore` exposes `isSuperAdmin`/`isPlatformStaff` (`isManager`/`canManageAll` kept as aliases).
+- [x] **Deploy 3 — RENAME SURFACE (code committed).** Admin mutation routes + transfer use
+      `requireSuperAdmin` (was the `requireManager` alias, which is kept as a deprecated alias with no
+      remaining call sites); CLAUDE.md role/scoping/admin sections rewritten for the RBAC model. Client
+      `isManager`/`canManageAll` aliases and the conservative super-admin-only `/admin` middleware gate are
+      intentionally retained (viewer read-only UI is roadmap item 5).
 - [ ] **CONTRACT (deferred).** Remove the Deploy-2 fallbacks and (eventually) `publishers.type` +
       `publishers.accountId` — only after a consistency sweep shows 0 unstamped events and the wa-bot no
       longer reads `type`.
