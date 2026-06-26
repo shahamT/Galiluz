@@ -26,7 +26,11 @@ so each deploy is safe alone on continuously-deployed prod.
       `super_admin` memberships for managers, `owner` memberships for accounted publishers, accounts for
       accountless event-owners, and stamps `event.accountId` on every non-deleted event (orphans reported,
       never guessed). Idempotent. Dev clone: 1 super_admin + 67 owner memberships, 115 events stamped,
-      3 orphans (legacy events with no publisherId). **Still TODO: run on prod AFTER Deploy 1 is live and BEFORE Deploy 2 ships.**
+      3 orphans (legacy events with no publisherId).
+      **On prod it runs automatically via a one-time startup hook** ([server/plugins/migrate-memberships.ts](../server/plugins/migrate-memberships.ts))
+      — same logic, fire-and-forget on boot, guarded by the unique `appSettings` marker
+      `migration_memberships_v1` (race-safe across instances; no-op once done). **⚠ REMOVE that plugin in
+      the next deploy** once prod logs `[migrate-memberships] done`. The standalone script remains for manual/dry-run use.
 - [x] **Deploy 2 — SWITCH READS (code committed; ships after the prod backfill).** `getAccountPublisherIds`
       reads memberships; event reads/ownership use `event.accountId === session.activeAccountId` (super_admin
       bypass, straggler fallback to the publisher-set); per-event/dashboard/stats gating uses
