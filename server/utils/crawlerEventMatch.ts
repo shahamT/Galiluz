@@ -37,7 +37,7 @@ const MATCH_SCHEMA = {
   },
 }
 
-const SYSTEM_PROMPT = `You compare a NEWLY detected event against EXISTING events from the same publisher account, to avoid creating a duplicate draft.
+const SYSTEM_PROMPT = `You compare a NEWLY detected event against EXISTING events, to avoid creating a duplicate draft.
 
 Pick the single CANDIDATE most likely to be the SAME real-world happening as the NEW event, and give "similarity" = your confidence (0–100) that they are the same one event. If no candidate is plausibly the same, set bestCandidateId = null and similarity = 0.
 
@@ -61,8 +61,9 @@ Do not require exact matches on title or city — but the date rule above is dec
 Return bestCandidateId, similarity (0–100), and a short reason citing the evidence.`
 
 /**
- * AI comparison of a freshly extracted event vs the account's existing future
- * events. Returns a 0–100 similarity to the best candidate; matchedId is set only
+ * AI comparison of a freshly extracted event vs existing future events (the sender's
+ * account, plus any same-city/same-date events from other accounts — the caller decides
+ * the candidate set). Returns a 0–100 similarity to the best candidate; matchedId is set only
  * when similarity ≥ MATCH_SIMILARITY_THRESHOLD (a duplicate). Fail-open to "new"
  * (matchedId null) on any error — a deletable duplicate draft is far less harmful
  * than silently dropping a real new event.
@@ -106,7 +107,7 @@ Date: ${occ.date || '(none)'}
 Description: ${newDescription || '(none)'}
 Original message: ${sanitizeMessageForPrompt(messageText).slice(0, 2000)}
 
-EXISTING CANDIDATES (same account):
+EXISTING CANDIDATES:
 ${candidatesText}
 
 Which candidate is the same real-world event as the NEW event, and how confident are you (0–100)?`

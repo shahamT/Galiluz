@@ -76,13 +76,25 @@ async function ensureIndexes() {
 
     // App settings: one doc per settings domain (key-based).
     appSettings.createIndex({ key: 1 }, { unique: true }),
-    // Crawler dedup: lookup by (publisher, message hash); auto-expire after 21 days.
-    crawlerMessages.createIndex({ publisherId: 1, textHash: 1 }),
+    // Crawler dedup TTL: auto-expire records after 21 days. (The lookup key index is
+    // created separately below — it must be UNIQUE; see ensureCrawlerDedupIndex.)
     crawlerMessages.createIndex({ createdAt: 1 }, { expireAfterSeconds: 21 * DAY }),
     // Magic links: lookup by token hash; auto-expire at expiresAt.
     magicLinks.createIndex({ tokenHash: 1 }, { unique: true }),
     magicLinks.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ])
+
+  // Crawler dedup lookup key MUST be unique so the ingest claim (insertOne → E11000 on a
+  // duplicate) is race-safe against at-least-once webhook delivery. Migrate the legacy
+  // non-unique index in place; tolerate the conflict + a brand-new collection.
+  try {
+    await crawlerMessages.createIndex({ publisherId: 1, textHash: 1 }, { unique: true })
+  } catch {
+    await crawlerMessages.dropIndex('publisherId_1_textHash_1').catch(() => {})
+    await crawlerMessages
+      .createIndex({ publisherId: 1, textHash: 1 }, { unique: true })
+      .catch((e) => console.error('[Indexes] crawlerMessages unique index failed:', e instanceof Error ? e.message : e))
+  }
 
   console.info('[Indexes] All indexes ensured')
 }
