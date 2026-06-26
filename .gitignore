@@ -83,6 +83,10 @@ Desktop.ini
 # dotenv environment variables file
 .env.test
 
+# Local-only dev maintenance script (clones prod data into dev with scrubbed phones).
+# Kept out of git on purpose — contains hardcoded numbers and a destructive wipe.
+scripts/clone-prod-to-dev.js
+
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
 
