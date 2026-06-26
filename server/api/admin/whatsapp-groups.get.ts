@@ -5,7 +5,7 @@ import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
  * gateway → Green API getContacts). Manager-only. Used by the add-group picker.
  */
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requireManager: true })
+  await requirePublisherAuth(event, { requirePlatformStaff: true })
 
   const config = useRuntimeConfig() as Record<string, string>
   const gatewayUrl = (config.waGatewayUrl || process.env.WA_GATEWAY_URL || '').replace(/\/$/, '')

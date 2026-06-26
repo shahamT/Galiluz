@@ -3,7 +3,7 @@ import { getAppSettingsCollection } from '~/server/utils/appSettings'
 
 /** Admin: add a WhatsApp group to the crawler watch-list (idempotent). Manager-only. */
 export default defineEventHandler(async (event) => {
-  const session = await requirePublisherAuth(event, { requireManager: true })
+  const session = await requirePublisherAuth(event, { requireSuperAdmin: true })
   const body = await readBody<{ chatId?: string; name?: string }>(event)
   const chatId = typeof body?.chatId === 'string' ? body.chatId.trim() : ''
   const name = typeof body?.name === 'string' ? body.name.trim() : ''

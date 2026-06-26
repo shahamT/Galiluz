@@ -3,7 +3,7 @@ import { getAppSettingsCollection } from '~/server/utils/appSettings'
 
 /** Admin: remove a WhatsApp group from the crawler watch-list. Manager-only. */
 export default defineEventHandler(async (event) => {
-  const session = await requirePublisherAuth(event, { requireManager: true })
+  const session = await requirePublisherAuth(event, { requireSuperAdmin: true })
   const chatId = decodeURIComponent(getRouterParam(event, 'chatId') || '').trim()
   if (!chatId) throw createError({ statusCode: 400, message: 'chatId required' })
 

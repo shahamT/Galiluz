@@ -4,7 +4,7 @@ import { requireApiSecret } from '~/server/utils/requireApiSecret'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { getAppSetting } from '~/server/utils/appSettings'
 import { getPublisherPreferences } from '~/server/utils/publisherPreferences'
-import { getAccountPublisherIds, resolveAccountTitle } from '~/server/utils/accountScope'
+import { resolveAccountTitle, ensureAccountForPublisher } from '~/server/utils/accountScope'
 import { getTodayIsrael } from '~/server/utils/eventFirstOccurrence'
 import { NOT_DELETED } from '~/server/utils/eventsQuery'
 import { sanitizeMessageForPrompt } from '~/server/utils/sanitizeMessageForPrompt'
@@ -170,9 +170,12 @@ export default defineEventHandler(async (event) => {
   const eventsCol = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
   const MATCH_PROJECTION = { 'event.Title': 1, 'event.shortDescription': 1, 'event.location.city': 1, 'event.occurrences': 1 }
 
-  const publisherIds = await getAccountPublisherIds({ accountId: publisher.accountId, publisherId } as never)
+  // Resolve the sender's account (tenant key) once — used both for the own-account dedup
+  // candidates below and for stamping the draft (step 9). ensureAccountForPublisher is
+  // idempotent and DB-free when the publisher already has an account.
+  const accountId = await ensureAccountForPublisher({ _id: publisher._id, accountId: publisher.accountId, accountName: publisher.accountName, waId })
   const accountEvents = await eventsCol
-    .find({ 'event.publisherId': { $in: publisherIds }, ...NOT_DELETED }, { projection: MATCH_PROJECTION })
+    .find({ 'event.accountId': accountId, ...NOT_DELETED }, { projection: MATCH_PROJECTION })
     .toArray()
 
   const futureDates = occurrenceDates.filter((dt) => dt >= today)
@@ -234,7 +237,8 @@ export default defineEventHandler(async (event) => {
   }
 
   // 9. Build + save the draft (validDraft flags completeness; never rejected).
-  const { eventObj, validDraft } = buildCrawlerDraftEvent(formattedEvent, publisherId, media, waId)
+  // `accountId` (the tenant key) was resolved above in step 7.
+  const { eventObj, validDraft } = buildCrawlerDraftEvent(formattedEvent, publisherId, media, waId, accountId)
   const doc = {
     createdAt: new Date(),
     isActive: false,

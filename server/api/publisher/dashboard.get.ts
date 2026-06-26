@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
   const features = await getAccountFeatures(session)
 
   return computeDashboard({
-    statsPubFilter: session.type === 'manager' ? {} : { publisherId: { $in: accountPublisherIds } },
+    statsPubFilter: session.isSuperAdmin ? {} : { publisherId: { $in: accountPublisherIds } },
     eventsPubFilter: { 'event.publisherId': { $in: accountPublisherIds } },
     logsPubFilter: { publisherId: { $in: accountPublisherIds } },
     filter,

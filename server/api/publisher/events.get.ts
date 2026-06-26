@@ -1,7 +1,7 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { NOT_DELETED } from '~/server/utils/eventsQuery'
-import { getAccountPublisherIds } from '~/server/utils/accountScope'
+import { getAccountEventFilter } from '~/server/utils/accountScope'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event)
@@ -11,10 +11,11 @@ export default defineEventHandler(async (event) => {
 
   const eventsCol = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
 
-  // Account-scoped: all events by any publisher in the caller's account (1:1 today).
-  const publisherIds = await getAccountPublisherIds(session)
+  // Tenant-scoped: events owned by the caller's active account (event.accountId), with a
+  // straggler fallback to the account's publisher-set for any not-yet-stamped event.
+  const scope = await getAccountEventFilter(session)
   const docs = await eventsCol
-    .find({ 'event.publisherId': { $in: publisherIds }, ...NOT_DELETED })
+    .find({ ...scope, ...NOT_DELETED })
     .project({
       _id: 1,
       isActive: 1,

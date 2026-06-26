@@ -20,7 +20,7 @@ function validateMagicBytes(buf: Buffer, _mimetype: string): boolean {
 }
 
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requireManager: true })
+  await requirePublisherAuth(event, { requireSuperAdmin: true })
 
   const body = await readBody<{ file: string; mimetype: string; filename: string }>(event)
   const base64 = typeof body?.file === 'string' ? body.file : ''

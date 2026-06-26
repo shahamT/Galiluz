@@ -75,6 +75,8 @@ export default defineNuxtConfig({
     mongodbCollectionEventStats: process.env.MONGODB_COLLECTION_EVENT_STATS || 'eventStats',
     mongodbCollectionEventOccurrenceStats: process.env.MONGODB_COLLECTION_EVENT_OCCURRENCE_STATS || 'eventOccurrenceStats',
     mongodbCollectionAccounts: process.env.MONGODB_COLLECTION_ACCOUNTS || 'accounts',
+    // Publisher↔account↔role join (multi-tenant RBAC; source of truth for memberships).
+    mongodbCollectionMemberships: process.env.MONGODB_COLLECTION_MEMBERSHIPS || 'memberships',
     // Global app settings (key-based), crawler dedup (TTL 21d), and magic-link tokens (TTL).
     mongodbCollectionAppSettings: process.env.MONGODB_COLLECTION_APP_SETTINGS || 'appSettings',
     mongodbCollectionCrawlerMessages: process.env.MONGODB_COLLECTION_CRAWLER_MESSAGES || 'crawlerMessages',

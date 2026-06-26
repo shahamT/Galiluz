@@ -1,7 +1,7 @@
 import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
-import { getAccountPublisherIds } from '~/server/utils/accountScope'
+import { ownsEventForSession } from '~/server/utils/accountScope'
 import { getAccountFeatures } from '~/server/utils/accountFeatures'
 
 export default defineEventHandler(async (event) => {
@@ -25,14 +25,14 @@ export default defineEventHandler(async (event) => {
   const doc = await eventsCol.findOne({ _id: objectId })
   if (!doc || doc.deletedAt) throw createError({ statusCode: 404, message: 'event not found' })
 
-  // Account-scoped ownership: any publisher in the caller's account owns the event (1:1 today).
-  const ownsEvent = (await getAccountPublisherIds(session)).includes(doc.event?.publisherId)
-  if (session.type !== 'manager' && !ownsEvent) {
+  // Tenant-scoped ownership: the caller's active account owns the event (by event.accountId).
+  const ownsEvent = await ownsEventForSession(session, doc.event)
+  if (!session.isSuperAdmin && !ownsEvent) {
     throw createError({ statusCode: 403, message: 'forbidden' })
   }
 
   let ownerInfo: { publisherId: string; publisherName: string; originalCreatorPublisherId?: string } | null = null
-  if (session.type === 'manager' && doc.event?.publisherId) {
+  if (session.isSuperAdmin && doc.event?.publisherId) {
     const publishersCol = db.collection(config.mongodbCollectionPublishers || 'publishers')
     let pubObjId: ObjectId | null = null
     try { pubObjId = new ObjectId(doc.event.publisherId) } catch { /* skip */ }

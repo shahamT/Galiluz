@@ -3,7 +3,7 @@ import { getAppSetting } from '~/server/utils/appSettings'
 
 /** Admin: read crawler settings (global toggle + managed groups). Manager-only. */
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requireManager: true })
+  await requirePublisherAuth(event, { requirePlatformStaff: true })
   const doc = await getAppSetting('crawler')
   const groups = Array.isArray(doc?.groups) ? (doc.groups as Array<Record<string, unknown>>) : []
   return {
