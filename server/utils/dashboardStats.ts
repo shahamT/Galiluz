@@ -20,8 +20,9 @@ export interface DashboardScope {
   /** Publisher scope for the stats collections (occStats / interactions / eventStats).
    *  `{}` = platform-wide; `{ publisherId: { $in: ids } }` = scoped. Merged with deletedAt-absent. */
   statsPubFilter: Record<string, unknown>
-  /** Publisher scope for the events collection (used for counts + top-event metadata).
-   *  `{}` = all events (incl. ghost-publisher events); `{ 'event.publisherId': { $in: ids } }` = scoped. */
+  /** Scope for the events collection (used for counts + top-event metadata).
+   *  `{}` = all events (incl. ghost-publisher events, admin dashboard); `{ 'event.accountId': id }` =
+   *  scoped to one account (publisher dashboard, via getAccountEventFilter). */
   eventsPubFilter: Record<string, unknown>
   /** Filter for the recent-activity logs (who performed the action), e.g.
    *  `{ publisherId: x }` (a single actor) or `{ publisherId: { $in: ids } }`. */

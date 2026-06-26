@@ -68,6 +68,11 @@ export default defineEventHandler(async (event) => {
     } else {
       await collection.deleteOne({ waId })
 
+      // Remove the publisher's memberships (owner of their account + any platform staff role) so
+      // none are left orphaned pointing at a deleted publisher. Ghost records keep theirs.
+      const membershipsCol = db.collection((config.mongodbCollectionMemberships as string) || 'memberships')
+      await membershipsCol.deleteMany({ publisherId })
+
       // Release the publisher's account if no other publishers remain in it
       // (ghost records keep their publisher, so this only runs on hard delete).
       if (doc.accountId) {
