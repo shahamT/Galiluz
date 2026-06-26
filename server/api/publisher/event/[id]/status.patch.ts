@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
   const doc = await col.findOne({ _id: objectId })
   if (!doc || doc.deletedAt) throw createError({ statusCode: 404, message: 'event not found' })
 
-  const ownsEvent = await ownsEventForSession(session, doc.event)
+  const ownsEvent = ownsEventForSession(session, doc.event)
   if (!session.isSuperAdmin && !ownsEvent) {
     throw createError({ statusCode: 403, message: 'forbidden' })
   }

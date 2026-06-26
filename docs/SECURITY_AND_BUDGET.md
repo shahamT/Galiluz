@@ -18,8 +18,8 @@ Publishers log in via WhatsApp OTP. The session is stored in a secure cookie.
 
 ### Resource ownership
 
-- **Publishers** can only read/write their own events. Endpoints enforce `doc.event.publisherId === session.publisherId`.
-- **Managers** (`session.type === 'manager'`) bypass the ownership check and can act on any event.
+- **Publishers** can only read/write events owned by their active account. Endpoints enforce `ownsEventForSession(session, doc.event)` (i.e. `doc.event.accountId === session.activeAccountId`).
+- **Super-admins** (`session.isSuperAdmin`, from a platform `super_admin` membership) bypass the ownership check and can act on any event.
 
 ### 401 handling on the client
 

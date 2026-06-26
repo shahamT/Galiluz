@@ -7,8 +7,8 @@ import { getAccountPublisherIds, ensureAccountForPublisher } from '~/server/util
 // script + manual verification, not here.
 
 describe('getAccountPublisherIds', () => {
-  it('falls back to the caller\'s own publisherId when no account is assigned (silent = old behaviour)', async () => {
-    const session = { publisherId: 'pub-1', waId: '972500000000', fullName: '', publishingAs: '', type: 'publisher' as const }
+  it('falls back to the caller\'s own publisherId when there is no active account (platform-only staff)', async () => {
+    const session = { publisherId: 'pub-1', waId: '972500000000', fullName: '', publishingAs: '', isSuperAdmin: false, isPlatformStaff: false }
     const ids = await getAccountPublisherIds(session)
     expect(ids).toEqual(['pub-1'])
   })

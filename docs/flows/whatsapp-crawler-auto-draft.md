@@ -160,7 +160,7 @@ imperfectly-extracted dates/cities) — not exact field equality.
 | Green API → gateway `/webhook/green-api` | `Authorization: Bearer <webhookUrlToken>` must equal `GREEN_API_WEBHOOK_TOKEN`. **Fail-closed: 503 if the token is unset** (the route is public). Constant-time compare. |
 | gateway → web `/api/internal/crawler/ingest`, `/watched-groups` | `API_SECRET` via `x-api-key` (`requireApiSecret`) |
 | web → gateway `/internal/*` | `API_SECRET` via `x-api-secret` (`checkApiSecret`) |
-| Admin settings APIs | `requirePublisherAuth(event,{requireManager:true})` → 403 `manager_only` |
+| Admin settings APIs (mutations) | `requirePublisherAuth(event,{requireSuperAdmin:true})` → 403 `manager_only`; the settings GET uses `{requirePlatformStaff:true}` |
 | Image fetch | [safeImageFetch.ts](../../server/utils/safeImageFetch.ts): https-only, no credentials, DNS-resolve and reject private/reserved IPs (v4+v6, incl. IPv4-mapped/NAT64/6to4 embedded-v4, link/site-local, ULA, multicast), manual per-hop redirect re-validation, body-size cap, timeout, `image/*` only |
 | Magic link | 32-byte token, **HMAC-SHA256 hashed at rest** (secret `OTP_SECRET`), 10-min TTL, **single-use**, server-validated internal redirect (must start `/`, not `//`/`/\`), issues a normal 1h `galiluz_auth` session, consume endpoint rate-limited |
 

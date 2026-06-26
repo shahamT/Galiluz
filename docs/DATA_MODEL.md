@@ -124,9 +124,11 @@ Account, approval state, and all auth state in one doc.
 {
   _id: ObjectId,
   waId: String,                     // UNIQUE. Normalized Israeli phone: 972XXXXXXXXX
-  accountId: String,                // accounts._id.toString(); auto-created at approval, absent on legacy docs until backfilled
+  accountId: String,                // accounts._id.toString() — the DEFAULT-ACTIVE-account pointer (auto-created at approval)
   status: 'pending' | 'approved' | 'ghost',   // only 'approved' can log in / receive OTP
-  type: 'publisher' | 'manager',    // manager = cross-publisher portal rights
+  // type: 'publisher' | 'manager'  — LEGACY. Roles now live in `memberships` (see below). No longer
+  //   written or read for authorization; only old docs still carry it. Manage staff via
+  //   scripts/set-platform-role.js (a super_admin membership), NOT by setting this field.
 
   createdAt: Date,
   createdOnBehalf: Boolean,         // true for ghost records created via API; reject never hard-deletes these

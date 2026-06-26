@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
   let effectiveWaId          = session.waId // publisher's WhatsApp number → event.publisherPhone (public contact link)
   // Tenant key that OWNS the event: self → the caller's active account; on-behalf → the TARGET
   // publisher's account (created on the fly for a brand-new ghost).
-  let effectiveAccountId     = session.activeAccountId || session.accountId || ''
+  let effectiveAccountId     = session.activeAccountId || ''
   let isManagerAction        = false
 
   if (onBehalfPublisherId || onBehalfPhone) {
@@ -74,7 +74,6 @@ export default defineEventHandler(async (event) => {
           waId: normalized,
           phone: normalized,
           status: 'ghost',
-          type: 'publisher',
           createdOnBehalf: true,
           createdAt: new Date(),
         })

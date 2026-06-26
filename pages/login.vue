@@ -286,7 +286,7 @@ async function handleVerifyOtp() {
       if (rt.startsWith('/') && !rt.startsWith('//') && !rt.startsWith('/\\')) {
         navigateTo(rt)
       } else {
-        navigateTo(authStore.isManager ? '/admin' : '/publisher/dashboard')
+        navigateTo(authStore.isSuperAdmin ? '/admin' : '/publisher/dashboard')
       }
     }, 800)
   } catch (err) {

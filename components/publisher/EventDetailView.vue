@@ -69,7 +69,7 @@
                   המרה לטיוטה
                 </button>
                 <button
-                  v-if="allowTransfer && authStore.isManager"
+                  v-if="allowTransfer && authStore.isSuperAdmin"
                   type="button"
                   class="EventPage-actionBtn EventPage-actionBtn--ghost-draft"
                   @click="showTransferModal = true"

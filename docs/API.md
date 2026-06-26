@@ -7,7 +7,7 @@ Nitro routes under [server/api/](../server/api/) (plus one server route, [/direc
 | Guard | Source | Behavior |
 |---|---|---|
 | `requireApiSecret(event)` | [requireApiSecret.ts](../server/utils/requireApiSecret.ts) | `X-API-Key` header (preferred) or `apiKey` query param, timing-safe compare against `API_SECRET`. In production with no secret configured → 503. **In dev with no secret configured the guard is a no-op.** |
-| `requirePublisherAuth(event, opts?)` | [requirePublisherAuth.ts](../server/utils/requirePublisherAuth.ts) | Reads the `galiluz_auth` HttpOnly cookie (browser) or `Authorization: Bearer` (tools), HMACs the token, looks up `publishers.authKey` with unexpired `authKeyExpiresAt` and `status: 'approved'`. 401 on failure; `{ requireManager: true }` → 403 for non-managers. Returns `{ publisherId, waId, fullName, publishingAs, type }`. |
+| `requirePublisherAuth(event, opts?)` | [requirePublisherAuth.ts](../server/utils/requirePublisherAuth.ts) | Reads the `galiluz_auth` HttpOnly cookie (browser) or `Authorization: Bearer` (tools), HMACs the token, looks up `publishers.authKey` with unexpired `authKeyExpiresAt` and `status: 'approved'`. Resolves roles fresh from `memberships`. 401 on failure; `{ requireSuperAdmin: true }` → 403 `manager_only` for non-super-admins, `{ requirePlatformStaff: true }` → 403 `platform_staff_only`. Returns `{ publisherId, waId, fullName, publishingAs, activeAccountId, activeRole, platformRole, isSuperAdmin, isPlatformStaff }`. |
 | `checkRateLimit(event)` | [rateLimit.ts](../server/utils/rateLimit.ts) | General tier, 429 on excess. |
 | `checkAuthRateLimit(event)` + `checkPhoneRateLimit(phone)` | same | Auth tier (see below). |
 
@@ -25,7 +25,7 @@ The file store ([rateLimitFileStore.ts](../server/utils/rateLimitFileStore.ts)) 
 
 - **Correlation IDs**: [correlation-id.ts](../server/middleware/correlation-id.ts) runs on every request — honors an inbound `X-Correlation-Id` matching `/^[\w-]{4,64}$/` (the WA apps send one), otherwise generates a 4-byte hex id. Stored on `event.context.correlationId`, echoed in the `X-Correlation-Id` response header, and carried into eventLogs entries. Mutating routes that pre-date the middleware generate their own 4-byte hex id for the eventLogs entry instead of reading the context.
 - **Error logging**: [error-logging.ts](../server/plugins/error-logging.ts) logs every unhandled **5xx** as a single JSON line (`method`, `path`, `statusCode`, `message`, `correlationId`, 5-line stack). 4xx (validation, auth, 429) are deliberately not logged.
-- **Manager semantics**: ownership checks are uniformly `if (session.type !== 'manager' && doc.event?.publisherId !== session.publisherId) → 403`. When a manager acts on another publisher's event, the eventLogs entry gets `isManagerAction: true`. Manager-scoped *stats* queries (`dashboard`, `stats`) drop the `publisherId` filter entirely; the portal events *list* and dashboard event counts/recent logs stay scoped to the manager's own `publisherId`.
+- **Super-admin semantics**: event ownership checks are uniformly `if (!session.isSuperAdmin && !ownsEventForSession(session, doc.event)) → 403` (own = `event.accountId === session.activeAccountId`). When a super-admin acts on another account's event, the eventLogs entry gets `isManagerAction: true`. Super-admin *stats* queries (`dashboard`, `stats`) drop the `publisherId` filter entirely; the portal events *list* and dashboard event counts/recent logs stay scoped to the super-admin's own active account.
 - **Caching on public GETs**: `/api/categories` → `Cache-Control: public, max-age=86400` (static data); `/api/events` and `/api/events/[id]/meta` → `public, max-age=60`. `/direct` has `cache: false` in `nitro.routeRules`. Nothing else sets cache headers.
 - **CSRF**: `send-otp` and `verify-otp` enforce `Origin` host === `Host` in production (missing Origin rejected).
 - **Hebrew error messages**: validation failures on publisher-facing routes return Hebrew `message` strings (e.g. 422 from event validation) — they are shown to users as-is.
@@ -68,11 +68,13 @@ The file store ([rateLimitFileStore.ts](../server/utils/rateLimitFileStore.ts)) 
 | GET | `/api/publisher/stats` | Own; manager unscoped | Per-event stats rows, top 100 by views, titles joined from events. |
 | POST | `/api/publisher/media` | Any authenticated + RateLimit | Base64 upload → Cloudinary. 20MB max; MIME + extension allowlists, double-extension rejection, magic-byte check for non-HEIC images. Returns `{ cloudinaryURL, cloudinaryData, isMain: false }`. |
 
-### Admin (ManagerAuth — `requirePublisherAuth({ requireManager: true })`)
+### Admin (read routes → `requirePublisherAuth({ requirePlatformStaff: true })`; mutations → `{ requireSuperAdmin: true }`)
+
+GET routes (`dashboard`, `events`, `publishers`, `whatsapp-groups`, `settings/crawler`, `crawler-publishers`, `broadcast/[id]`) allow platform staff (super_admin **or** viewer). All mutations require a super_admin.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/admin/broadcast-media` | Manager-only image upload for broadcasts → Cloudinary. **Image-only** (JPG/PNG/WebP), **≤5MB**, magic-byte check, folder `broadcasts`. Returns `{ cloudinaryURL }`. |
+| POST | `/api/admin/broadcast-media` | Super-admin-only image upload for broadcasts → Cloudinary. **Image-only** (JPG/PNG/WebP), **≤5MB**, magic-byte check, folder `broadcasts`. Returns `{ cloudinaryURL }`. |
 | POST | `/api/admin/broadcast` | Send a WhatsApp message to selected **approved** publishers. Body `{ publisherIds[], message, imageUrl? }`. Resolves recipients (approved, non-deleted), validates the worst-case image caption ≤1024, **creates a `broadcasts` job doc** (`status:'sending'`), then hands a compact job (template + per-recipient `{id, accountName, fullName}` + `broadcastId`) to the gateway's `/internal/broadcast`, which paces the sends. Returns `{ success, broadcastId, total }`. Personalization tags `<שם החשבון>`/`<שם המפרסם>` are replaced per recipient **by the gateway**. On gateway-dispatch failure the doc is marked `failed` → 502. |
 | GET | `/api/admin/broadcast/[id]` | Live broadcast status (polled by the admin page while sending). Returns `{ status, sentCount, failedCount, recipientCount, total, completedAt }`. |
 
@@ -103,8 +105,9 @@ The file store ([rateLimitFileStore.ts](../server/utils/rateLimitFileStore.ts)) 
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/publishers/register` | Upsert by `waId` → `status: 'pending'`, `type: 'publisher'`, `createdOnBehalf: false`. Idempotent. |
-| GET | `/api/publishers/check?waId=` | Returns `{ status, fullName, publishingAs, type }`. Status is only `approved \| pending \| not_found` — ghosts and anything else map to `not_found`. |
+| POST | `/api/publishers/register` | Upsert by `waId` → `status: 'pending'`, `createdOnBehalf: false`. Idempotent. |
+| GET | `/api/publishers/check?waId=` | Returns `{ status, fullName, publishingAs, type }` where `type` is **derived from the platform membership** (`manager` = has a super_admin membership, else `publisher`). Status is only `approved \| pending \| not_found` — ghosts and anything else map to `not_found`. |
+| GET | `/api/publishers/managers` | waIds of platform super-admins (members of the platform account with role `super_admin`). |
 | POST | `/api/publishers/approve` | Set `status: 'approved'` + `approvedAt`. 404 if no such `waId`. |
 | POST | `/api/publishers/reject` | Cascade soft-delete all the publisher's events + stats stamps, then ghost-mark (`createdOnBehalf`) or hard-delete the publisher doc. Logs `publisher_rejected` with cascade count. No Cloudinary cleanup in this path. |
 | POST | `/api/publishers/ghost` | `$setOnInsert`-only upsert of a ghost record (`status: 'ghost'`, `createdOnBehalf: true`) — never modifies an existing record of any status. Idempotent. |

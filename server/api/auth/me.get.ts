@@ -11,8 +11,7 @@ export default defineEventHandler(async (event) => {
     waId: session.waId,
     fullName: session.fullName,
     // Account name lives on accounts.title now; keep the `publishingAs` key for the client.
-    publishingAs: await resolveAccountTitle({ accountId: session.accountId, accountName: session.accountName, waId: session.waId }),
-    type: session.type,
+    publishingAs: await resolveAccountTitle({ accountId: session.activeAccountId, accountName: session.accountName, waId: session.waId }),
     platformRole: session.platformRole,
     activeAccountId: session.activeAccountId,
     activeRole: session.activeRole,

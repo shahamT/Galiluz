@@ -21,29 +21,23 @@ export default defineEventHandler(async (event) => {
     const { db } = await getMongoConnection()
     const collection = db.collection(collectionName)
 
-    // Platform super-admins are members of the single `kind:'platform'` account with role
-    // 'super_admin' (the post-migration source of truth). During rollout we ALSO honor the
-    // legacy `type:'manager'` flag, so this list is correct before and after the data backfill
-    // with no wa-bot redeploy. Non-creating lookup: if the platform account doesn't exist yet
-    // (pre-migrate), the membership branch is skipped and we fall back to `type` alone.
+    // Platform super-admins = members of the single `kind:'platform'` account with role
+    // 'super_admin' (the source of truth for staff). Non-creating lookup: no platform account →
+    // no staff yet → empty list.
     const accounts = db.collection(config.mongodbCollectionAccounts || 'accounts')
     const platformAccount = await accounts.findOne({ kind: 'platform' }, { projection: { _id: 1 } })
+    if (!platformAccount) return []
 
-    let superAdminIds: ObjectId[] = []
-    if (platformAccount) {
-      const memberships = db.collection(config.mongodbCollectionMemberships || 'memberships')
-      const rows = await memberships
-        .find({ accountId: platformAccount._id.toString(), role: 'super_admin', status: 'active' }, { projection: { publisherId: 1 } })
-        .toArray()
-      superAdminIds = rows
-        .map((r) => { try { return new ObjectId(String(r.publisherId)) } catch { return null } })
-        .filter((x): x is ObjectId => x !== null)
-    }
+    const memberships = db.collection(config.mongodbCollectionMemberships || 'memberships')
+    const rows = await memberships
+      .find({ accountId: platformAccount._id.toString(), role: 'super_admin', status: 'active' }, { projection: { publisherId: 1 } })
+      .toArray()
+    const superAdminIds = rows
+      .map((r) => { try { return new ObjectId(String(r.publisherId)) } catch { return null } })
+      .filter((x): x is ObjectId => x !== null)
+    if (!superAdminIds.length) return []
 
-    const or: Record<string, unknown>[] = [{ type: 'manager' }]
-    if (superAdminIds.length) or.push({ _id: { $in: superAdminIds } })
-
-    const docs = await collection.find({ status: 'approved', $or: or }, { projection: { waId: 1 } }).toArray()
+    const docs = await collection.find({ status: 'approved', _id: { $in: superAdminIds } }, { projection: { waId: 1 } }).toArray()
     return docs.map((d) => d.waId).filter(Boolean)
   } catch (err) {
     console.error('[PublishersAPI] Managers error:', err instanceof Error ? err.message : String(err))

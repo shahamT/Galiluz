@@ -47,7 +47,7 @@ manager UI ──POST /api/admin/broadcast───────▶ web (manager-
 - **Image vs text:** image attached → `sendFileByUrl(chatId, imageUrl, fileName, renderedCaption)`; else `sendMessage(chatId, rendered)`.
 
 ## 6. Authentication & security
-- Both web endpoints: `requirePublisherAuth(event, { requireManager: true })` (403 `manager_only` otherwise); client gated by `middleware/auth.ts`.
+- Both web endpoints: `requirePublisherAuth(event, { requireSuperAdmin: true })` (403 `manager_only` otherwise); client gated by `middleware/auth.ts`.
 - Web→gateway: `x-api-secret` (shared `API_SECRET`), same as OTP/crawler.
 - `imageUrl` must be a `https://res.cloudinary.com/` URL (no arbitrary URL handed to Green API).
 - Recipients re-filtered to `status:'approved'` server-side — never trusts the client list.

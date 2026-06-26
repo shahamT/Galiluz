@@ -1,6 +1,6 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requireApiSecret } from '~/server/utils/requireApiSecret'
-import { resolveAccountTitle } from '~/server/utils/accountScope'
+import { resolveAccountTitle, resolvePublisherRoles } from '~/server/utils/accountScope'
 
 export default defineEventHandler(async (event) => {
   requireApiSecret(event)
@@ -33,7 +33,10 @@ export default defineEventHandler(async (event) => {
     const fullName = typeof doc.fullName === 'string' ? doc.fullName : ''
     // Account name now lives on accounts.title; keep the `publishingAs` key for the bot.
     const publishingAs = await resolveAccountTitle({ accountId: doc.accountId, accountName: doc.accountName, waId: doc.waId })
-    const type = doc.type === 'manager' ? 'manager' : 'publisher'
+    // `type` is derived from the platform membership (the source of truth) — a super_admin is the
+    // bot's "manager". publishers.type is no longer read.
+    const roles = await resolvePublisherRoles({ publisherId: doc._id.toString(), accountId: doc.accountId })
+    const type = roles.isSuperAdmin ? 'manager' : 'publisher'
     return { status, fullName, publishingAs, type }
   } catch (err) {
     console.error('[PublishersAPI] Check error:', err instanceof Error ? err.message : String(err))

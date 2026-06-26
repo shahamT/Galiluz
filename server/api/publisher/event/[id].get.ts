@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   if (!doc || doc.deletedAt) throw createError({ statusCode: 404, message: 'event not found' })
 
   // Tenant-scoped ownership: the caller's active account owns the event (by event.accountId).
-  const ownsEvent = await ownsEventForSession(session, doc.event)
+  const ownsEvent = ownsEventForSession(session, doc.event)
   if (!session.isSuperAdmin && !ownsEvent) {
     throw createError({ statusCode: 403, message: 'forbidden' })
   }

@@ -7,12 +7,8 @@ export interface PublisherSession {
   publisherId: string
   waId: string
   fullName: string
-  /** @deprecated Account name relocated to accounts.title — empty for web publishers. Resolve the display title via resolveAccountTitle({accountId, accountName, waId}). */
+  /** Account display title (accounts.title); empty for web publishers — resolve via resolveAccountTitle. */
   publishingAs: string
-  /** @deprecated Platform role moved to `platformRole` (memberships). Kept during rollout. */
-  type: 'publisher' | 'manager'
-  /** @deprecated Denormalized default-account pointer; use `activeAccountId`. */
-  accountId?: string
   /** Pending-period account-name carrier (before an account exists). */
   accountName?: string
   /** Active business account (the `accountId` pointer validated against memberships). */
@@ -21,19 +17,16 @@ export interface PublisherSession {
   activeRole?: 'owner' | 'admin' | null
   /** Platform (Galiluz-management) role (from memberships): 'super_admin' | 'viewer' | null. */
   platformRole?: 'super_admin' | 'viewer' | null
-  /** Effective super-admin (platform super_admin, or the legacy `type==='manager'` alias). Use this
-   *  for per-event "act on any event" checks instead of `type === 'manager'`. */
+  /** Platform super-admin — use for per-event "act on any event" checks. */
   isSuperAdmin: boolean
-  /** Effective platform staff (super_admin or viewer, or the legacy alias) — may read the admin portal. */
+  /** Platform staff (super_admin or viewer) — may read the admin portal. */
   isPlatformStaff: boolean
   /** Per-publisher preference flags (raw, stored); resolve with getPublisherPreferences(). */
   preferences?: Record<string, unknown>
 }
 
 export interface AuthOptions {
-  /** @deprecated alias of `requireSuperAdmin`. Throws 403 unless the user is a platform super_admin. */
-  requireManager?: boolean
-  /** Throws 403 unless the user is a platform super_admin. */
+  /** Throws 403 unless the user is a platform super_admin (message `manager_only`). */
   requireSuperAdmin?: boolean
   /** Throws 403 unless the user is platform staff (super_admin or viewer) — for admin READ routes. */
   requirePlatformStaff?: boolean
@@ -42,7 +35,7 @@ export interface AuthOptions {
 /**
  * Validates the Bearer token from the Authorization header.
  * Throws 401 if missing, invalid, or expired.
- * Throws 403 on a failed role gate (requireSuperAdmin / requirePlatformStaff / the requireManager alias).
+ * Throws 403 on a failed role gate (requireSuperAdmin / requirePlatformStaff).
  * Returns publisher session info on success, with roles derived FRESH from memberships.
  *
  * Usage:
@@ -51,7 +44,7 @@ export interface AuthOptions {
  *   const session = await requirePublisherAuth(event, { requirePlatformStaff: true }) // admin READ routes (super_admin|viewer)
  *
  * For resource ownership use the tenant key (see ownsEventForSession) and the super-admin bypass:
- *   if (!session.isSuperAdmin && !(await ownsEventForSession(session, doc.event)))
+ *   if (!session.isSuperAdmin && !ownsEventForSession(session, doc.event))
  *     throw createError({ statusCode: 403 })
  */
 export async function requirePublisherAuth(event: H3Event, options: AuthOptions = {}): Promise<PublisherSession> {
@@ -77,7 +70,7 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
 
     const doc = await collection.findOne(
       { authKey: hash, authKeyExpiresAt: { $gt: new Date() } },
-      { projection: { _id: 1, waId: 1, fullName: 1, publishingAs: 1, accountName: 1, type: 1, status: 1, accountId: 1, preferences: 1 } },
+      { projection: { _id: 1, waId: 1, fullName: 1, publishingAs: 1, accountName: 1, status: 1, accountId: 1, preferences: 1 } },
     )
 
     if (!doc || doc.status !== 'approved') {
@@ -86,18 +79,16 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
 
     // Roles are read FRESH from memberships every request (never cache a privilege — a stale role
     // cache is the classic multi-tenant escalation bug). resolvePublisherRoles derives platformRole,
-    // the active business account/role, and the effective super_admin/platform-staff gates (the
-    // legacy `type==='manager'` alias is applied inside, so this works pre- and post-migrate).
+    // the active business account/role, and the super_admin/platform-staff gates. `accountId` is the
+    // default-active-account pointer used to pick the active membership.
     const publisherId = doc._id.toString()
-    const roles = await resolvePublisherRoles({ publisherId, accountId: doc.accountId, type: doc.type })
+    const roles = await resolvePublisherRoles({ publisherId, accountId: doc.accountId })
 
     const session: PublisherSession = {
       publisherId,
       waId: doc.waId,
       fullName: doc.fullName || '',
       publishingAs: doc.publishingAs || '',
-      type: doc.type === 'manager' ? 'manager' : 'publisher',
-      accountId: doc.accountId || undefined,
       accountName: doc.accountName || undefined,
       activeAccountId: roles.activeAccountId,
       activeRole: roles.activeRole,
@@ -107,7 +98,7 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
       preferences: doc.preferences || {},
     }
 
-    if ((options.requireManager || options.requireSuperAdmin) && !session.isSuperAdmin) {
+    if (options.requireSuperAdmin && !session.isSuperAdmin) {
       throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'manager_only' })
     }
     if (options.requirePlatformStaff && !session.isPlatformStaff) {
