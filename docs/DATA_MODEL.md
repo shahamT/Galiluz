@@ -20,7 +20,8 @@ For the routes that read/write these collections, see [API.md](./API.md).
 |---|---|---|---|---|
 | events | `events` | Core event documents (drafts + published; soft-deleted kept) | Forever | One doc per submitted event |
 | publishers | `publishers` | Publisher accounts + OTP/session auth state | Forever | Small (one doc per publisher) |
-| accounts | `accounts` | Business account grouping publishers (one account → many publishers) | Forever (soft-deleted kept) | Small (one doc per account; 1:1 with publishers today) |
+| accounts | `accounts` | Tenant grouping publishers — `kind: 'business'` (owns events) or the single `'platform'` (Galiluz management) | Forever (soft-deleted kept) | Small (one doc per account; 1:1 with publishers today) |
+| memberships | `memberships` | Publisher↔account↔role join (source of truth for roles); M:N-ready | Forever | One doc per (publisher, account) pair |
 | eventStats | `eventStats` | Event-level engagement counters | Forever (stamped `deletedAt` on delete) | One doc per event with interactions |
 | eventOccurrenceStats | `eventOccurrenceStats` | Per-(event, date) view/calendar counters | Forever (stamped) | One doc per event-occurrence-date with interactions |
 | eventInteractions | `eventInteractions` | Raw interaction log (source for unique counting) | **TTL 90 days** | One doc per interaction — high volume |
@@ -54,6 +55,8 @@ The central document. `event` (formatted, what the site renders) and `rawEvent` 
     shortDescription: String,
     fullDescription: String,        // sanitized HTML — only p,br,strong,em,del,code,pre,blockquote,ul,ol,li survive sanitizeHtml
     publisherId: String,            // publishers._id.toString() — NOT an ObjectId
+    originalCreatorPublisherId: String, // immutable creator (stamped at create; set on first transfer for legacy)
+    accountId: String,              // TENANT KEY (RBAC) — owning account; stamped at create, moved on transfer
     publisherPhone: String,         // digits only, may be ''
 
     occurrences: [{                 // at least 1 (validated)
@@ -157,12 +160,13 @@ Account, approval state, and all auth state in one doc.
 
 ## accounts
 
-Groups publishers under a business account: **one account → many publishers; each publisher → exactly one account** (`publishers.accountId`). Structural groundwork for a future multi-worker-per-business shift — **today the mapping is 1:1** (one account auto-created per publisher), so it does not change behavior.
+Groups publishers under an account (the **tenant**). Two kinds: **`business`** (the default — owns events; one account → many publishers, today 1:1) and exactly one **`platform`** account ("Galiluz Management", owns no events) whose members are Galiluz staff. Roles are NOT stored here — they live in [`memberships`](#memberships).
 
 ```js
 {
   _id: ObjectId,
   title: String,        // display name; seeded from publisher.accountName at approval (the account-name field)
+  kind: String,         // 'business' (default, owns events) | 'platform' (the single Galiluz-management org)
   isActive: Boolean,    // default true; false = disabled
   createdAt: Date,
   deletedAt: Date,      // PRESENT only when soft-deleted (absent on live accounts, like events)
@@ -173,10 +177,29 @@ Groups publishers under a business account: **one account → many publishers; e
 }
 ```
 
-- **Created** automatically when a publisher is approved ([approve.post.ts](../server/api/publishers/approve.post.ts) → `ensureAccountForPublisher` in [accountScope.ts](../server/utils/accountScope.ts)); existing publishers are backfilled by [scripts/backfill-accounts.js](../scripts/backfill-accounts.js).
-- **`features`** is the entitlement map (registry: [consts/features.const.js](../consts/features.const.js); resolver: [accountFeatures.ts](../server/utils/accountFeatures.ts)). Default **OFF / opt-in** — an absent flag resolves to disabled. **Enforcement is server-side** (gated endpoints omit the data); the client receives the resolved map only to gate UI. **Managers bypass** (always all-enabled) and the admin portal never checks `features`. Set them in the DB via [scripts/set-account-features.js](../scripts/set-account-features.js) (no admin UI yet).
+- **Created** automatically when a publisher is approved ([approve.post.ts](../server/api/publishers/approve.post.ts) → `ensureAccountForPublisher` in [accountScope.ts](../server/utils/accountScope.ts)), which also writes the publisher's **`owner` membership**; existing publishers are backfilled by [scripts/backfill-accounts.js](../scripts/backfill-accounts.js) (accounts) + [scripts/backfill-memberships.js](../scripts/backfill-memberships.js) (memberships + `event.accountId`).
+- **`features`** is the entitlement map (registry: [consts/features.const.js](../consts/features.const.js); resolver: [accountFeatures.ts](../server/utils/accountFeatures.ts)). Default **OFF / opt-in** — an absent flag resolves to disabled. **Enforcement is server-side** (gated endpoints omit the data); the client receives the resolved map only to gate UI. **Managers/platform staff bypass** (always all-enabled) and the admin portal never checks `features`. Set them in the DB via [scripts/set-account-features.js](../scripts/set-account-features.js) (no admin UI yet).
 - **Released** (soft-deleted) when its last publisher is hard-deleted on reject ([reject.post.ts](../server/api/publishers/reject.post.ts)).
-- **Scoping is resolved at query time** — the portal dashboard, events list, stats, and event-ownership checks scope by the account's publisher set: `event.publisherId ∈ getAccountPublisherIds(session)` (resolves `account → its publisherIds`, falling back to the caller's own id when no account yet). `accountId` is **not** denormalized onto events/stats; the existing `publisherId` fields remain the source of truth for "who did it".
+- **Scoping (transitioning, see RBAC rollout):** stats/dashboard scope by the account's publisher set — `eventStats.publisherId ∈ getAccountPublisherIds(session)` (resolves `account → its publisherIds`, falling back to the caller's own id) — because stats rows are keyed by `publisherId`. **Event** reads/ownership move to the tenant key `event.accountId === session.activeAccountId` in Deploy 2. Until then `event.accountId` is dual-written but reads still use `getAccountPublisherIds`.
+
+## memberships
+
+The **source of truth for roles**: one row per `(publisher, account)` pair, M:N-ready (a publisher can belong to several accounts with a different role in each). Roles are scoped by the account's `kind`. Introduced by the multi-tenant RBAC refactor (see [plans/multi-account-roadmap.md](../plans/multi-account-roadmap.md)).
+
+```js
+{
+  _id: ObjectId,
+  publisherId: String,  // publishers._id.toString()
+  accountId: String,    // accounts._id.toString()
+  role: String,         // business account: 'owner' | 'admin'   ·   platform account: 'super_admin' | 'viewer'
+  status: String,       // 'active' (today); 'invited'/'suspended' reserved for future invite/lifecycle flows
+  createdAt: Date,
+}
+```
+
+- **Disjoint role names by plane** (business `owner`/`admin` vs platform `super_admin`/`viewer`) let the session classify platform vs business membership without joining `account.kind`.
+- **Roles are read FRESH per request** in [requirePublisherAuth.ts](../server/utils/requirePublisherAuth.ts) (one indexed `{publisherId}` find) and resolved through the central policy module [authz.ts](../server/utils/authz.ts) (capability→role map). A role is **never denormalized/cached** onto the publisher — a stale role cache is the classic multi-tenant privilege-escalation bug. Only the account *pointer* (`publishers.accountId`) is cached, and it's validated against memberships at session build.
+- **Written idempotently** via `ensureMembership(publisherId, accountId, role)` (upsert on the unique pair; never downgrades an existing role). New registrant → `owner` of their auto-created business account. Galiluz staff hold `super_admin`/`viewer` rows in the single platform account (set via script today; UI is roadmap).
 
 ## eventStats
 
@@ -295,6 +318,7 @@ All created at startup by [ensure-indexes.ts](../server/plugins/ensure-indexes.t
 |---|---|---|
 | events | `{ isActive: 1, deletedAt: 1, 'event.occurrences.startTime': 1 }` | Public feed query |
 | events | `{ 'event.publisherId': 1 }` | Portal queries |
+| events | `{ 'event.accountId': 1, deletedAt: 1 }` | Tenant-scoped event reads (RBAC) |
 | events | `{ 'rawEvent.publisher.waId': 1 }` | wa-bot lookups (`by-publisher`) |
 | eventInteractions | `{ eventId: 1, action: 1, timestamp: -1 }` | Recent interactions |
 | eventInteractions | `{ eventId: 1, action: 1, visitorId: 1 }` | Unique-view counting |
@@ -306,6 +330,9 @@ All created at startup by [ensure-indexes.ts](../server/plugins/ensure-indexes.t
 | eventOccurrenceStats | `{ publisherId: 1, occurrenceDate: 1 }` | Dashboard active/month filters |
 | eventLogs | `{ publisherId: 1, createdAt: -1 }` | Recent activity feed |
 | publishers | `{ waId: 1 }` **unique** | Phone lookup |
+| memberships | `{ publisherId: 1, accountId: 1 }` **unique** | One role per (publisher, account) |
+| memberships | `{ accountId: 1 }` | Members of an account (e.g. list platform super_admins) |
+| memberships | `{ publisherId: 1 }` | A publisher's accounts (session build) |
 | authLogs | `{ timestamp: 1 }` **TTL 30d** | Retention |
 | raw_messages | `{ createdAt: 1 }` **TTL 7d** | Retention |
 
@@ -313,8 +340,10 @@ Additionally, [requirePublisherAuth.ts](../server/utils/requirePublisherAuth.ts)
 
 **Validators** (`$jsonSchema`, `validationLevel: 'moderate'`, `validationAction: 'error'` — new inserts and updates to already-valid docs must conform; legacy docs stay writable):
 
-- `events`: `isActive` bool, `deletedAt` date, `event` object-or-null with `Title`/`publisherId` strings and `occurrences` items `{ date: /^\d{4}-\d{2}-\d{2}/, startTime: string, endTime: string|null, hasTime: bool }`.
+- `events`: `isActive` bool, `deletedAt` date, `event` object-or-null with `Title`/`publisherId`/`accountId` strings and `occurrences` items `{ date: /^\d{4}-\d{2}-\d{2}/, startTime: string, endTime: string|null, hasTime: bool }`.
 - `publishers`: `waId` required string; `status`/`type`/`fullName` strings.
+- `accounts`: `title` required string; `kind` string.
+- `memberships`: `publisherId`/`accountId`/`role` required strings; `status` string, `createdAt` date.
 
 Deliberately permissive — business validation lives in [eventValidation.ts](../server/utils/eventValidation.ts); the validators are a backstop against structurally broken documents.
 
