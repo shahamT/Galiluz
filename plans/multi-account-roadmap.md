@@ -21,16 +21,15 @@ so each deploy is safe alone on continuously-deployed prod.
       `type==='manager'` still counts as super_admin during rollout); dual-write owner/super_admin
       memberships on approval/ghost/on-behalf/transfer; `event.accountId` stamped on every create path
       and moved on transfer; `managers.get` tolerant (membership OR `type`). **Reads unchanged.**
-- [x] **MIGRATE — data-only (applied to dev clone; PROD PENDING).** [scripts/backfill-memberships.js](../scripts/backfill-memberships.js)
+- [x] **MIGRATE — data-only (DONE on prod).** [scripts/backfill-memberships.js](../scripts/backfill-memberships.js)
       (`--dry-run` first → verify counts → apply → re-run expecting 0). Creates the platform account,
       `super_admin` memberships for managers, `owner` memberships for accounted publishers, accounts for
       accountless event-owners, and stamps `event.accountId` on every non-deleted event (orphans reported,
-      never guessed). Idempotent. Dev clone: 1 super_admin + 67 owner memberships, 115 events stamped,
-      3 orphans (legacy events with no publisherId).
-      **On prod it runs automatically via a one-time startup hook** ([server/plugins/migrate-memberships.ts](../server/plugins/migrate-memberships.ts))
-      — same logic, fire-and-forget on boot, guarded by the unique `appSettings` marker
-      `migration_memberships_v1` (race-safe across instances; no-op once done). **⚠ REMOVE that plugin in
-      the next deploy** once prod logs `[migrate-memberships] done`. The standalone script remains for manual/dry-run use.
+      never guessed). Idempotent.
+      Ran on prod automatically via a one-time startup hook (`server/plugins/migrate-memberships.ts`,
+      marker `migration_memberships_v1`): **`[migrate-memberships] done — superAdmins:1, owners:69,
+      eventsStamped:117, orphans:3`**. The hook was REMOVED in the follow-up deploy; the standalone
+      script remains for manual/dry-run use. (Dev clone earlier: 1 / 67 / 115 / 3.)
 - [x] **Deploy 2 — SWITCH READS (code committed; ships after the prod backfill).** `getAccountPublisherIds`
       reads memberships; event reads/ownership use `event.accountId === session.activeAccountId` (super_admin
       bypass, straggler fallback to the publisher-set); per-event/dashboard/stats gating uses
