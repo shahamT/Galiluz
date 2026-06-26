@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import type { H3Event } from 'h3'
 import { getMongoConnection } from '~/server/utils/mongodb'
-import { isSuperAdmin, isPlatformStaff } from '~/server/utils/authz'
+import { resolvePublisherRoles } from '~/server/utils/accountScope'
 
 export interface PublisherSession {
   publisherId: string
@@ -21,6 +21,11 @@ export interface PublisherSession {
   activeRole?: 'owner' | 'admin' | null
   /** Platform (Galiluz-management) role (from memberships): 'super_admin' | 'viewer' | null. */
   platformRole?: 'super_admin' | 'viewer' | null
+  /** Effective super-admin (platform super_admin, or the legacy `type==='manager'` alias). Use this
+   *  for per-event "act on any event" checks instead of `type === 'manager'`. */
+  isSuperAdmin: boolean
+  /** Effective platform staff (super_admin or viewer, or the legacy alias) — may read the admin portal. */
+  isPlatformStaff: boolean
   /** Per-publisher preference flags (raw, stored); resolve with getPublisherPreferences(). */
   preferences?: Record<string, unknown>
 }
@@ -37,15 +42,16 @@ export interface AuthOptions {
 /**
  * Validates the Bearer token from the Authorization header.
  * Throws 401 if missing, invalid, or expired.
- * Throws 403 if options.requireManager is true and the user is not a manager.
- * Returns publisher session info on success.
+ * Throws 403 on a failed role gate (requireSuperAdmin / requirePlatformStaff / the requireManager alias).
+ * Returns publisher session info on success, with roles derived FRESH from memberships.
  *
  * Usage:
- *   const session = await requirePublisherAuth(event)                        // any authenticated user
- *   const session = await requirePublisherAuth(event, { requireManager: true }) // manager only
+ *   const session = await requirePublisherAuth(event)                            // any authenticated user
+ *   const session = await requirePublisherAuth(event, { requireSuperAdmin: true })   // platform super-admin
+ *   const session = await requirePublisherAuth(event, { requirePlatformStaff: true }) // admin READ routes (super_admin|viewer)
  *
- * For resource ownership (publisher can only access own data):
- *   if (session.type !== 'manager' && resource.publisherWaId !== session.waId)
+ * For resource ownership use the tenant key (see ownsEventForSession) and the super-admin bypass:
+ *   if (!session.isSuperAdmin && !(await ownsEventForSession(session, doc.event)))
  *     throw createError({ statusCode: 403 })
  */
 export async function requirePublisherAuth(event: H3Event, options: AuthOptions = {}): Promise<PublisherSession> {
@@ -78,23 +84,12 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
       throw createError({ statusCode: 401, statusMessage: 'Unauthorized', message: 'Invalid or expired token' })
     }
 
-    // Roles are read FRESH from memberships every request (never cache a privilege — a stale
-    // role cache is the classic multi-tenant escalation bug). Platform roles (super_admin/viewer)
-    // and business roles (owner/admin) use disjoint names, so we classify by role name.
+    // Roles are read FRESH from memberships every request (never cache a privilege — a stale role
+    // cache is the classic multi-tenant escalation bug). resolvePublisherRoles derives platformRole,
+    // the active business account/role, and the effective super_admin/platform-staff gates (the
+    // legacy `type==='manager'` alias is applied inside, so this works pre- and post-migrate).
     const publisherId = doc._id.toString()
-    const membershipsCol = db.collection(config.mongodbCollectionMemberships || 'memberships')
-    const memberships = await membershipsCol
-      .find({ publisherId }, { projection: { accountId: 1, role: 1 } })
-      .toArray()
-    const platformRole = (memberships.find((m) => m.role === 'super_admin' || m.role === 'viewer')?.role
-      || null) as 'super_admin' | 'viewer' | null
-    const businessMemberships = memberships.filter((m) => m.role === 'owner' || m.role === 'admin')
-    // Active business account = the denormalized pointer when it has a live membership, else the
-    // first business membership, else the pointer itself (preserves today's behavior pre-backfill).
-    const pointer = doc.accountId || undefined
-    const activeMembership = businessMemberships.find((m) => m.accountId === pointer) || businessMemberships[0]
-    const activeAccountId = activeMembership?.accountId || pointer
-    const activeRole = (activeMembership?.role || null) as 'owner' | 'admin' | null
+    const roles = await resolvePublisherRoles({ publisherId, accountId: doc.accountId, type: doc.type })
 
     const session: PublisherSession = {
       publisherId,
@@ -104,21 +99,18 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
       type: doc.type === 'manager' ? 'manager' : 'publisher',
       accountId: doc.accountId || undefined,
       accountName: doc.accountName || undefined,
-      activeAccountId,
-      activeRole,
-      platformRole,
+      activeAccountId: roles.activeAccountId,
+      activeRole: roles.activeRole,
+      platformRole: roles.platformRole,
+      isSuperAdmin: roles.isSuperAdmin,
+      isPlatformStaff: roles.isPlatformStaff,
       preferences: doc.preferences || {},
     }
 
-    // During the rollout the legacy `type==='manager'` still counts as super_admin (the platform
-    // membership is created in the Migrate phase). All gates resolve through the authz helpers.
-    const effectiveSuperAdmin = isSuperAdmin(platformRole) || session.type === 'manager'
-    const effectivePlatformStaff = isPlatformStaff(platformRole) || session.type === 'manager'
-
-    if ((options.requireManager || options.requireSuperAdmin) && !effectiveSuperAdmin) {
+    if ((options.requireManager || options.requireSuperAdmin) && !session.isSuperAdmin) {
       throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'manager_only' })
     }
-    if (options.requirePlatformStaff && !effectivePlatformStaff) {
+    if (options.requirePlatformStaff && !session.isPlatformStaff) {
       throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'platform_staff_only' })
     }
 

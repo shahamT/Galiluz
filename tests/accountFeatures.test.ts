@@ -10,6 +10,16 @@ describe('getAccountFeatures', () => {
     expect(features).toEqual({ globalStats: true, perEventStats: true })
   })
 
+  it('platform super_admin bypasses gating — every feature enabled, no DB lookup', async () => {
+    const features = await getAccountFeatures({ activeAccountId: 'acc-1', platformRole: 'super_admin' })
+    expect(features).toEqual({ globalStats: true, perEventStats: true })
+  })
+
+  it('a viewer does NOT bypass — features fall through to the account (fail-closed when id invalid)', async () => {
+    const features = await getAccountFeatures({ activeAccountId: 'not-an-objectid', platformRole: 'viewer' })
+    expect(features).toEqual({ globalStats: false, perEventStats: false })
+  })
+
   it('fails closed to defaults (OFF) when the publisher has no account yet', async () => {
     const features = await getAccountFeatures({ type: 'publisher' })
     expect(features).toEqual({ globalStats: false, perEventStats: false })

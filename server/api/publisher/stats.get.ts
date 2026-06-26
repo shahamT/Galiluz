@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
 
   // Account-scoped (excluding stats of soft-deleted events). Managers see all.
   const publisherQuery = {
-    ...(session.type === 'manager' ? {} : { publisherId: { $in: await getAccountPublisherIds(session) } }),
+    ...(session.isSuperAdmin ? {} : { publisherId: { $in: await getAccountPublisherIds(session) } }),
     deletedAt: { $exists: false },
   }
   const stats = await statsCol.find(publisherQuery, {

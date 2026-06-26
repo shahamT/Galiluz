@@ -6,6 +6,7 @@ import {
   hasCapability,
   isSuperAdmin,
   isPlatformStaff,
+  deriveActiveRoles,
 } from '~/server/utils/authz'
 
 describe('ROLE_CAPABILITIES', () => {
@@ -83,5 +84,75 @@ describe('isSuperAdmin / isPlatformStaff', () => {
     expect(isPlatformStaff('viewer')).toBe(true)
     expect(isPlatformStaff(null)).toBe(false)
     expect(isPlatformStaff('owner')).toBe(false)
+  })
+})
+
+describe('deriveActiveRoles (memberships → session roles)', () => {
+  it('single business owner (the common case): active account = pointer, owner role, no platform', () => {
+    const r = deriveActiveRoles([{ accountId: 'A', role: 'owner' }], 'A')
+    expect(r.activeAccountId).toBe('A')
+    expect(r.activeRole).toBe('owner')
+    expect(r.platformRole).toBe(null)
+    expect(r.isSuperAdmin).toBe(false)
+    expect(r.isPlatformStaff).toBe(false)
+  })
+
+  it('pointer wins over other business memberships', () => {
+    const r = deriveActiveRoles(
+      [{ accountId: 'A', role: 'admin' }, { accountId: 'B', role: 'owner' }],
+      'B',
+    )
+    expect(r.activeAccountId).toBe('B')
+    expect(r.activeRole).toBe('owner')
+  })
+
+  it('no pointer match → owner before admin, then oldest createdAt', () => {
+    const r = deriveActiveRoles(
+      [
+        { accountId: 'A', role: 'admin', createdAt: '2024-01-01' },
+        { accountId: 'B', role: 'owner', createdAt: '2024-03-01' },
+        { accountId: 'C', role: 'owner', createdAt: '2024-02-01' },
+      ],
+      undefined,
+    )
+    // owner beats admin; among owners, the older (C, Feb) beats B (Mar)
+    expect(r.activeAccountId).toBe('C')
+    expect(r.activeRole).toBe('owner')
+  })
+
+  it('a publisher who is ALSO platform staff carries both planes', () => {
+    const r = deriveActiveRoles(
+      [{ accountId: 'A', role: 'owner' }, { accountId: 'PLATFORM', role: 'super_admin' }],
+      'A',
+    )
+    expect(r.activeAccountId).toBe('A')
+    expect(r.activeRole).toBe('owner')
+    expect(r.platformRole).toBe('super_admin')
+    expect(r.isSuperAdmin).toBe(true)
+    expect(r.isPlatformStaff).toBe(true)
+  })
+
+  it('viewer-only staffer (no business membership): platform role set, active account = pointer/undefined', () => {
+    const r = deriveActiveRoles([{ accountId: 'PLATFORM', role: 'viewer' }], undefined)
+    expect(r.platformRole).toBe('viewer')
+    expect(r.activeAccountId).toBe(undefined)
+    expect(r.activeRole).toBe(null)
+    expect(r.isSuperAdmin).toBe(false)
+    expect(r.isPlatformStaff).toBe(true)
+  })
+
+  it('rollout alias: legacy type==="manager" with NO platform membership still counts as super_admin', () => {
+    const r = deriveActiveRoles([{ accountId: 'A', role: 'owner' }], 'A', 'manager')
+    expect(r.platformRole).toBe(null)       // no membership yet (pre-migrate)
+    expect(r.isSuperAdmin).toBe(true)        // but the alias gates it as super_admin
+    expect(r.isPlatformStaff).toBe(true)
+  })
+
+  it('empty memberships with a pointer → falls back to the pointer (pre-backfill behavior)', () => {
+    const r = deriveActiveRoles([], 'A')
+    expect(r.activeAccountId).toBe('A')
+    expect(r.activeRole).toBe(null)
+    expect(r.platformRole).toBe(null)
+    expect(r.isSuperAdmin).toBe(false)
   })
 })

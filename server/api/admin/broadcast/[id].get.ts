@@ -7,7 +7,7 @@ import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
  * the admin page while sending. Manager scope is platform-wide (no publisher scoping).
  */
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requireManager: true })
+  await requirePublisherAuth(event, { requirePlatformStaff: true })
 
   const id = getRouterParam(event, 'id') || ''
   if (!ObjectId.isValid(id)) throw createError({ statusCode: 400, message: 'invalid id' })

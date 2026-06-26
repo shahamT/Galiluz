@@ -8,7 +8,7 @@ import { NOT_DELETED } from '~/server/utils/eventsQuery'
  * shape as /api/publisher/events so the publisher list UI renders it unchanged.
  */
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requireManager: true })
+  await requirePublisherAuth(event, { requirePlatformStaff: true })
 
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()

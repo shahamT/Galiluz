@@ -13,7 +13,10 @@ export default defineEventHandler(async (event) => {
     // Account name lives on accounts.title now; keep the `publishingAs` key for the client.
     publishingAs: await resolveAccountTitle({ accountId: session.accountId, accountName: session.accountName, waId: session.waId }),
     type: session.type,
-    // Resolved account entitlements (managers → all enabled). Advisory only —
+    platformRole: session.platformRole,
+    activeAccountId: session.activeAccountId,
+    activeRole: session.activeRole,
+    // Resolved account entitlements (super-admins → all enabled). Advisory only —
     // the server independently withholds gated data; this just drives UI gating.
     features: await getAccountFeatures(session),
     // Resolved per-publisher preferences (merged over registry defaults).

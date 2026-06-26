@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
   let isManagerAction        = false
 
   if (onBehalfPublisherId || onBehalfPhone) {
-    if (session.type !== 'manager') throw createError({ statusCode: 403, message: 'אין הרשאה' })
+    if (!session.isSuperAdmin) throw createError({ statusCode: 403, message: 'אין הרשאה' })
     isManagerAction = true
 
     if (onBehalfPublisherId) {

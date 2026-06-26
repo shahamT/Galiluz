@@ -8,7 +8,7 @@ import { NOT_DELETED } from '~/server/utils/eventsQuery'
  * Publishers carry their account name so the dropdown can chip it without a join.
  */
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requireManager: true })
+  await requirePublisherAuth(event, { requirePlatformStaff: true })
 
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()

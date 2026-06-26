@@ -8,7 +8,7 @@ import { computeDashboard } from '~/server/utils/dashboardStats'
  * manager acts across the whole platform.
  */
 export default defineEventHandler(async (event) => {
-  const session = await requirePublisherAuth(event, { requireManager: true })
+  const session = await requirePublisherAuth(event, { requirePlatformStaff: true })
 
   const q = getQuery(event)
   const filter = ['all', 'active', 'month'].includes(q.filter as string) ? (q.filter as string) : 'all'

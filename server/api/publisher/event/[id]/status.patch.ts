@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
-import { getAccountPublisherIds } from '~/server/utils/accountScope'
+import { ownsEventForSession } from '~/server/utils/accountScope'
 import { logEventStatusChange } from '~/server/utils/eventLogs.service'
 import { notifyApproverOfEventActivation } from '~/server/utils/notifyApproverEvent'
 
@@ -28,8 +28,8 @@ export default defineEventHandler(async (event) => {
   const doc = await col.findOne({ _id: objectId })
   if (!doc || doc.deletedAt) throw createError({ statusCode: 404, message: 'event not found' })
 
-  const ownsEvent = (await getAccountPublisherIds(session)).includes(doc.event?.publisherId)
-  if (session.type !== 'manager' && !ownsEvent) {
+  const ownsEvent = await ownsEventForSession(session, doc.event)
+  if (!session.isSuperAdmin && !ownsEvent) {
     throw createError({ statusCode: 403, message: 'forbidden' })
   }
 
@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
       publisherId: session.publisherId,
       waId: session.waId,
       correlationId: randomBytes(4).toString('hex'),
-      isManagerAction: session.type === 'manager' && !ownsEvent,
+      isManagerAction: session.isSuperAdmin && !ownsEvent,
     })
   }
 

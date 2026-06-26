@@ -1,5 +1,6 @@
 import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
+import { deriveActiveRoles, type ResolvedRoles } from '~/server/utils/authz'
 import type { PublisherSession } from '~/server/utils/requirePublisherAuth'
 
 /**
@@ -131,23 +132,77 @@ export async function resolveAccountTitle(input: { accountId?: string | null; ac
 }
 
 /**
- * Resolve the set of publisherIds belonging to the session's account.
- * Falls back to `[session.publisherId]` when the publisher has no account yet
- * (pre-backfill) — so scoping degrades gracefully to the old per-publisher
- * behaviour and never widens or empties a query unexpectedly.
+ * Resolve a publisher's effective roles + active account by reading their `memberships`
+ * (the source of truth) and deriving via the pure `deriveActiveRoles` policy. Used by both
+ * `requirePublisherAuth` (session build) and `verify-otp` (login response) so the derivation
+ * lives in ONE place. Roles are never cached on the publisher — a stale role cache is the
+ * classic multi-tenant escalation bug.
+ */
+export async function resolvePublisherRoles(input: { publisherId: string; accountId?: string | null; type?: string | null }): Promise<ResolvedRoles> {
+  const config = useRuntimeConfig() as Record<string, string>
+  const { db } = await getMongoConnection()
+  const memberships = db.collection(config.mongodbCollectionMemberships || 'memberships')
+  const rows = await memberships
+    .find({ publisherId: input.publisherId, status: 'active' }, { projection: { accountId: 1, role: 1, createdAt: 1 } })
+    .toArray()
+  return deriveActiveRoles(
+    rows.map((r) => ({ accountId: String(r.accountId), role: String(r.role), createdAt: r.createdAt })),
+    input.accountId || undefined,
+    input.type,
+  )
+}
+
+/**
+ * Resolve the set of publisherIds belonging to the session's ACTIVE account, read from
+ * `memberships` (members of `activeAccountId`). Stats rows are keyed by `publisherId`, so this
+ * publisher-set is still how dashboard/stats scope (event reads use the `event.accountId` tenant
+ * key instead). Falls back to `[session.publisherId]` when there's no account yet — so scoping
+ * degrades to old per-publisher behaviour and never widens or empties a query unexpectedly.
  */
 export async function getAccountPublisherIds(session: PublisherSession): Promise<string[]> {
-  if (!session.accountId) return [session.publisherId]
+  const accountId = session.activeAccountId || session.accountId
+  if (!accountId) return [session.publisherId]
 
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()
-  const publishers = db.collection(config.mongodbCollectionPublishers || 'publishers')
+  const memberships = db.collection(config.mongodbCollectionMemberships || 'memberships')
 
-  const docs = await publishers
-    .find({ accountId: session.accountId }, { projection: { _id: 1 } })
+  const rows = await memberships
+    .find({ accountId, status: 'active' }, { projection: { publisherId: 1 } })
     .toArray()
 
-  const ids = docs.map((d) => d._id.toString())
+  const ids = rows.map((r) => String(r.publisherId)).filter(Boolean)
   // Defensive: an account should always contain at least its own publisher.
   return ids.length ? ids : [session.publisherId]
+}
+
+/**
+ * Portal "my events" filter: events owned by the session's ACTIVE account (the `event.accountId`
+ * tenant key), with a defensive fallback to the account's publisher-set for any event not yet
+ * stamped with an accountId (pre-backfill straggler). Super-admins bypass scoping at the call site.
+ */
+export async function getAccountEventFilter(session: PublisherSession): Promise<Record<string, unknown>> {
+  const accountId = session.activeAccountId || session.accountId
+  const publisherIds = await getAccountPublisherIds(session)
+  if (!accountId) return { 'event.publisherId': { $in: publisherIds } }
+  return {
+    $or: [
+      { 'event.accountId': accountId },
+      // {$in:[null,'']} also matches a missing field — covers unstamped stragglers owned by the account.
+      { 'event.accountId': { $in: [null, ''] }, 'event.publisherId': { $in: publisherIds } },
+    ],
+  }
+}
+
+/**
+ * Does the session's active account OWN this event? Matches the `event.accountId` tenant key;
+ * falls back to the account's publisher-set for an unstamped straggler. Super-admins bypass
+ * ownership at the call site (they may act on any event).
+ */
+export async function ownsEventForSession(session: PublisherSession, eventObj: { accountId?: string; publisherId?: string } | null | undefined): Promise<boolean> {
+  if (!eventObj) return false
+  const accountId = session.activeAccountId || session.accountId
+  if (accountId && eventObj.accountId) return eventObj.accountId === accountId
+  if (eventObj.publisherId) return (await getAccountPublisherIds(session)).includes(eventObj.publisherId)
+  return false
 }

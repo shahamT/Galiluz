@@ -4,7 +4,7 @@ import { checkAuthRateLimit, checkPhoneRateLimit } from '~/server/utils/rateLimi
 import { logAuthEvent } from '~/server/utils/authLog'
 import { getAccountFeatures } from '~/server/utils/accountFeatures'
 import { getPublisherPreferences } from '~/server/utils/publisherPreferences'
-import { resolveAccountTitle } from '~/server/utils/accountScope'
+import { resolveAccountTitle, resolvePublisherRoles } from '~/server/utils/accountScope'
 import { normaliseIsraeliPhone, verifyStoredOtp } from '~/server/utils/otp'
 
 const AUTH_KEY_EXPIRY_MS = 60 * 60 * 1000 // 1 hour
@@ -72,6 +72,9 @@ export default defineEventHandler(async (event) => {
 
   await logAuthEvent(event, 'login', waId)
 
+  // Roles + active account, derived fresh from memberships (same resolver the session uses).
+  const roles = await resolvePublisherRoles({ publisherId: doc._id.toString(), accountId: doc.accountId, type: doc.type })
+
   return {
     expiresAt: authKeyExpiresAt.toISOString(),
     user: {
@@ -79,9 +82,12 @@ export default defineEventHandler(async (event) => {
       fullName: doc.fullName || '',
       publishingAs: await resolveAccountTitle({ accountId: doc.accountId, accountName: doc.accountName, waId: doc.waId }),
       type: doc.type || 'publisher',
+      platformRole: roles.platformRole,
+      activeAccountId: roles.activeAccountId,
+      activeRole: roles.activeRole,
       // Resolved here so the client has entitlements immediately after login,
       // without waiting for a /api/auth/me round-trip.
-      features: await getAccountFeatures({ accountId: doc.accountId, type: doc.type }),
+      features: await getAccountFeatures({ activeAccountId: roles.activeAccountId, accountId: doc.accountId, type: doc.type, platformRole: roles.platformRole }),
       preferences: getPublisherPreferences(doc),
     },
   }

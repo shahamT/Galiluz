@@ -4,7 +4,7 @@ import { getMongoConnection } from '~/server/utils/mongodb'
 
 /** Admin: publishers currently opted in to crawler auto-drafts. Manager-only. */
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requireManager: true })
+  await requirePublisherAuth(event, { requirePlatformStaff: true })
 
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()
