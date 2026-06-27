@@ -107,6 +107,10 @@ export default defineEventHandler(async (event) => {
   if (crawler?.enabled !== true) return skip('crawler_disabled')
   const watched = Array.isArray(crawler.groups) ? (crawler.groups as Array<{ chatId?: string }>).map((g) => g.chatId) : []
   if (!groupChatId.endsWith('@g.us') || !watched.includes(groupChatId)) return skip('group_not_watched')
+  const groupName =
+    (Array.isArray(crawler.groups)
+      ? (crawler.groups as Array<{ chatId?: string; name?: string }>).find((g) => g.chatId === groupChatId)?.name
+      : '') || groupChatId
 
   // 3. Sender must be an approved, non-ghost, opted-in publisher.
   const waId = normalizePhone(body?.senderPhone || '')
@@ -136,17 +140,40 @@ export default defineEventHandler(async (event) => {
   const openaiApiKey = config.openaiApiKey || process.env.OPENAI_API_KEY
   const openaiModel = (process.env.OPENAI_MODEL_WEB || 'gpt-4o').trim() || 'gpt-4o'
 
+  // Crawler AI-decision logging (PRODUCTION ONLY, opt-in via the crawler page). For every message
+  // that reached the AI stage (passed the publisher / not-too-short / not-duplicate filters), post
+  // the message + the AI's verdict + reason to the selected "crawler log" group. Best-effort.
+  const decisionLogChatId =
+    process.env.NODE_ENV === 'production' && crawler.logDecisions === true && typeof crawler.logGroupChatId === 'string'
+      ? (crawler.logGroupChatId as string)
+      : ''
+  const logDecision = async (verdict: string, detail = '') => {
+    if (!decisionLogChatId) return
+    const snippet = rawText.length > 500 ? `${rawText.slice(0, 500)}…` : rawText
+    const msg = [
+      '🔎 *קראולר — החלטת AI*',
+      `קבוצה: ${groupName}`,
+      `מפרסם: ${publisher.fullName || '-'} (${waId})`,
+      '———',
+      snippet,
+      '———',
+      `החלטה: ${verdict}`,
+      ...(detail ? [`סיבה: ${detail}`] : []),
+    ].join('\n')
+    await notifyLog(msg, decisionLogChatId)
+  }
+
   // 5. Is this an event? (relaxed; accepts partial detail.) A transient AI/transport
   // error RELEASES the claim, so the same message can be re-evaluated on re-post.
   const detection = await detectEventFromFreeText(rawText, { openaiApiKey, openaiModel, correlationId })
   if (detection?.transient) { await releaseClaim(); return skip(`detect_error:${detection.reason || 'n/a'}`) }
-  if (!detection?.isEvent) return skip(`not_event:${detection?.reason || 'n/a'}`)
+  if (!detection?.isEvent) { await logDecision('❌ לא זוהה כאירוע', detection?.reason || ''); return skip(`not_event:${detection?.reason || 'n/a'}`) }
 
   // 6. Extract structured event. Transient errors release the claim; a deterministic
   // failure is a final verdict, so the claim stays to avoid reprocessing.
   const { formattedEvent, errorReason, transient } = await extractEventFromFreeText(rawText, getCategoriesList(), CITIES_LIST, { openaiApiKey, openaiModel })
   if (transient) { await releaseClaim(); return skip(`extract_error:${errorReason || 'n/a'}`) }
-  if (errorReason || !formattedEvent) return skip(`extract_failed:${errorReason || 'n/a'}`)
+  if (errorReason || !formattedEvent) { await logDecision('⚠️ חילוץ נכשל', errorReason || ''); return skip(`extract_failed:${errorReason || 'n/a'}`) }
 
   // Abort if the event already happened: when the AI extracted occurrences and ALL of
   // them are in the past, there's nothing to publish. No occurrences at all → continue
@@ -156,6 +183,7 @@ export default defineEventHandler(async (event) => {
     .map((o) => o.date)
     .filter(Boolean) as string[]
   if (occurrenceDates.length && occurrenceDates.every((dt) => dt < today)) {
+    await logDecision('🕒 אירוע שכבר עבר')
     return skip('event_in_past')
   }
 
@@ -208,7 +236,11 @@ export default defineEventHandler(async (event) => {
     .slice(0, MAX_MATCH_CANDIDATES) as Array<{ id: string; title: string; city: string; date: string; shortDescription: string }>
 
   const match = await matchCrawlerEvent(formattedEvent, candidates, rawText, { openaiApiKey, openaiModel, correlationId })
-  if (match.matchedId) return skip(`already_exists:${match.matchedId}`)
+  if (match.matchedId) {
+    const sim = typeof match.similarity === 'number' ? ` (דמיון ${match.similarity}%)` : ''
+    await logDecision('♻️ כפילות של אירוע קיים', `${match.reason || ''}${sim} — מזהה ${match.matchedId}`)
+    return skip(`already_exists:${match.matchedId}`)
+  }
 
   // 8. Upload the message image (if any) to Cloudinary. The URL is sourced from
   // Green API and forwarded by the gateway — fetch it through the SSRF-hardened
@@ -263,6 +295,8 @@ export default defineEventHandler(async (event) => {
 
   console.info(`[crawler/ingest] draft created ${draftId} for ${waId} (validDraft=${validDraft})`)
 
+  await logDecision('✅ נוצרה טיוטה', `${String(eventObj.Title || '')} — מזהה ${draftId}`)
+
   // Issue a single-use magic link + notify the publisher on WhatsApp (best-effort;
   // the draft is already saved, so a notification failure must not fail the request).
   let notified = false
@@ -290,10 +324,6 @@ export default defineEventHandler(async (event) => {
       // Only AFTER the publisher was notified, surface the new draft to the log group
       // (plain notice; best-effort — notifyLog never throws).
       const account = await resolveAccountTitle({ accountId: publisher.accountId, accountName: publisher.accountName, waId })
-      const groupName =
-        (Array.isArray(crawler.groups)
-          ? (crawler.groups as Array<{ chatId?: string; name?: string }>).find((g) => g.chatId === groupChatId)?.name
-          : '') || groupChatId
       const logMsg = buildApproverDraftNotification({
         title: String(eventObj.Title || ''),
         account,
