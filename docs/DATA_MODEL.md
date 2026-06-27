@@ -321,7 +321,7 @@ All created at startup by [ensure-indexes.ts](../server/plugins/ensure-indexes.t
 | events | `{ isActive: 1, deletedAt: 1, 'event.occurrences.startTime': 1 }` | Public feed query |
 | events | `{ 'event.publisherId': 1 }` | Portal queries |
 | events | `{ 'event.accountId': 1, deletedAt: 1 }` | Tenant-scoped event reads (RBAC) |
-| events | `{ 'rawEvent.publisher.waId': 1 }` | wa-bot lookups (`by-publisher`) |
+| events | `{ 'rawEvent.publisher.waId': 1 }` | reject cascade (match a publisher's events) |
 | eventInteractions | `{ eventId: 1, action: 1, timestamp: -1 }` | Recent interactions |
 | eventInteractions | `{ eventId: 1, action: 1, visitorId: 1 }` | Unique-view counting |
 | eventInteractions | `{ publisherId: 1, timestamp: -1 }` | Publisher activity |
@@ -351,11 +351,9 @@ Deliberately permissive — business validation lives in [eventValidation.ts](..
 
 ## Lifecycles
 
-### wa-bot flow: draft → process → activate
-
-1. **Draft** — `POST /api/events/draft` inserts `{ createdAt, isActive: false, event: null, rawEvent }`; `publisherId` resolved from `rawEvent.publisher.waId`. Logs `draft_created`.
-2. **Process** — `POST /api/events/[id]/process` sets `event` from the wa-bot's `formattedEvent` (normalize → validate → `$set`). Guard: rejects if `doc.event != null` (already processed) or `doc.deletedAt`. Logs `draft_processed`.
-3. **Activate** — `POST /api/events/[id]/activate` sets `isActive: true`. Guard: rejects if `doc.event == null` (unprocessed) or `doc.deletedAt`. Logs `event_activated`. The event is now feed-eligible.
+Events are created by the **publisher portal** and the **WhatsApp crawler** (gateway → ingest).
+The old in-bot draft→process→activate publisher flow was retired (the bot only directs publishers
+to the web portal).
 
 ### Portal create
 
@@ -363,12 +361,11 @@ Deliberately permissive — business validation lives in [eventValidation.ts](..
 
 ### Edit paths
 
-- **Portal**: `PATCH /api/publisher/event/[id]` ([\[id\].patch.ts](../server/api/publisher/event/[id].patch.ts)) — ownership check, sanitize, merge partial body into existing `event`, normalize, validate, `$set { event: merged }`. Logs `event_edited` with `changedFields` + previous/new snapshots, `editSource: 'publisher_portal'`, `isManagerAction` when a manager edits someone else's event.
-- **wa-bot**: `POST /api/events/[id]/patch` ([patch.post.ts](../server/api/events/[id]/patch.post.ts)) — same merge idea, also updates the parallel `rawEvent.raw*` fields; `editSource` arrives via `_meta.editSource`.
+- **Portal**: `PATCH /api/publisher/event/[id]` ([\[id\].patch.ts](../server/api/publisher/event/[id].patch.ts)) — ownership check (tenant key), sanitize, merge partial body into existing `event`, normalize, validate, `$set { event: merged }`. Logs `event_edited` with `changedFields` + previous/new snapshots, `editSource: 'publisher_portal'`, `isManagerAction` when a super-admin edits another account's event.
 
 ### Soft delete — exact sequence
 
-Both delete routes ([publisher portal](../server/api/publisher/event/[id].delete.ts) and [wa-bot](../server/api/events/[id]/delete.post.ts)) run the identical sequence:
+Both delete routes ([publisher portal](../server/api/publisher/event/[id].delete.ts) and the [approver delete](../server/api/events/[id]/delete.post.ts) the bot calls) run the identical sequence:
 
 1. `findOne` the event; 404 if missing. **If `doc.deletedAt` already set → return `{ success: true }`** (idempotent re-delete, no double cascade).
 2. `logEventDeletion(...)` to eventLogs (`deletionType: 'kill' | 'user_deleted'`, non-throwing) — the audit record is written first and is **intentionally kept forever**.

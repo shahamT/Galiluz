@@ -82,36 +82,29 @@ GET routes (`dashboard`, `events`, `publishers`, `whatsapp-groups`, `settings/cr
 
 > **Operational "log" group** — `POST /internal/log` (wa-gateway, ApiSecret) `{ message }` posts a plain, action-less notice to the configured `LOG_GROUP_CHAT_ID` (`<id>@g.us`; no-op if unset). The web helper `notifyLog()` ([server/utils/notifyLog.ts](../server/utils/notifyLog.ts)) sends to it for: **new approved publishers** ([approve.post.ts](../server/api/publishers/approve.post.ts)), **new published events** ([notifyApproverEvent.ts](../server/utils/notifyApproverEvent.ts), alongside the approver's interactive copy), and **new crawler drafts** ([ingest.post.ts](../server/api/internal/crawler/ingest.post.ts) — drafts go to the log, not the approver). Find the group chatId via `GET /internal/groups`.
 
-### wa-bot / internal (ApiSecret)
+### Internal (ApiSecret)
+
+The wa-bot's only event action is the approver deleting an event; the rest of these are
+wa-gateway/raw-message endpoints. (Event **creation/editing** is the web portal + crawler only —
+the in-bot publisher flows were retired.)
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/events/draft` | Insert draft (`event: null`, `rawEvent` required); resolves `publisherId` from `rawEvent.publisher.waId`. |
-| POST | `/api/events/create` | Insert complete event (`formattedEvent` required, normalized + validated, `isActive: false`). |
-| POST | `/api/events/[id]/process` | Set `event` from `formattedEvent` on a draft. Rejects already-processed (`event != null`) or deleted docs. |
-| POST | `/api/events/[id]/patch` | Partial wa-bot edit; merges into `event` and mirrors `rawEvent.raw*`; `_meta.editSource` recorded in the log. |
-| POST | `/api/events/[id]/activate` | Set `isActive: true`. Rejects unprocessed (`event == null`) or deleted docs. |
-| POST | `/api/events/[id]/delete` | Soft delete + cascade; body `deletionType: 'kill' \| 'user_deleted'` (default `user_deleted`). Idempotent. |
-| GET | `/api/events/[id]` | Single event in frontend shape (for the wa-bot update flow — **not public**). Optional `?waId=` enforces `rawEvent.publisher.waId` ownership (404 on mismatch). |
+| POST | `/api/events/[id]/delete` | Soft delete + cascade; body `deletionType: 'kill' \| 'user_deleted'` (default `user_deleted`). Idempotent. Called by the bot's approver delete. |
 | GET | `/api/events/[id]/stats` | eventStats counters (deleted excluded; zeros when absent). Internal-only to prevent analytics enumeration. |
-| GET | `/api/events/by-publisher?waId=` | Publisher's active events with an occurrence today or later (Israel), sorted by earliest occurrence, limit 100. |
 | POST | `/api/internal/broadcast-progress` | wa-gateway → web: reports broadcast progress `{ broadcastId, sentCount, failedIds[], done }`; updates the `broadcasts` job doc (status → `done` on `done:true`). |
-| POST | `/api/internal/upload-media` | Base64 → Cloudinary upload (wa-bot media). |
-| POST | `/api/internal/delete-media` | Batch Cloudinary destroy: `items[] { publicId, resourceType? }`. |
 | GET | `/api/whatsapp-messages` | RateLimit + ApiSecret. Recent raw_messages payloads, `?limit=` capped. |
 | GET | `/api/whatsapp-media/[filename]` | RateLimit + ApiSecret. Looks up `cloudinaryUrl` in raw_messages by filename (path-traversal and regex-injection guarded), 302 → Cloudinary. |
 
 ### Publisher management (ApiSecret)
 
+Registration is fully web-based (`/api/publishers/register/{check,start,verify}`, see the auth
+section). The bot only approves/rejects (via the approver's buttons).
+
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/publishers/register` | Upsert by `waId` → `status: 'pending'`, `createdOnBehalf: false`. Idempotent. |
-| GET | `/api/publishers/check?waId=` | Returns `{ status, fullName, publishingAs, type }` where `type` is **derived from the platform membership** (`manager` = has a super_admin membership, else `publisher`). Status is only `approved \| pending \| not_found` — ghosts and anything else map to `not_found`. |
-| GET | `/api/publishers/managers` | waIds of platform super-admins (members of the platform account with role `super_admin`). |
-| POST | `/api/publishers/approve` | Set `status: 'approved'` + `approvedAt`. 404 if no such `waId`. |
-| POST | `/api/publishers/reject` | Cascade soft-delete all the publisher's events + stats stamps, then ghost-mark (`createdOnBehalf`) or hard-delete the publisher doc. Logs `publisher_rejected` with cascade count. No Cloudinary cleanup in this path. |
-| POST | `/api/publishers/ghost` | `$setOnInsert`-only upsert of a ghost record (`status: 'ghost'`, `createdOnBehalf: true`) — never modifies an existing record of any status. Idempotent. |
-| GET | `/api/publishers/managers` | Array of approved managers' `waId`s. |
+| POST | `/api/publishers/approve` | Set `status: 'approved'` + `approvedAt` (+ ensure account/owner membership). 404 if no such `waId`. |
+| POST | `/api/publishers/reject` | Cascade soft-delete all the publisher's events + stats stamps, delete their memberships, then ghost-mark (`createdOnBehalf`) or hard-delete the publisher doc. Logs `publisher_rejected` with cascade count. No Cloudinary cleanup in this path. |
 
 ## Auth flow sequences
 

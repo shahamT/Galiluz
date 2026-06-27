@@ -14,9 +14,6 @@ const DEFAULT_MODEL = 'gpt-4o-mini'
 const VALID_INTENTS = new Set([
   'discover',
   'publish',
-  'event_add_new',
-  'event_update',
-  'event_delete',
   'contact',
   'irrelevant',
   'unclear',
@@ -43,12 +40,9 @@ const SYSTEM_PROMPT = `You are an intent classifier for a Hebrew WhatsApp bot (G
 The user sent a message from the main menu. Classify into exactly ONE intent:
 
 - discover: User wants to look up / search / find events. E.g. "מה קורה בצפון", "אילו אירועים יש", "חיפוש אירועים", "מה קורה היום/מחר".
-- publish: User wants to register as a publisher or sign up to publish (not yet "add one event now"). E.g. "רוצה להפוך למפרסם", "הרשמה לפרסום", "להצטרף כמפרסם".
-- event_add_new: User wants to add / publish / post a new event now. E.g. "לפרסם אירוע", "להוסיף אירוע", "אירוע חדש", "להעלות אירוע".
-- event_update: User wants to update / edit / change an existing event. E.g. "לעדכן אירוע", "עריכת אירוע", "לשנות אירוע קיים".
-- event_delete: User wants to delete / remove an event. E.g. "למחוק אירוע", "מחיקת אירוע", "להסיר אירוע".
+- publish: Anything to do with being a publisher — registering/signing up to publish, or adding / updating / deleting an event. E.g. "רוצה להפוך למפרסם", "הרשמה לפרסום", "לפרסם אירוע", "להוסיף אירוע", "לעדכן אירוע", "למחוק אירוע". (All of these are handled by directing the user to the web portal.)
 - contact: User wants to contact / get in touch / talk to someone / get phone or wa.me. E.g. "צרו קשר", "ליצור קשר", "להתקשר", "טלפון", "לשוחח".
-- irrelevant: The request is something we cannot help with (e.g. order food, unrelated topic, spam). We only offer: discover events, publish/update/delete events, contact.
+- irrelevant: The request is something we cannot help with (e.g. order food, unrelated topic, spam). We only offer: discover events, publish events, contact.
 - unclear: Cannot determine what the user wants; message is too vague, empty, or ambiguous.
 
 Respond with valid JSON only: { "intent": "<one of the enum values>" }.`
@@ -57,7 +51,7 @@ Respond with valid JSON only: { "intent": "<one of the enum values>" }.`
  * Classify user message into main-menu intent.
  * @param {string} userMessage - Trimmed user text
  * @param {{ openaiApiKey?: string, openaiModel?: string }} [options]
- * @returns {Promise<{ intent: 'discover'|'publish'|'event_add_new'|'event_update'|'event_delete'|'contact'|'irrelevant'|'unclear' }>}
+ * @returns {Promise<{ intent: 'discover'|'publish'|'contact'|'irrelevant'|'unclear' }>}
  */
 export async function classifyMainMenuIntent(userMessage, options = {}) {
   const apiKey = (options.openaiApiKey ?? '').trim()
