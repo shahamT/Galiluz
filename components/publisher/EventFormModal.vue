@@ -584,6 +584,15 @@ watch(() => form.mainCategory, (newMain) => {
   form.categories = form.categories.filter(c => c !== newMain)
 })
 
+// Clear city/region validation errors as soon as the picker selection becomes valid
+// (CityPicker only emits update:modelValue, so there's no per-field @input to hook clearError to).
+watch(() => form.city, (c) => {
+  if (c?.cityId) { errors.city = ''; errors.customCity = ''; errors.region = ''; return } // listed city → custom fields gone
+  if (c?.customCity !== undefined) errors.city = '' // entered "custom" mode
+  if (c?.customCity?.trim()) errors.customCity = ''
+  if (c?.region) errors.region = ''
+}, { deep: true })
+
 // Auto-default the multi-day flag as the user changes the number of occurrences:
 // a lone occurrence is trivially "multi-day"; growing from one to many defaults the
 // flag OFF (treat as separate single-day events) until the user opts in. Suppressed
