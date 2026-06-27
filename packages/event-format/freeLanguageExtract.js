@@ -9,6 +9,7 @@ import { OCCURRENCE_RULES } from './occurrenceRules.js'
 import { isRetryableOpenAIError, getRetryDelayMs, sleep, describeOpenAIError } from './openaiRetry.js'
 import { createOpenAIClient } from './openaiClient.js'
 import { stripCityFromLocationFields } from './stripCityFromPlace.js'
+import { cleanTitle } from './cleanTitle.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
@@ -283,7 +284,10 @@ CITY: Extract the city/town name. Use standard spelling. If the message mentions
 NORTHERN ISRAEL ONLY: This calendar is for Northern Israel only (הגליל העליון, רמת הגולן, אצבע הגליל). If you have NO DOUBT that the extracted city is NOT in Northern Israel (e.g. clearly תל אביב, ירושלים, באר שבע, נתניה, ראשון לציון), set city to empty string and add flag: fieldKey="rawCityOutsideNorth", reason="העיר שזוהתה אינה באזור הצפון". When in doubt, accept the city — only flag when you are certain it is outside the North.
 
 RULES:
-1. rawTitle: Event name only. No price, dates, location (unless clearly part of event name). Generate from content if no clear title.
+1. rawTitle: The event's actual NAME — what the event IS — concise (about 2–7 words). Decide in this order:
+   a. If the message has a clear, specific event name (a real title, not a slogan), USE IT, but CLEANED: drop dates, times, prices, the city/place, a leading call-to-action, emojis, and quotes/asterisks. Pull just the name out of its line — e.g. "פסטיבל היין של ראש פינה בסופש הקרוב!" → "פסטיבל היין של ראש פינה"; "🍷 הערב ביער מרפא דפנה! בואו לטעום יינות" → "טעימת יינות ביער מרפא דפנה".
+   b. If the opening / most prominent line is a HYPE TAGLINE, slogan, teaser or call-to-action rather than a name (e.g. "האירוע המטורף של השנה", "אל תפספסו!", "וואלה התגעגענו!", "אתם מוכנים?!"), do NOT use it as the title. Instead SYNTHESIZE a short descriptive name from the actual content — the activity/type plus a defining detail (artist, theme, or venue): e.g. an Independence-Day party → "מסיבת יום העצמאות"; a foraging workshop with a guide → "סדנת ליקוט".
+   Never output a generic slogan, a full sentence, a question, or marketing fluff as the title. Keep it factual — do NOT invent specifics (names, numbers) not in the message. The title must not contain dates, times, price, or emojis.
 2. rawFullDescription: Output as HTML only. Use only these tags: <p>, <br>, <strong>, <em>, <s>, <ul>, <ol>, <li>, <blockquote>, <code>. Use <strong> for bold, <em> for italic, <ul><li> for bullet lists. Do not use * or _ in the output; use only these HTML tags. Min 70 chars. Preserve structure; add formatting (bold, italic, bullets, paragraphs) for readability when helpful. FOR EACH LINK OR PHONE you extract to urls: REMOVE from rawFullDescription both (a) the URL or phone number itself and (b) the label/reference text that introduces it (e.g. "אינסטגרם - ", "כרטיסים >> ", "טלפון להרשמה - ", "להזמנה: "). Remove any connector (dash, arrows, colon) that only links the label to the URL or phone. KEEP generic phrases like "כרטיסים למטה בלינק" when they do not repeat a specific extracted link. Do NOT add any content that is not in the original text. TYPOS: You may fix clear typos only when 100% certain (e.g. "בילןי נחמד בסופש" → "בילוי נחמד בסופש"). Do NOT change wordplay, puns, or intentional phrasing.
 3. shortDescription: 1-2 sentences Hebrew, no location/price/dates.
 4. rawOccurrences: String representation of dates/times from message. rawOccurrences must capture BOTH date AND time from the ENTIRE message. Date and time often appear in different places (e.g. date in header "28.2.26", times later "18:00", "18:30"). Scan the full message: extract the calendar date from one part, extract the start time from another, and synthesize rawOccurrences as a combined string (e.g. "28.2.26 18:00" or "28.2 במוצ״ש 18:00"). Do NOT output only the date when times exist elsewhere.
@@ -358,6 +362,7 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
       const hasRawCityOutsideNorth = Array.isArray(parsed.flags) && parsed.flags.some(
         (f) => f && f.fieldKey === 'rawCityOutsideNorth',
       )
+      const cleanedTitle = cleanTitle(parsed.rawTitle) // strip trailing date/time/decoration deterministically
       const cityStr = (parsed.city ?? parsed.rawCity ?? '').trim()
       const parsedLocationName = (parsed.rawLocationName ?? parsed.locationName ?? '').trim() || null
       const parsedAddressLine1 = (parsed.rawAddressLine1 ?? parsed.addressLine1 ?? '').trim() || null
@@ -404,7 +409,7 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
       }
 
       const rawEventSupplement = {
-        rawTitle: (parsed.rawTitle ?? '').trim(),
+        rawTitle: cleanedTitle,
         rawOccurrences: (parsed.rawOccurrences ?? '').trim(),
         rawFullDescription: (parsed.rawFullDescription ?? '').trim(),
         rawMainCategory: (parsed.rawMainCategory ?? '').trim() || 'community_meetup',
@@ -448,7 +453,7 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
       const rawOccurrencesStr = (parsed.rawOccurrences ?? '').trim() || undefined
       const normalizedOccurrences = normalizeFormattedEventOccurrences(rawOccurrences, rawOccurrencesStr)
       const formattedEvent = {
-        Title: (parsed.rawTitle ?? '').trim() || 'אירוע',
+        Title: cleanedTitle || 'אירוע',
         shortDescription: (parsed.shortDescription ?? '').trim() || 'אירוע',
         fullDescription: fullDescriptionValue,
         mainCategory,

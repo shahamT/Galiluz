@@ -18,7 +18,8 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "test": "vitest run",
-    "eval:matcher": "vitest run -c vitest.eval.config.ts",
+    "eval:matcher": "vitest run -c vitest.eval.config.ts tests/eval/matcher.eval.test.ts",
+    "eval:title": "vitest run -c vitest.eval.config.ts tests/eval/title.eval.test.ts",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
