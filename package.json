@@ -20,6 +20,7 @@
     "test": "vitest run",
     "eval:matcher": "vitest run -c vitest.eval.config.ts tests/eval/matcher.eval.test.ts",
     "eval:title": "vitest run -c vitest.eval.config.ts tests/eval/title.eval.test.ts",
+    "eval:parse": "vitest run -c vitest.eval.config.ts tests/eval/parse.eval.test.ts",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
