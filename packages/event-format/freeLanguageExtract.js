@@ -8,6 +8,7 @@ import { normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 import { OCCURRENCE_RULES } from './occurrenceRules.js'
 import { isRetryableOpenAIError, getRetryDelayMs, sleep, describeOpenAIError } from './openaiRetry.js'
 import { createOpenAIClient } from './openaiClient.js'
+import { stripCityFromLocationFields } from './stripCityFromPlace.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
@@ -48,38 +49,6 @@ function sanitizeText(text) {
   let s = text.trim()
   if (s.length > MAX_TEXT_LENGTH) s = s.slice(0, MAX_TEXT_LENGTH)
   return s
-}
-
-/**
- * Strip redundant city name from locationName/addressLine1 when they repeat the city.
- * City is stored in City field; avoid duplication (e.g. locationName "בית הלל" when City is "בית הלל").
- * @param {string} city - City name (from City field)
- * @param {string|null|undefined} locationName
- * @param {string|null|undefined} addressLine1
- * @returns {{ locationName: string|null, addressLine1: string|null }}
- */
-function stripCityFromLocationFields(city, locationName, addressLine1) {
-  const cityNorm = (city ?? '').trim()
-  if (!cityNorm) return { locationName: locationName ?? null, addressLine1: addressLine1 ?? null }
-  const norm = (s) => (s ?? '').trim().replace(/\s+/g, ' ')
-  const cityLower = norm(cityNorm).toLowerCase()
-
-  const strip = (val) => {
-    const v = norm(val)
-    if (!v) return null
-    const vLower = v.toLowerCase()
-    if (vLower === cityLower) return null
-    if (vLower.startsWith(cityLower)) {
-      const rest = v.slice(cityNorm.length).replace(/^[\s,]+/, '').trim()
-      return rest || null
-    }
-    return v || null
-  }
-
-  return {
-    locationName: strip(locationName) ?? null,
-    addressLine1: strip(addressLine1) ?? null,
-  }
 }
 
 const DETECTION_SCHEMA = {
