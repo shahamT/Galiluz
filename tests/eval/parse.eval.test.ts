@@ -26,6 +26,7 @@ interface ParseCase {
   expectList?: boolean // fullDescription should use <ul><li>
   outsideNorth?: 'must' | 'mustNot' // whether rawCityOutsideNorth SHOULD fire
   requireCats?: string[] // categories must include all of these
+  expectEmoji?: boolean // fullDescription should carry at least one emoji (#3)
 }
 
 const cases: ParseCase[] = [
@@ -33,6 +34,7 @@ const cases: ParseCase[] = [
     name: 'bass party — has a URL + says "לצפון" (northern, not outside)',
     message: '25.6 || 22:00 מביאים את בשורת הבייס לצפון✨ מסיבת טראנס ובייס שתעיף אתכם. כרטיסים ב-70 כאן!!! https://web.vibez.io/events/bassbusa3',
     outsideNorth: 'mustNot',
+    expectEmoji: true,
   },
   {
     name: 'US-themed party held in the north (theme is not a location)',
@@ -48,7 +50,13 @@ const cases: ParseCase[] = [
     name: 'winery party — many offerings → bullet list, no URL leak',
     message: '*מסיבה ביקב הר אודם! 🥂* 19.6 שישי 10:00-16:00. בתכנית: דיגי בסיל, דוכנים של יוצרי הגולן, קרמיקה אפרת, מוצרי בטון בעבודת יד, תכשיטים, ואוכל דרוזי של סיאם. הכניסה חופשית.',
     expectList: true,
+    expectEmoji: true,
     outsideNorth: 'mustNot',
+  },
+  {
+    name: 'no-emoji source → emojis added tastefully; link-reference phrase dropped',
+    message: 'ערב הרצאות וסדנאות יצירה במתנ"ס מעלות. הרצאה על אמנות מודרנית, סדנת ציור וסדנת קרמיקה. רביעי 9.7 בשעה 18:00. מספר המקומות מוגבל, כרטיסים בלינק למטה. https://example.com/tickets',
+    expectEmoji: true,
   },
   {
     name: 'foraging workshop — two URLs + a phone in the body',
@@ -69,6 +77,9 @@ const cases: ParseCase[] = [
 ]
 
 const URL_RE = /(?:https?:\/\/|www\.)/i
+const EMOJI_RE = /\p{Extended_Pictographic}/u
+// Phrases that only point at a link/registration without adding info (#4) — should be removed.
+const LINK_REF_RE = /בלינק|בקישור|בתגובות/
 const BAD_TITLES = new Set(['כאן', 'לינק', 'here', 'click'])
 // A title is "generic" if it's empty, a known filler word, or only punctuation/symbols.
 // NOTE: don't use \W — Hebrew letters are non-\w in JS, so \W would flag every Hebrew title.
@@ -86,7 +97,9 @@ function checkParse(res: any, c: ParseCase): string[] {
   const desc = String(e.fullDescription || '')
 
   if (URL_RE.test(desc)) reasons.push('raw URL left in description')
+  if (LINK_REF_RE.test(desc)) reasons.push('valueless link-reference phrase left in description (#4)')
   if (c.expectList && !/<li>/i.test(desc)) reasons.push('expected a <ul><li> list, got none')
+  if (c.expectEmoji && !EMOJI_RE.test(desc)) reasons.push('expected at least one emoji, got none (#3)')
 
   const flaggedOutside = Array.isArray(res.flags) && res.flags.some((f: any) => f?.fieldKey === 'rawCityOutsideNorth')
   if (c.outsideNorth === 'mustNot' && flaggedOutside) reasons.push('falsely flagged rawCityOutsideNorth (dropped a northern city)')
