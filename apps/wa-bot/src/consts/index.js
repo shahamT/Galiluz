@@ -69,9 +69,9 @@ export const DISCOVER = {
   ASK_CATEGORY: 'איזה אירועים את/ה מחפש/ת?',
   ASK_REGION: 'באיזה איזור?',
   REGION_BUTTONS: [
-    { id: 'center', title: 'הגליל העליון המרכזי' },
-    { id: 'golan', title: 'צפון ומרכז רמת הגולן' },
     { id: 'upper', title: 'אצבע הגליל' },
+    { id: 'golan', title: 'צפון ומרכז רמת הגולן' },
+    { id: 'center', title: 'הגליל העליון המרכזי' },
   ],
   ASK_TIME: {
     body: 'מתי?',
