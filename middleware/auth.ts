@@ -21,13 +21,13 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo('/login')
   }
 
-  // Role check: only managers can access /admin
-  if (isAdminRoute && authenticated && !authStore.isManager) {
+  // Role check: only super-admins can access /admin
+  if (isAdminRoute && authenticated && !authStore.isSuperAdmin) {
     return navigateTo('/publisher/dashboard')
   }
 
   if (isAuthEntryPage && authenticated) {
-    return navigateTo(authStore.isManager ? '/admin' : '/publisher/dashboard')
+    return navigateTo(authStore.isSuperAdmin ? '/admin' : '/publisher/dashboard')
   }
 
   // Auth check passed — signal to protected pages that they can render

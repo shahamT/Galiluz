@@ -73,21 +73,20 @@ export default defineEventHandler(async (event) => {
   await logAuthEvent(event, 'login', waId)
 
   // Roles + active account, derived fresh from memberships (same resolver the session uses).
-  const roles = await resolvePublisherRoles({ publisherId: doc._id.toString(), accountId: doc.accountId, type: doc.type })
+  const roles = await resolvePublisherRoles({ publisherId: doc._id.toString(), accountId: doc.accountId })
 
   return {
     expiresAt: authKeyExpiresAt.toISOString(),
     user: {
       waId: doc.waId,
       fullName: doc.fullName || '',
-      publishingAs: await resolveAccountTitle({ accountId: doc.accountId, accountName: doc.accountName, waId: doc.waId }),
-      type: doc.type || 'publisher',
+      publishingAs: await resolveAccountTitle({ accountId: roles.activeAccountId, accountName: doc.accountName, waId: doc.waId }),
       platformRole: roles.platformRole,
       activeAccountId: roles.activeAccountId,
       activeRole: roles.activeRole,
       // Resolved here so the client has entitlements immediately after login,
       // without waiting for a /api/auth/me round-trip.
-      features: await getAccountFeatures({ activeAccountId: roles.activeAccountId, accountId: doc.accountId, type: doc.type, platformRole: roles.platformRole }),
+      features: await getAccountFeatures({ activeAccountId: roles.activeAccountId, platformRole: roles.platformRole }),
       preferences: getPublisherPreferences(doc),
     },
   }

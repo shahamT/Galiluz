@@ -141,14 +141,7 @@ describe('deriveActiveRoles (memberships → session roles)', () => {
     expect(r.isPlatformStaff).toBe(true)
   })
 
-  it('rollout alias: legacy type==="manager" with NO platform membership still counts as super_admin', () => {
-    const r = deriveActiveRoles([{ accountId: 'A', role: 'owner' }], 'A', 'manager')
-    expect(r.platformRole).toBe(null)       // no membership yet (pre-migrate)
-    expect(r.isSuperAdmin).toBe(true)        // but the alias gates it as super_admin
-    expect(r.isPlatformStaff).toBe(true)
-  })
-
-  it('empty memberships with a pointer → falls back to the pointer (pre-backfill behavior)', () => {
+  it('empty memberships with a pointer → falls back to the pointer (no business membership yet)', () => {
     const r = deriveActiveRoles([], 'A')
     expect(r.activeAccountId).toBe('A')
     expect(r.activeRole).toBe(null)

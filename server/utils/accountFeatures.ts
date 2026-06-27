@@ -20,24 +20,23 @@ export function resolveFeatures(stored: Record<string, unknown> | null | undefin
 
 /**
  * Resolve the set of enabled features for the caller — the single authority for
- * account-level entitlements. Callers pass the session (which carries `activeAccountId`,
- * `platformRole`, and `type`), e.g. `getAccountFeatures(session)`.
+ * account-level entitlements. Callers pass the session (which carries `activeAccountId`
+ * and `platformRole`), e.g. `getAccountFeatures(session)`.
  *
- * - Super-admins bypass gating: every feature enabled (the legacy `type==='manager'` alias
- *   is honored during rollout). A `viewer` does NOT bypass — features are business
- *   entitlements, and a read-only platform viewer gets its account's actual flags.
+ * - Super-admins bypass gating: every feature enabled. A `viewer` does NOT bypass —
+ *   features are business entitlements, and a read-only platform viewer gets its
+ *   account's actual flags.
  * - Result is whitelisted to the registry keys, so a malformed/unexpected
  *   `features` object in the DB can never inject behaviour or extra keys.
  * - Fail-closed: a missing accountId, bad id, or absent account doc resolves to
  *   the registry defaults (currently all OFF).
  */
-export async function getAccountFeatures(input: { accountId?: string; activeAccountId?: string; type?: string; platformRole?: string | null }): Promise<FeatureMap> {
-  if (input.platformRole === 'super_admin' || input.type === 'manager') return allEnabled()
-  const accountId = input.activeAccountId || input.accountId
-  if (!accountId) return { ...FEATURE_DEFAULTS }
+export async function getAccountFeatures(input: { activeAccountId?: string; platformRole?: string | null }): Promise<FeatureMap> {
+  if (input.platformRole === 'super_admin') return allEnabled()
+  if (!input.activeAccountId) return { ...FEATURE_DEFAULTS }
 
   let oid: ObjectId
-  try { oid = new ObjectId(accountId) } catch { return { ...FEATURE_DEFAULTS } }
+  try { oid = new ObjectId(input.activeAccountId) } catch { return { ...FEATURE_DEFAULTS } }
 
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()

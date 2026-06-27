@@ -41,9 +41,17 @@ so each deploy is safe alone on continuously-deployed prod.
       remaining call sites); CLAUDE.md role/scoping/admin sections rewritten for the RBAC model. Client
       `isManager`/`canManageAll` aliases and the conservative super-admin-only `/admin` middleware gate are
       intentionally retained (viewer read-only UI is roadmap item 5).
-- [ ] **CONTRACT (deferred).** Remove the Deploy-2 fallbacks and (eventually) `publishers.type` +
-      `publishers.accountId` — only after a consistency sweep shows 0 unstamped events and the wa-bot no
-      longer reads `type`.
+- [x] **CONTRACT (code committed; memberships are now the sole source of truth).** Removed every
+      migration fallback: the `type==='manager'` alias (authz/requirePublisherAuth/getAccountFeatures/
+      client), the straggler `$or` in `getAccountEventFilter`/`ownsEventForSession` (now plain
+      `event.accountId === activeAccountId`; these helpers are sync), and the `requireManager` option.
+      Session no longer carries `type`/`accountId`; client `authStore` drops `isManager`/`canManageAll`.
+      `publishers.type` is no longer written or read for roles — `check.get` and `managers.get` derive the
+      wa-bot's "manager" signal from the super_admin **membership** (no wa-bot redeploy). Staff are managed
+      via [scripts/set-platform-role.js](../scripts/set-platform-role.js). Verified on the dev clone
+      (check→manager/publisher, managers list) + 247 unit tests.
+  - Still physically present but unused (safe to drop in a later data cleanup): the legacy `publishers.type`
+    field on old docs, and the 3 ownerless orphan events with no `event.accountId` (public-feed only).
 
 ### Verification gates (each phase)
 - **Login unbroken:** a single-account publisher lands on `/publisher/dashboard` with their one account

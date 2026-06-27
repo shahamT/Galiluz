@@ -2,14 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { getAccountFeatures, resolveFeatures } from '~/server/utils/accountFeatures'
 
 // getAccountFeatures: cover the branches that return before any DB / runtime-config
-// access (manager bypass + the fail-closed fallbacks). The DB lookup path is
+// access (super_admin bypass + the fail-closed fallbacks). The DB lookup path is
 // exercised by resolveFeatures below (the pure merge) + manual verification.
 describe('getAccountFeatures', () => {
-  it('managers bypass gating — every feature enabled, no DB lookup', async () => {
-    const features = await getAccountFeatures({ accountId: 'acc-1', type: 'manager' })
-    expect(features).toEqual({ globalStats: true, perEventStats: true })
-  })
-
   it('platform super_admin bypasses gating — every feature enabled, no DB lookup', async () => {
     const features = await getAccountFeatures({ activeAccountId: 'acc-1', platformRole: 'super_admin' })
     expect(features).toEqual({ globalStats: true, perEventStats: true })
@@ -20,13 +15,13 @@ describe('getAccountFeatures', () => {
     expect(features).toEqual({ globalStats: false, perEventStats: false })
   })
 
-  it('fails closed to defaults (OFF) when the publisher has no account yet', async () => {
-    const features = await getAccountFeatures({ type: 'publisher' })
+  it('fails closed to defaults (OFF) when there is no active account', async () => {
+    const features = await getAccountFeatures({})
     expect(features).toEqual({ globalStats: false, perEventStats: false })
   })
 
-  it('fails closed to defaults (OFF) when accountId is not a valid ObjectId', async () => {
-    const features = await getAccountFeatures({ accountId: 'not-an-objectid', type: 'publisher' })
+  it('fails closed to defaults (OFF) when activeAccountId is not a valid ObjectId', async () => {
+    const features = await getAccountFeatures({ activeAccountId: 'not-an-objectid' })
     expect(features).toEqual({ globalStats: false, perEventStats: false })
   })
 })

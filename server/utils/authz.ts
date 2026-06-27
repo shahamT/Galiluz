@@ -85,7 +85,7 @@ export interface ResolvedRoles {
   /** Active business account: the pointer when it has a live membership, else the resolver pick. */
   activeAccountId: string | undefined
   activeRole: BusinessRole | null
-  /** Effective gates (include the rollout `type==='manager'` alias). */
+  /** Effective gates (derived purely from the platform membership). */
   isSuperAdmin: boolean
   isPlatformStaff: boolean
 }
@@ -99,22 +99,18 @@ function membershipTime(v: Date | string | null | undefined): number {
 }
 
 /**
- * Derive a publisher's effective roles from their membership rows (pure; no DB).
+ * Derive a publisher's effective roles from their membership rows (pure; no DB) — `memberships`
+ * is the single source of truth for roles.
  * - `platformRole`: the role of their platform-account membership (super_admin/viewer), else null.
  * - `activeAccountId`/`activeRole`: the business membership matching `pointer`
- *   (`publishers.accountId`) when present; otherwise the deterministic pick — highest priority
- *   (owner before admin), then oldest `createdAt`. Falls back to the pointer itself when the
- *   publisher has no business membership (preserves pre-backfill behavior; staff-only → undefined).
- * - `isSuperAdmin`/`isPlatformStaff` include the legacy `type==='manager'` alias for the rollout.
+ *   (`publishers.accountId`, the default-active-account pointer) when present; otherwise the
+ *   deterministic pick — highest priority (owner before admin), then oldest `createdAt`. Falls
+ *   back to the pointer itself when there is no business membership (staff-only → undefined).
  *
  * Disjoint role-name namespaces (super_admin/viewer vs owner/admin) let us classify platform vs
  * business membership without joining `account.kind`.
  */
-export function deriveActiveRoles(
-  memberships: MembershipRow[],
-  pointer: string | undefined,
-  legacyType?: string | null,
-): ResolvedRoles {
+export function deriveActiveRoles(memberships: MembershipRow[], pointer: string | undefined): ResolvedRoles {
   const platformRole = (memberships.find((m) => m.role === 'super_admin' || m.role === 'viewer')?.role
     || null) as PlatformRole | null
 
@@ -130,7 +126,7 @@ export function deriveActiveRoles(
     platformRole,
     activeAccountId: active?.accountId || pointer,
     activeRole: (active?.role || null) as BusinessRole | null,
-    isSuperAdmin: isSuperAdmin(platformRole) || legacyType === 'manager',
-    isPlatformStaff: isPlatformStaff(platformRole) || legacyType === 'manager',
+    isSuperAdmin: isSuperAdmin(platformRole),
+    isPlatformStaff: isPlatformStaff(platformRole),
   }
 }

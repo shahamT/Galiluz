@@ -11,9 +11,8 @@ export default defineEventHandler(async (event) => {
 
   const eventsCol = db.collection(config.mongodbCollectionEventsWaBot || config.mongodbCollectionEvents || 'events')
 
-  // Tenant-scoped: events owned by the caller's active account (event.accountId), with a
-  // straggler fallback to the account's publisher-set for any not-yet-stamped event.
-  const scope = await getAccountEventFilter(session)
+  // Tenant-scoped: events owned by the caller's active account (the event.accountId tenant key).
+  const scope = getAccountEventFilter(session)
   const docs = await eventsCol
     .find({ ...scope, ...NOT_DELETED })
     .project({

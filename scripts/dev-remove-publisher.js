@@ -68,6 +68,7 @@ try {
   const db = client.db(dbName)
   const publishers = db.collection(env.MONGODB_COLLECTION_PUBLISHERS || 'publishers')
   const accounts = db.collection(env.MONGODB_COLLECTION_ACCOUNTS || 'accounts')
+  const memberships = db.collection(env.MONGODB_COLLECTION_MEMBERSHIPS || 'memberships')
 
   console.log(`Target: ${dbName} — waId ${waId}`)
   const pub = await publishers.findOne({ waId })
@@ -84,6 +85,9 @@ try {
     } else {
       console.log('Publisher had no accountId (never approved) — no account to delete.')
     }
+    // Remove their memberships too (owner + any platform staff role) so none are orphaned.
+    const mr = await memberships.deleteMany({ publisherId: pub._id.toString() })
+    console.log(`Deleted ${mr.deletedCount} membership(s)`)
     const pr = await publishers.deleteOne({ waId })
     console.log(`Deleted publisher ${waId} (status was "${pub.status}") (${pr.deletedCount})`)
   }

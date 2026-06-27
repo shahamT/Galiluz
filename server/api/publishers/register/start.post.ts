@@ -75,7 +75,6 @@ export default defineEventHandler(async (event) => {
         accountName,
         eventTypesDescription,
         status: 'pending',
-        type: 'publisher',
         approvedTerms: true,
         approvedTermsAt: now,
         phoneVerified: false,
