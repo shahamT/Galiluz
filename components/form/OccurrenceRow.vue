@@ -8,14 +8,31 @@
           <div class="OccurrenceRow-dateWrap">
             <FormField label="תאריך" required :error="errors.date">
               <div class="OccurrenceRow-dateField">
-                <input
-                  v-model="local.date"
-                  type="date"
-                  class="FormInput OccurrenceRow-dateInput"
-                  :min="minDate"
-                  :disabled="frozen"
-                  @change="emit('update:modelValue', local)"
-                />
+                <!-- Native <input type=date> shows mm/dd/yyyy on US-locale browsers; we render our own
+                     dd/mm/yyyy text and open the native calendar via showPicker(). Value stays ISO. -->
+                <div class="OccurrenceRow-dateControl">
+                  <button
+                    type="button"
+                    class="FormInput OccurrenceRow-dateInput OccurrenceRow-dateBtn"
+                    :class="{ 'OccurrenceRow-dateBtn--placeholder': !displayDate }"
+                    :disabled="frozen"
+                    @click="openPicker"
+                  >
+                    <span>{{ displayDate || 'בחרו תאריך' }}</span>
+                    <UiIcon name="calendar_month" size="sm" class="OccurrenceRow-dateIcon" />
+                  </button>
+                  <input
+                    ref="dateEl"
+                    v-model="local.date"
+                    type="date"
+                    class="OccurrenceRow-dateNative"
+                    :min="minDate"
+                    :disabled="frozen"
+                    tabindex="-1"
+                    aria-hidden="true"
+                    @change="emit('update:modelValue', local)"
+                  />
+                </div>
                 <span v-if="weekdayLabel" class="OccurrenceRow-dayChip">{{ weekdayLabel }}</span>
               </div>
             </FormField>
@@ -128,6 +145,25 @@ watch(() => props.modelValue, (val) => {
 }, { deep: true })
 
 const minDate = computed(() => props.frozen ? undefined : new Date().toISOString().slice(0, 10))
+
+// Display the ISO date (YYYY-MM-DD) as DD/MM/YYYY regardless of the browser's locale.
+const displayDate = computed(() => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(local.date || '')
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : ''
+})
+
+// Open the (visually hidden) native date input's calendar; value/min/validation stay native.
+const dateEl = ref(null)
+function openPicker() {
+  if (props.frozen) return
+  const el = dateEl.value
+  if (!el) return
+  if (typeof el.showPicker === 'function') {
+    try { el.showPicker(); return } catch { /* not allowed here — fall back */ }
+  }
+  el.focus()
+  el.click()
+}
 
 // Hebrew weekday chip beside the date — recomputes live as local.date changes.
 // Parse the YYYY-MM-DD parts manually (avoids UTC-vs-local off-by-one from new Date(str)).
@@ -354,6 +390,45 @@ function confirmRemove() {
     width: 9rem;
     font-size: var(--font-size-sm);
     padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  &-dateControl {
+    position: relative;
+  }
+
+  &-dateBtn {
+    appearance: none;
+    -webkit-appearance: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-xs);
+    cursor: pointer;
+    text-align: right;
+    font-family: var(--font-family-body);
+    color: var(--color-text);
+
+    &--placeholder { color: var(--color-text-muted); }
+    &:disabled { opacity: 0.4; cursor: not-allowed; }
+  }
+
+  &-dateIcon {
+    color: var(--brand-dark-green);
+    flex-shrink: 0;
+  }
+
+  // The real <input type="date"> overlays the button (so showPicker anchors the calendar there)
+  // but is invisible and click-through — the button handles the click.
+  &-dateNative {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
   }
 
   &-timePicker {

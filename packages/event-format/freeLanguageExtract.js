@@ -8,6 +8,9 @@ import { normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 import { OCCURRENCE_RULES } from './occurrenceRules.js'
 import { isRetryableOpenAIError, getRetryDelayMs, sleep, describeOpenAIError } from './openaiRetry.js'
 import { createOpenAIClient } from './openaiClient.js'
+import { stripCityFromLocationFields } from './stripCityFromPlace.js'
+import { cleanTitle } from './cleanTitle.js'
+import { stripLinksFromHtml } from './cleanDescription.js'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const MAX_ATTEMPTS = 3
@@ -48,38 +51,6 @@ function sanitizeText(text) {
   let s = text.trim()
   if (s.length > MAX_TEXT_LENGTH) s = s.slice(0, MAX_TEXT_LENGTH)
   return s
-}
-
-/**
- * Strip redundant city name from locationName/addressLine1 when they repeat the city.
- * City is stored in City field; avoid duplication (e.g. locationName "בית הלל" when City is "בית הלל").
- * @param {string} city - City name (from City field)
- * @param {string|null|undefined} locationName
- * @param {string|null|undefined} addressLine1
- * @returns {{ locationName: string|null, addressLine1: string|null }}
- */
-function stripCityFromLocationFields(city, locationName, addressLine1) {
-  const cityNorm = (city ?? '').trim()
-  if (!cityNorm) return { locationName: locationName ?? null, addressLine1: addressLine1 ?? null }
-  const norm = (s) => (s ?? '').trim().replace(/\s+/g, ' ')
-  const cityLower = norm(cityNorm).toLowerCase()
-
-  const strip = (val) => {
-    const v = norm(val)
-    if (!v) return null
-    const vLower = v.toLowerCase()
-    if (vLower === cityLower) return null
-    if (vLower.startsWith(cityLower)) {
-      const rest = v.slice(cityNorm.length).replace(/^[\s,]+/, '').trim()
-      return rest || null
-    }
-    return v || null
-  }
-
-  return {
-    locationName: strip(locationName) ?? null,
-    addressLine1: strip(addressLine1) ?? null,
-  }
 }
 
 const DETECTION_SCHEMA = {
@@ -311,19 +282,31 @@ ${categoriesText}
 
 CITY: Extract the city/town name. Use standard spelling. If the message mentions a city from this list, use that exact name: ${citiesText}. Otherwise use the city name as stated. Fix obvious typos (e.g. קריעת שמונה → קריית שמונה).
 
-NORTHERN ISRAEL ONLY: This calendar is for Northern Israel only (הגליל העליון, רמת הגולן, אצבע הגליל). If you have NO DOUBT that the extracted city is NOT in Northern Israel (e.g. clearly תל אביב, ירושלים, באר שבע, נתניה, ראשון לציון), set city to empty string and add flag: fieldKey="rawCityOutsideNorth", reason="העיר שזוהתה אינה באזור הצפון". When in doubt, accept the city — only flag when you are certain it is outside the North.
+NORTHERN ISRAEL ONLY: This calendar covers Northern Israel only (הגליל העליון, רמת הגולן, אצבע הגליל). Set city to empty string and add flag fieldKey="rawCityOutsideNorth", reason="העיר שזוהתה אינה באזור הצפון" ONLY when the message EXPLICITLY names a city/town/venue you are CERTAIN is in the south/center (e.g. תל אביב, ירושלים, באר שבע, נתניה, ראשון לציון, חיפה). Judge ONLY the actual event LOCATION. NEVER infer "outside the north" from: a theme/country/nationality (e.g. "מסיבת יום העצמאות של ארה״ב" — that's a theme, the party is here), a direction word ("לצפון", "בצפון"), a region adjective ("גלילית", "גלילי", "גולן"), or the mere ABSENCE of a recognizable city. If no city is stated, do NOT flag rawCityOutsideNorth — leave city empty and use the normal rawCity/rawLocation flags. When in any doubt, accept the city.
 
 RULES:
-1. rawTitle: Event name only. No price, dates, location (unless clearly part of event name). Generate from content if no clear title.
-2. rawFullDescription: Output as HTML only. Use only these tags: <p>, <br>, <strong>, <em>, <s>, <ul>, <ol>, <li>, <blockquote>, <code>. Use <strong> for bold, <em> for italic, <ul><li> for bullet lists. Do not use * or _ in the output; use only these HTML tags. Min 70 chars. Preserve structure; add formatting (bold, italic, bullets, paragraphs) for readability when helpful. FOR EACH LINK OR PHONE you extract to urls: REMOVE from rawFullDescription both (a) the URL or phone number itself and (b) the label/reference text that introduces it (e.g. "אינסטגרם - ", "כרטיסים >> ", "טלפון להרשמה - ", "להזמנה: "). Remove any connector (dash, arrows, colon) that only links the label to the URL or phone. KEEP generic phrases like "כרטיסים למטה בלינק" when they do not repeat a specific extracted link. Do NOT add any content that is not in the original text. TYPOS: You may fix clear typos only when 100% certain (e.g. "בילןי נחמד בסופש" → "בילוי נחמד בסופש"). Do NOT change wordplay, puns, or intentional phrasing.
-3. shortDescription: 1-2 sentences Hebrew, no location/price/dates.
+1. rawTitle: The event's actual NAME — what the event IS — concise (about 2–7 words). Decide in this order:
+   a. If the message has a clear, specific event name (a real title, not a slogan), USE IT, but CLEANED: drop dates, times, prices, the city/place, a leading call-to-action, emojis, and quotes/asterisks. Pull just the name out of its line — e.g. "פסטיבל היין של ראש פינה בסופש הקרוב!" → "פסטיבל היין של ראש פינה"; "🍷 הערב ביער מרפא דפנה! בואו לטעום יינות" → "טעימת יינות ביער מרפא דפנה".
+   b. If the opening / most prominent line is a HYPE TAGLINE, slogan, teaser or call-to-action rather than a name (e.g. "האירוע המטורף של השנה", "אל תפספסו!", "וואלה התגעגענו!", "אתם מוכנים?!"), do NOT use it as the title. Instead SYNTHESIZE a short descriptive name from the actual content — the activity/type plus a defining detail (artist, theme, or venue): e.g. an Independence-Day party → "מסיבת יום העצמאות"; a foraging workshop with a guide → "סדנת ליקוט".
+   Never output a generic slogan, a full sentence, a question, or marketing fluff as the title. Keep it factual — do NOT invent specifics (names, numbers) not in the message. The title must not contain dates, times, price, or emojis.
+2. rawFullDescription: REWRITE the description into an appealing, easy-to-scan HTML block — this presentation rewrite is REQUIRED; do NOT just mirror the source's line breaks with <br>. Stay 100% faithful to the facts: never invent or change names, dates, prices, places or claims — formatting and emojis are decoration only.
+   - Open with a punchy one-line hook in its own <p>, then short supporting <p> paragraphs.
+   - When the text lists several activities / acts / offerings / items (even comma- or "ו"-separated, e.g. "דוכנים, אוכל ומוזיקה"), turn them into a <ul><li> list — one item per <li> — instead of a long sentence.
+   - Use <strong> to highlight the KEY points that make the text clearer and more appealing — the headline act AND other genuinely important phrases (the main attractions, what's special), spread across the description, not only the opening hook. Bold short phrases (not single filler words), and don't over-bold — a few meaningful highlights, not every line. Never bold the date, price or location.
+   - Use emojis with good taste to lift the appeal: if the source has NONE, add a few (about 2-4 across the description) that fit the vibe (🎶 🎤 🎸 🎨 🎭 🍷 🍝 🌿 🧘 🎉 👨‍👩‍👧‍👦 …); if it already has some, keep the fitting ones and add more only where it genuinely helps; if it's already emoji-heavy, trim to a tasteful amount. At most one per bullet / short paragraph. Don't repeat the same emoji, don't replace words with emojis, and skip emojis entirely for solemn events (e.g. memorials).
+   - Allowed tags — ONLY these, nothing else (anything else is stripped): <p> <br> <strong> <em> <ul> <ol> <li>. No * or _, no headings, no <a>/<blockquote>/<code>/<s>. Min 70 chars.
+   - LINKS & PHONES: NEVER leave a URL or phone number in the description — every link/phone goes to urls and must be removed from the body (including inside a <li>), along with the label/connector that only introduced it (e.g. "כרטיסים >> ", "טלפון להרשמה - ", "להזמנה: "). ALSO remove phrases that merely point at the link/registration without adding information (e.g. "כרטיסים בלינק", "כרטיסים למטה", "פרטים בקישור", "להרשמה בלינק", "לינק בתגובות") — the links are shown separately. Keep such a phrase only if it carries real info beyond "there is a link".
+   - DATE/TIME: if the event has a SINGLE simple date/time, do NOT repeat it as a standalone headline line in the description (it's shown separately). KEEP timing in the description when it adds real info — multiple dates/occurrences, or a multi-step schedule (e.g. "פתיחת דלתות 19:30, מופע 20:30").
+   - NOISE: drop standalone single-letter or punctuation-only lines (e.g. a lone "י"), decorative "#"/"*" markers around words, and repeated decorative separators.
+   - TYPOS: fix only when 100% certain (e.g. "בילןי נחמד" → "בילוי נחמד"); never change wordplay, puns or intentional phrasing.
+3. shortDescription: 1-2 short Hebrew sentences on what the event is and its vibe. You MAY include one enticing highlight (e.g. "כניסה חופשית" or the venue) when it adds appeal. Keep it short and engaging — don't just restate the full date/time.
 4. rawOccurrences: String representation of dates/times from message. rawOccurrences must capture BOTH date AND time from the ENTIRE message. Date and time often appear in different places (e.g. date in header "28.2.26", times later "18:00", "18:30"). Scan the full message: extract the calendar date from one part, extract the start time from another, and synthesize rawOccurrences as a combined string (e.g. "28.2.26 18:00" or "28.2 במוצ״ש 18:00"). Do NOT output only the date when times exist elsewhere.
 5. occurrences: ${OCCURRENCE_RULES}
 When date and time appear in different parts of the message (e.g. date in header "28.2.26", time "18:00" in body), combine them into one startTime. When multiple times appear for the same date (e.g. "12:00 - פתיחה, 13:00 - הופעה"), infer the correct startTime from what the event is advertising: if the whole day/event is advertised, use the first stated time; if the event is specifically the show, use that time. Example: event with 18:00 (פתיחת מרחב), 18:30 (חימום), 18:45–21:00 (מסע) — the event starts at 18:00. No single clear end → endTime: null.
 6. rawPrice: String from message (e.g. "50" or "חינם"). price: number or 0 (free) or null. When the text implies no entrance fee (e.g. חינם, בחינם, חופשי, כניסה חופשית, ללא תשלום, ללא דמי כניסה, אין דמי כניסה, or any phrasing that clearly indicates free/no charge) → price: 0. Do NOT rely only on examples — infer from meaning. Use the MAIN/STANDARD price only — NOT last-minute or day-of price (e.g. "50 ש״ח עד למועד האירוע, 60 ש״ח ביום האירוע" → use 50), NOT bundle price (e.g. "100 ש״ח לכרטיס, 180 ש״ח לשני כרטיסים" → use 100). Prefer the single-ticket or advance price when multiple options exist.
-7. mainCategory/categories: ALWAYS infer from content (event type, topic, keywords). mainCategory = primary best-fit. Then WORK HARD to find secondary categories — a secondary category is the NORM, not the exception. Scan the whole category list and add every other id whose theme is present, judged by the event's SUBJECT/TOPIC, its AUDIENCE, and its ACTIVITIES (not only its format). A lecture/talk/הרצאה MUST also carry its subject as a category (about art → [lecture, art]; about technology or AI → [lecture, technology]; about health → [lecture, health]; about nature → [lecture, nature]). Likewise: "מתאים לילדים"/"משפחות" → add kids; a guided or hands-on session → add workshop; food or drink as a focus → add food; time in nature → add nature; live music → add music. categories = [mainCategory] + up to ${MAX_EXTRA_CATEGORIES} additional ids; aim for 2 on most events. Return only mainCategory when, after this scan, genuinely no second theme exists (e.g. a plain pickup football game → sport alone), and never add an id that truly does not fit. Only flag rawMainCategory when you truly cannot infer any suitable category (e.g. completely generic "אירוע" with zero context).
+7. mainCategory/categories: ALWAYS infer from content (event type, topic, keywords). mainCategory = primary best-fit. Then WORK HARD to find secondary categories — a secondary category is the NORM, not the exception. Scan the whole category list and add every other id whose theme is present, judged by the event's SUBJECT/TOPIC, its AUDIENCE, and its ACTIVITIES (not only its format). A lecture/talk/הרצאה MUST also carry its subject as a category (about art → [lecture, art]; about technology or AI → [lecture, technology]; about health → [lecture, health]; about nature → [lecture, nature]). Likewise: "מתאים לילדים"/"משפחות" → add kids; a guided or hands-on session → add workshop; food or drink as a focus → add food; time in nature → add nature; live music → add music. categories = [mainCategory] + up to ${MAX_EXTRA_CATEGORIES} additional ids; aim for 2 on most events. Return only mainCategory when, after this scan, genuinely no second theme exists (e.g. a plain pickup football game → sport alone), and never add an id that truly does not fit. LIVE MUSIC: when the event's main draw is a live musical performance/concert, set mainCategory = "show" AND include "music" — this is for concerts/gigs/live performances only, NOT DJ/dance parties (use "party"), NOT jam sessions (use "jam"), NOT music workshops/courses (use "workshop"/"course"). Only flag rawMainCategory when you truly cannot infer any suitable category (e.g. completely generic "אירוע" with zero context).
 8. location: Extract locationName, addressLine1, addressLine2, wazeNavLink, gmapsNavLink. rawLocationName/rawAddressLine1 = raw strings. IMPORTANT: Do NOT repeat the city name in locationName or addressLine1 — City is stored separately. locationName = venue/place name only (e.g. "מרכז קהילתי", "פאב השכונה"); addressLine1 = street/address or specific detail (e.g. "רחוב הרצל 5"), NOT the city. If the only location info is the city, leave locationName and addressLine1 empty.
-9. urls: Event links and phones only. type=link|phone. For phones: Title = short Hebrew label (e.g. "טלפון להרשמה", "להזמנה", "הרשמה"); Url = digits only. Exclude Waze/Gmaps (those go to rawNavLinks).
+9. urls: Event links and phones only. type=link|phone. Title = a meaningful Hebrew label describing the destination, inferred from context (e.g. "כרטיסים", "הרשמה", "אתר האירוע", "טלפון להרשמה", "וואטסאפ"). NEVER use "כאן"/"לינק"/"here"/"click"/punctuation as the Title. For phones: Url = digits only. Exclude Waze/Gmaps (those go to rawNavLinks).
 10. rawNavLinks: Newline-separated Waze and Google Maps URLs if present. Else "".
 11. rawUrls: Newline-separated other URLs and phone numbers. Else "".
 
@@ -389,6 +372,7 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
       const hasRawCityOutsideNorth = Array.isArray(parsed.flags) && parsed.flags.some(
         (f) => f && f.fieldKey === 'rawCityOutsideNorth',
       )
+      const cleanedTitle = cleanTitle(parsed.rawTitle) // strip trailing date/time/decoration deterministically
       const cityStr = (parsed.city ?? parsed.rawCity ?? '').trim()
       const parsedLocationName = (parsed.rawLocationName ?? parsed.locationName ?? '').trim() || null
       const parsedAddressLine1 = (parsed.rawAddressLine1 ?? parsed.addressLine1 ?? '').trim() || null
@@ -435,7 +419,7 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
       }
 
       const rawEventSupplement = {
-        rawTitle: (parsed.rawTitle ?? '').trim(),
+        rawTitle: cleanedTitle,
         rawOccurrences: (parsed.rawOccurrences ?? '').trim(),
         rawFullDescription: (parsed.rawFullDescription ?? '').trim(),
         rawMainCategory: (parsed.rawMainCategory ?? '').trim() || 'community_meetup',
@@ -472,14 +456,16 @@ export async function extractEventFromFreeText(text, categoriesList, citiesList,
 
       const rawDesc = (parsed.rawFullDescription ?? '').trim()
       const looksLikeHtml = rawDesc && /<\w/.test(rawDesc)
-      const fullDescriptionValue = rawDesc
+      // Deterministic safety net: guarantee no raw URL survives in the body (the prompt asks for
+      // this, but the model occasionally leaves one — especially when reformatting into a list).
+      const fullDescriptionValue = stripLinksFromHtml(rawDesc
         ? (looksLikeHtml ? rawDesc : convertMessageToHtml(rawDesc))
-        : ''
+        : '')
       const rawOccurrences = Array.isArray(parsed.occurrences) && parsed.occurrences.length > 0 ? parsed.occurrences : []
       const rawOccurrencesStr = (parsed.rawOccurrences ?? '').trim() || undefined
       const normalizedOccurrences = normalizeFormattedEventOccurrences(rawOccurrences, rawOccurrencesStr)
       const formattedEvent = {
-        Title: (parsed.rawTitle ?? '').trim() || 'אירוע',
+        Title: cleanedTitle || 'אירוע',
         shortDescription: (parsed.shortDescription ?? '').trim() || 'אירוע',
         fullDescription: fullDescriptionValue,
         mainCategory,

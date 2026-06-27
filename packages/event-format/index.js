@@ -899,6 +899,9 @@ export async function verifyCityInNorthernIsrael(cityName, options = {}) {
 export { normalizeFormattedEventOccurrences } from './occurrenceUtils.js'
 export { extractNavLinksFromRaw, htmlToWhatsAppMessage, parseFreeLanguageEditRequest, convertMessageToHtml }
 export { detectEventFromFreeText, extractEventFromFreeText } from './freeLanguageExtract.js'
+export { stripCityFromName, stripCityFromLocationFields } from './stripCityFromPlace.js'
+export { cleanTitle } from './cleanTitle.js'
+export { stripLinksFromHtml } from './cleanDescription.js'
 export { createOpenAIClient } from './openaiClient.js'
 export { extractEventTextFromPage } from './extractEventTextFromPage.js'
 export { selectEventRelevantImageUrls } from './selectEventRelevantImageUrls.js'
