@@ -2,13 +2,17 @@
   <div class="AddGroupModal" @click.self="$emit('close')">
     <div class="AddGroupModal-card" role="dialog" aria-modal="true">
       <div class="AddGroupModal-header">
-        <h2 class="AddGroupModal-title">הוספת קבוצה</h2>
+        <h2 class="AddGroupModal-title">{{ mode === 'log' ? 'בחירת קבוצת יומן' : 'הוספת קבוצה' }}</h2>
         <button type="button" class="AddGroupModal-close" aria-label="סגירה" @click="$emit('close')">
           <UiIcon name="close" size="sm" />
         </button>
       </div>
 
-      <p class="AddGroupModal-hint">בחרו קבוצה שמספר הוואטסאפ העסקי חבר בה. מוצגות רק קבוצות שעוד לא נוספו.</p>
+      <p class="AddGroupModal-hint">
+        {{ mode === 'log'
+          ? 'בחרו את הקבוצה שאליה יישלחו לוגים של החלטות הקראולר.'
+          : 'בחרו קבוצה שמספר הוואטסאפ העסקי חבר בה. מוצגות רק קבוצות שעוד לא נוספו.' }}
+      </p>
 
       <div v-if="loading" class="AddGroupModal-state">טוען קבוצות…</div>
       <div v-else-if="error" class="AddGroupModal-state AddGroupModal-state--error">
@@ -42,6 +46,8 @@
 defineOptions({ name: 'AdminSettingsAddGroupModal' })
 const props = defineProps({
   existingChatIds: { type: Array, default: () => [] },
+  // 'watch' → add to the crawler watch-list; 'log' → set the crawler-decision log group.
+  mode: { type: String, default: 'watch' },
 })
 const emit = defineEmits(['close', 'added'])
 
@@ -76,7 +82,10 @@ async function pick(g) {
   if (busy.value) return
   busy.value = true
   try {
-    await $fetch('/api/admin/settings/crawler/groups', { method: 'POST', body: { chatId: g.chatId, name: g.name } })
+    const url = props.mode === 'log'
+      ? '/api/admin/settings/crawler/log-group'
+      : '/api/admin/settings/crawler/groups'
+    await $fetch(url, { method: 'POST', body: { chatId: g.chatId, name: g.name } })
     emit('added')
   } catch {
     error.value = true

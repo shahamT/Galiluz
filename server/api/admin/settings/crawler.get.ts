@@ -9,5 +9,10 @@ export default defineEventHandler(async (event) => {
   return {
     enabled: doc?.enabled === true,
     groups: groups.map((g) => ({ chatId: g.chatId, name: g.name })),
+    // Crawler AI-decision logging (prod-only): on/off toggle + the target WhatsApp group.
+    logDecisions: doc?.logDecisions === true,
+    logGroup: doc?.logGroupChatId
+      ? { chatId: doc.logGroupChatId as string, name: (doc.logGroupName as string) || (doc.logGroupChatId as string) }
+      : null,
   }
 })

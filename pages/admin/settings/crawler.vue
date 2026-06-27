@@ -34,6 +34,37 @@
       </div>
     </section>
 
+    <!-- AI-decision log (prod only) -->
+    <section class="CrawlerSettings-card">
+      <div class="CrawlerSettings-toggleRow">
+        <div class="CrawlerSettings-toggleText">
+          <span class="CrawlerSettings-toggleLabel">יומן החלטות AI</span>
+          <span class="CrawlerSettings-toggleHint">לכל הודעה שעוברת את הסינון ומגיעה ל-AI — שולח לקבוצת היומן את ההודעה, ההחלטה והסיבה. פעיל בסביבת הייצור בלבד.</span>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          :aria-checked="logDecisions"
+          class="CrawlerSettings-switch"
+          :class="{ 'CrawlerSettings-switch--on': logDecisions }"
+          :disabled="savingLogToggle"
+          @click="toggleLogDecisions"
+        >
+          <span class="CrawlerSettings-switchKnob" />
+        </button>
+      </div>
+      <div class="CrawlerSettings-logGroupRow">
+        <UiIcon name="groups" size="sm" class="CrawlerSettings-itemIcon" />
+        <span class="CrawlerSettings-itemName">{{ logGroup ? (logGroup.name || logGroup.chatId) : 'קבוצת יומן לא נבחרה' }}</span>
+        <button type="button" class="CrawlerSettings-addBtn" @click="showLogGroupPicker = true">
+          <UiIcon name="edit" size="sm" /> {{ logGroup ? 'שינוי' : 'בחירת קבוצה' }}
+        </button>
+        <button v-if="logGroup" type="button" class="CrawlerSettings-remove" aria-label="ניקוי" @click="clearLogGroup">
+          <UiIcon name="delete" size="sm" />
+        </button>
+      </div>
+    </section>
+
     <!-- Groups -->
     <section class="CrawlerSettings-card">
       <div class="CrawlerSettings-sectionHead">
@@ -110,6 +141,14 @@
       @close="showAddGroup = false"
       @added="onGroupAdded"
     />
+
+    <AdminSettingsAddGroupModal
+      v-if="showLogGroupPicker"
+      mode="log"
+      :existing-chat-ids="[]"
+      @close="showLogGroupPicker = false"
+      @added="onLogGroupSet"
+    />
   </div>
 </template>
 
@@ -122,6 +161,12 @@ const optedInPublishers = ref([])
 const allPublishers = ref([])
 const savingToggle = ref(false)
 const showAddGroup = ref(false)
+
+// AI-decision log (prod only): on/off + the target WhatsApp group.
+const logDecisions = ref(false)
+const logGroup = ref(null)
+const savingLogToggle = ref(false)
+const showLogGroupPicker = ref(false)
 
 const optedInIds = computed(() => new Set(optedInPublishers.value.map((p) => p.id)))
 // Picker shows approved publishers not already opted in.
@@ -169,6 +214,8 @@ async function loadSettings() {
   const res = await $fetch('/api/admin/settings/crawler')
   enabled.value = res?.enabled === true
   groups.value = Array.isArray(res?.groups) ? res.groups : []
+  logDecisions.value = res?.logDecisions === true
+  logGroup.value = res?.logGroup || null
 }
 async function loadPublishers() {
   const [opted, all] = await Promise.all([
@@ -196,6 +243,32 @@ async function toggleEnabled() {
 function onGroupAdded() {
   showAddGroup.value = false
   loadSettings()
+}
+
+async function toggleLogDecisions() {
+  if (savingLogToggle.value) return
+  savingLogToggle.value = true
+  const next = !logDecisions.value
+  try {
+    await $fetch('/api/admin/settings/crawler', { method: 'PATCH', body: { logDecisions: next } })
+    logDecisions.value = next
+  } catch (err) {
+    console.error('[crawler-settings] log toggle failed', err)
+  } finally {
+    savingLogToggle.value = false
+  }
+}
+function onLogGroupSet() {
+  showLogGroupPicker.value = false
+  loadSettings()
+}
+async function clearLogGroup() {
+  try {
+    await $fetch('/api/admin/settings/crawler/log-group', { method: 'POST', body: { chatId: '' } })
+    await loadSettings()
+  } catch (err) {
+    console.error('[crawler-settings] clear log group failed', err)
+  }
 }
 async function removeGroup(chatId) {
   try {
@@ -298,6 +371,11 @@ onMounted(() => {
   &-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--spacing-xs); }
   &-list--pubs { margin-top: var(--spacing-sm); }
   &-item {
+    display: flex; align-items: center; gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--light-bg); border-radius: var(--radius-md);
+  }
+  &-logGroupRow {
     display: flex; align-items: center; gap: var(--spacing-sm);
     padding: var(--spacing-sm) var(--spacing-md);
     background: var(--light-bg); border-radius: var(--radius-md);

@@ -5,9 +5,11 @@ import { logger } from '../utils/logger.js'
 import { LOG_PREFIXES } from '../consts/index.js'
 
 /**
- * POST /internal/log  { message }  (API_SECRET-gated).
- * Posts a plain, action-less operational notice to the dedicated WhatsApp "log" group
- * (config.logGroupChatId). If no log group is configured it's a graceful no-op.
+ * POST /internal/log  { message, groupChatId? }  (API_SECRET-gated).
+ * Posts a plain, action-less operational notice to a WhatsApp group. The caller may target a
+ * specific group via `groupChatId` (e.g. the crawler-decision log group selected in the admin
+ * page); otherwise it falls back to the default "log" group (config.logGroupChatId). If neither
+ * is set it's a graceful no-op.
  */
 export async function handleLog(req, res) {
   let body
@@ -20,9 +22,10 @@ export async function handleLog(req, res) {
   const message = typeof body.message === 'string' ? body.message : ''
   if (!message) return sendJson(res, 400, { error: 'message is required' })
 
-  const chatId = config.logGroupChatId
+  const requested = typeof body.groupChatId === 'string' ? body.groupChatId.trim() : ''
+  const chatId = requested || config.logGroupChatId
   if (!chatId) {
-    logger.warn(LOG_PREFIXES.LOG, 'LOG_GROUP_CHAT_ID not set — log notice skipped')
+    logger.warn(LOG_PREFIXES.LOG, 'no target group (groupChatId / LOG_GROUP_CHAT_ID) — log notice skipped')
     return sendJson(res, 200, { success: false, skipped: 'no_log_group' })
   }
 
