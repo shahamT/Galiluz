@@ -52,6 +52,16 @@ describe('buildCrawlerDraftEvent', () => {
     expect(eventObj.Title).toBe('מופע')
   })
 
+  it('defaults price to free (0) when the extractor could not determine one (never null)', () => {
+    expect(buildCrawlerDraftEvent(completeEvent({ price: null }), 'pub-1').eventObj.price).toBe(0)
+    expect(buildCrawlerDraftEvent(completeEvent({ price: undefined }), 'pub-1').eventObj.price).toBe(0)
+  })
+
+  it('preserves an explicit numeric price, including 0 (free)', () => {
+    expect(buildCrawlerDraftEvent(completeEvent({ price: 50 }), 'pub-1').eventObj.price).toBe(50)
+    expect(buildCrawlerDraftEvent(completeEvent({ price: 0 }), 'pub-1').eventObj.price).toBe(0)
+  })
+
   it('attaches provided media and defaults to an empty array', () => {
     const media = [{ cloudinaryURL: 'https://x/y.jpg', isMain: true }]
     expect(buildCrawlerDraftEvent(completeEvent(), 'pub-1', media).eventObj.media).toEqual(media)

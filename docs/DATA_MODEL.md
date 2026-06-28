@@ -82,7 +82,7 @@ The central document. `event` (formatted, what the site renders) and `rawEvent` 
       gmapsNavLink: String | null,
     },
 
-    price: Number | null,           // ILS; null = free
+    price: Number | null,           // ILS; 0 = free. null = LEGACY only (shows "מחיר לא ידוע"); new events always store a number — auto-extraction defaults to 0 (free) when undetermined, the publisher form requires a price
 
     urls: [{ Title: String, Url: String, type: 'link' | 'phone' }],
 

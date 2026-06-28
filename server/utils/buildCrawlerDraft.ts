@@ -53,7 +53,10 @@ export function buildCrawlerDraftEvent(
       wazeNavLink: safeUrl(loc.wazeNavLink),
       gmapsNavLink: safeUrl(loc.gmapsNavLink),
     },
-    price: typeof formattedEvent.price === 'number' ? formattedEvent.price : null,
+    // Never persist null from auto-extraction: when the price can't be determined,
+    // default to free (0) — the publisher can change it when reviewing the draft.
+    // (null is reserved for legacy events; the frontend still renders it as "מחיר לא ידוע".)
+    price: Number.isFinite(formattedEvent.price) ? formattedEvent.price : 0,
     urls: Array.isArray(formattedEvent.urls)
       ? formattedEvent.urls
           .map((u: Record<string, any>) => ({
