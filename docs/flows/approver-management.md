@@ -34,11 +34,11 @@ notified** (`X אישר/מחק את …`).
 | File | Role |
 |---|---|
 | [pages/admin/settings/approvers.vue](../../pages/admin/settings/approvers.vue) | ניהול מאשרים page — pick/remove approvers (reuses `AdminPublisherSelect`) + the test-harness card |
-| [server/utils/approvers.ts](../../server/utils/approvers.ts) | `getApprovers()` resolves `appSettings.approvers.publisherIds` → `{waId,name}` (env fallback); `getApproverByWaId`, `resolveActorName` |
+| [server/utils/approvers.ts](../../server/utils/approvers.ts) | `getApprovers()` resolves `appSettings.approvers.publisherIds` → `{waId,name}`; `getApproverByWaId`, `resolveActorName` |
 | [server/api/admin/settings/approvers.get.ts](../../server/api/admin/settings/approvers.get.ts) · [.post.ts](../../server/api/admin/settings/approvers.post.ts) · [[publisherId].delete.ts](../../server/api/admin/settings/approvers/[publisherId].delete.ts) | Admin read / add / remove (staff read, super-admin write) |
 | [server/api/internal/approvers.get.ts](../../server/api/internal/approvers.get.ts) | ApiSecret: resolved `{ approvers:[{waId,name}] }` for the bot |
 | [server/api/publishers/approve.post.ts](../../server/api/publishers/approve.post.ts) · [reject.post.ts](../../server/api/publishers/reject.post.ts) · [server/api/events/[id]/delete.post.ts](../../server/api/events/[id]/delete.post.ts) | Atomic, actor-aware actions returning `{ applied, by, … }` |
-| [apps/wa-bot/src/services/approvers.service.js](../../apps/wa-bot/src/services/approvers.service.js) | Cached approver list (boot + 2-min refresh; env fallback); `isApprover`, `getApproverName`, `getAllApprovers` |
+| [apps/wa-bot/src/services/approvers.service.js](../../apps/wa-bot/src/services/approvers.service.js) | Cached approver list (boot + 2-min refresh); `isApprover`, `getApproverName`, `getAllApprovers` |
 | [apps/wa-bot/src/routes/webhook.js](../../apps/wa-bot/src/routes/webhook.js) | Fan-out, `isApprover` routing, winner/loser branch, `notifyOtherApprovers`, `finishReject`/`finishDelete` |
 | [server/utils/notifyApprover.ts](../../server/utils/notifyApprover.ts) · [notifyApproverEvent.ts](../../server/utils/notifyApproverEvent.ts) | Web → bot triggers (unchanged contract; bot now fans out) |
 | […/approvers/test-request.post.ts](../../server/api/admin/settings/approvers/test-request.post.ts) · [test-cleanup.post.ts](../../server/api/admin/settings/approvers/test-cleanup.post.ts) | Super-admin test harness (dummy registration + cleanup) |
@@ -59,10 +59,12 @@ bot restarts / instances:
 Admin reads `requirePlatformStaff`, writes `requireSuperAdmin`. `/api/internal/approvers` + the actions are ApiSecret (`x-api-key`/`x-api-secret`). The bot authorizes incoming actors via `isApprover(from)`; the web records whatever `actorWaId` the bot passes and resolves its name from the approver list.
 
 ## 7. Configuration
-`PUBLISHERS_APPROVER_WA_NUMBER` (wa-bot) is now only a **fallback** — used by `getApprovers()` (web) and the bot cache when no approvers are configured, so the legacy single approver keeps working during rollout. Once the admin adds approvers, the DB list takes over.
+No env var — approvers are entirely DB-managed via **/admin/settings/approvers**. (The legacy
+`PUBLISHERS_APPROVER_WA_NUMBER` env approver + its fallback were removed once the DB list was live.)
+If the list is empty, no one is notified — keep at least one approver.
 
 ## 8. Resilience
-Atomic DB guard is the source of truth (no in-memory races). The bot cache keeps a stale list if the web is briefly unreachable, and falls back to the env approver. Action responses carry the publisher/event names so the bot survives restarts and many approvers. WhatsApp can't retract already-sent buttons → the late-click guard + proactive notify cover stale messages.
+Atomic DB guard is the source of truth (no in-memory races). The bot cache keeps a stale list if the web is briefly unreachable. Action responses carry the publisher/event names so the bot survives restarts and many approvers. WhatsApp can't retract already-sent buttons → the late-click guard + proactive notify cover stale messages.
 
 ## 9. Enablement runbook
 On **/admin/settings/approvers**, add approvers from the publisher list. (They must be approved publishers with a phone; the site's super-admins qualify.) No deploy needed — the bot picks up the list within ~2 min.

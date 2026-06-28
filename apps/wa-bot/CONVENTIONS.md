@@ -60,5 +60,5 @@ Set `NODE_ENV=production` in production so required variables are validated on s
 - `ALLOW_MAIN_MENU_FREE_LANGUAGE` – set to `false` to disable AI intent routing at main menu (text at menu resends menu only; saves cost). Default `true`.  
 - `GALILUZ_APP_URL` – Nuxt/API base (default in prod: `https://galiluz.co.il`).  
 - `GALILUZ_APP_API_KEY` / `API_SECRET` – if Nuxt API requires a key.  
-- `PUBLISHERS_APPROVER_WA_NUMBER`, `APPROVER_REENGAGEMENT_TEMPLATE_NAME`, `APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE` – for publisher approval flow.  
+- `APPROVER_REENGAGEMENT_TEMPLATE_NAME`, `APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE` – publisher approval flow (approvers themselves are DB-managed in the admin portal, not an env var).  
 - `LOG_LEVEL` – `info` (default) or `debug`.

@@ -26,8 +26,8 @@
         @update:model-value="onPicked"
       />
 
-      <p v-if="usingEnvFallback" class="ApproversSettings-note">
-        לא הוגדרו מאשרים — בינתיים בשימוש מאשר ברירת המחדל מההגדרה הישנה. הוסיפו מאשר כדי לנהל מהפורטל.
+      <p v-if="noApprovers" class="ApproversSettings-note">
+        לא הוגדרו מאשרים — בקשות הרשמה ואירועים חדשים לא יישלחו לאף אחד. הוסיפו לפחות מאשר אחד.
       </p>
 
       <ul v-if="approvers.length" class="ApproversSettings-list">
@@ -79,7 +79,7 @@
 defineOptions({ name: 'AdminSettingsApprovers' })
 
 const approvers = ref([])
-const usingEnvFallback = ref(false)
+const noApprovers = ref(false)
 const allPublishers = ref([])
 
 // Test harness
@@ -101,7 +101,7 @@ function formatPhone(waId) {
 async function loadApprovers() {
   const res = await $fetch('/api/admin/settings/approvers')
   approvers.value = Array.isArray(res?.approvers) ? res.approvers : []
-  usingEnvFallback.value = res?.usingEnvFallback === true
+  noApprovers.value = res?.noApprovers === true
   testDummyCount.value = res?.testDummyCount || 0
 }
 
