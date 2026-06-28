@@ -77,7 +77,7 @@ Create each group, add its variables, and set the value. **Value** column: a lit
 | | `WA_GATEWAY_URL` | enter | gateway URL, e.g. `https://galiluz-wa-gateway.onrender.com` |
 | | `NUXT_PUBLIC_SITE_URL` | `https://galiluz.co.il` | |
 | **galiluz-app-wa-bot** | `GALILUZ_APP_URL` | `https://galiluz.co.il` | |
-| | `PUBLISHERS_APPROVER_WA_NUMBER` | enter | |
+| | `PUBLISHERS_APPROVER_WA_NUMBER` | enter | **Fallback only** — approvers are now DB-managed (admin **ניהול מאשרים**); used when none configured. See [flows/approver-management.md](flows/approver-management.md). |
 | | `APPROVER_REENGAGEMENT_TEMPLATE_NAME` | (blank/optional) | |
 | | `APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE` | `he` | |
 | | `LOG_LEVEL` | `info` | |
