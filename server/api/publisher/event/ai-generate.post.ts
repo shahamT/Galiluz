@@ -91,7 +91,9 @@ export default defineEventHandler(async (event) => {
       gmapsNavLink: loc.gmapsNavLink || '',
     },
     occurrences,
-    price: typeof formattedEvent.price === 'number' ? formattedEvent.price : null,
+    // When the price can't be determined, default to free (0) rather than null —
+    // the publisher reviews/edits the generated form before saving. We never emit null.
+    price: Number.isFinite(formattedEvent.price) ? formattedEvent.price : 0,
     urls: Array.isArray(formattedEvent.urls) ? formattedEvent.urls : [],
     flags: Array.isArray(flags) ? flags : [],
   }

@@ -32,7 +32,7 @@ describe('formatEventTime', () => {
 })
 
 describe('formatEventPrice', () => {
-  it('shows "unknown" for null/undefined price', () => {
+  it('shows "unknown" for null/undefined price (legacy events only)', () => {
     expect(formatEventPrice({ price: null })).toBe(PRICE_UNKNOWN_TEXT)
     expect(formatEventPrice({})).toBe(PRICE_UNKNOWN_TEXT)
   })

@@ -43,6 +43,10 @@ export function formatEventTime(occurrence) {
  * Format event price for display
  * @param {Object} event - Event object with price property
  * @returns {string} Formatted price string, "חינם" for free (0), or "מחיר לא ידוע" when price is unknown
+ *
+ * Note: a null/undefined price only occurs on LEGACY events — new events always store a number
+ * (auto-extraction defaults to free/0 when it can't tell; the publisher form requires a price).
+ * We still render null as "מחיר לא ידוע" so legacy data displays sensibly.
  */
 export function formatEventPrice(event) {
   if (event.price === null || event.price === undefined) {
