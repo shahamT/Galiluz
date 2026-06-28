@@ -50,6 +50,28 @@
       </ul>
       <p v-else class="ApproversSettings-empty">לא הוגדרו מאשרים עדיין.</p>
     </section>
+
+    <!-- Test harness -->
+    <section class="ApproversSettings-card">
+      <div class="ApproversSettings-sectionHead">
+        <h2 class="ApproversSettings-sectionTitle">בדיקת זרימת מאשרים</h2>
+      </div>
+      <p class="ApproversSettings-sectionHint">
+        שליחת בקשת הרשמה של מפרסם דמה למאשרים המוגדרים — כדי לבדוק את זרימת האישור/דחייה בלי מספר נוסף.
+        בסיום נקו את נתוני הבדיקה.
+      </p>
+
+      <div class="ApproversSettings-testActions">
+        <button type="button" class="ApproversSettings-btn" :disabled="testBusy" @click="sendTestRequest">
+          <UiIcon name="send" size="sm" /> שליחת בקשת הרשמה לבדיקה
+        </button>
+        <button type="button" class="ApproversSettings-btn ApproversSettings-btn--danger" :disabled="testBusy || !testDummyCount" @click="cleanupTest">
+          <UiIcon name="delete_sweep" size="sm" /> ניקוי נתוני בדיקה{{ testDummyCount ? ` (${testDummyCount})` : '' }}
+        </button>
+      </div>
+
+      <p v-if="testMsg" class="ApproversSettings-note" :class="{ 'ApproversSettings-note--ok': testOk }">{{ testMsg }}</p>
+    </section>
   </div>
 </template>
 
@@ -59,6 +81,12 @@ defineOptions({ name: 'AdminSettingsApprovers' })
 const approvers = ref([])
 const usingEnvFallback = ref(false)
 const allPublishers = ref([])
+
+// Test harness
+const testDummyCount = ref(0)
+const testBusy = ref(false)
+const testMsg = ref('')
+const testOk = ref(false)
 
 const approverIds = computed(() => new Set(approvers.value.map((a) => a.publisherId).filter(Boolean)))
 // Picker shows approved publishers that aren't already approvers.
@@ -74,6 +102,45 @@ async function loadApprovers() {
   const res = await $fetch('/api/admin/settings/approvers')
   approvers.value = Array.isArray(res?.approvers) ? res.approvers : []
   usingEnvFallback.value = res?.usingEnvFallback === true
+  testDummyCount.value = res?.testDummyCount || 0
+}
+
+async function sendTestRequest() {
+  if (testBusy.value) return
+  testBusy.value = true
+  testMsg.value = ''
+  try {
+    const res = await $fetch('/api/admin/settings/approvers/test-request', { method: 'POST' })
+    testOk.value = (res?.approverCount || 0) > 0
+    testMsg.value = res?.approverCount
+      ? `בקשת בדיקה נשלחה ל-${res.approverCount} מאשרים. בדקו את הוואטסאפ.`
+      : 'נוצרה בקשת בדיקה אך לא הוגדרו מאשרים — הוסיפו מאשר כדי לקבל את ההודעה.'
+    await loadApprovers()
+  } catch (err) {
+    testOk.value = false
+    testMsg.value = 'שליחת בקשת הבדיקה נכשלה.'
+    console.error('[approvers-settings] test request failed', err)
+  } finally {
+    testBusy.value = false
+  }
+}
+
+async function cleanupTest() {
+  if (testBusy.value) return
+  testBusy.value = true
+  testMsg.value = ''
+  try {
+    const res = await $fetch('/api/admin/settings/approvers/test-cleanup', { method: 'POST' })
+    testOk.value = true
+    testMsg.value = `נמחקו ${res?.removed || 0} רשומות בדיקה.`
+    await loadApprovers()
+  } catch (err) {
+    testOk.value = false
+    testMsg.value = 'ניקוי נתוני הבדיקה נכשל.'
+    console.error('[approvers-settings] test cleanup failed', err)
+  } finally {
+    testBusy.value = false
+  }
 }
 async function loadPublishers() {
   const all = await $fetch('/api/admin/publishers')
@@ -147,6 +214,23 @@ onMounted(() => {
     border: 1px solid #ffe1a8;
     border-radius: var(--radius-md);
     padding: var(--spacing-sm) var(--spacing-md);
+    &--ok { color: #1c7a44; background: #e3f6ea; border-color: #b7e4c7; }
+  }
+
+  &-testActions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+  &-btn {
+    display: inline-flex; align-items: center; gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-md);
+    border: 1.5px solid var(--brand-dark-green); border-radius: var(--radius-md);
+    background: transparent; color: var(--brand-dark-green);
+    font-family: var(--font-family-body); font-size: var(--font-size-sm); font-weight: 600; cursor: pointer;
+    transition: background 0.15s;
+    &:hover:not(:disabled) { background: var(--brand-light-green-hover); }
+    &:disabled { opacity: 0.5; cursor: default; }
+    &--danger {
+      border-color: var(--color-error); color: var(--color-error);
+      &:hover:not(:disabled) { background: var(--color-error-tint-light); }
+    }
   }
 
   &-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--spacing-xs); }
