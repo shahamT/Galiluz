@@ -9,58 +9,53 @@ import { LOG_PREFIXES } from '../consts/index.js'
  */
 
 /**
- * Approve a publisher (set status to approved).
- * @param {string} waId - WhatsApp user id
- * @returns {Promise<{ success: boolean }>}
+ * Approve a publisher (atomic first-wins on the web). Pass the acting approver's waId so the web can
+ * record who approved and tell a late approver it was already handled.
+ * @param {string} waId - publisher WhatsApp id
+ * @param {string} [actorWaId] - the approver who clicked
+ * @returns {Promise<{ applied: boolean, by?: string|null, resolvedStatus?: string, publisherName?: string, actorName?: string, error?: string }>}
  */
-export async function approvePublisher(waId) {
+export async function approvePublisher(waId, actorWaId) {
   const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/publishers/approve`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ waId }),
-    })
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ waId, actorWaId }) })
     if (!res.ok) {
       logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers approve failed', res.status)
-      return { success: false }
+      return { applied: false, error: 'http' }
     }
-    return { success: true }
+    return await res.json()
   } catch (err) {
     logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers approve error', err)
-    return { success: false }
+    return { applied: false, error: 'network' }
   }
 }
 
 /**
- * Reject (delete) a publisher. Reason is used only for the message to the publisher.
- * @param {string} waId - WhatsApp user id
- * @param {string} [reason] - Optional rejection reason
- * @returns {Promise<{ success: boolean }>}
+ * Reject a publisher (atomic first-wins). Reason is only for the message to the publisher.
+ * @param {string} waId - publisher WhatsApp id
+ * @param {string} [actorWaId] - the approver who clicked
+ * @param {string} [reason] - optional rejection reason
+ * @returns {Promise<{ applied: boolean, by?: string|null, resolvedStatus?: string, publisherName?: string, actorName?: string, error?: string }>}
  */
-export async function rejectPublisher(waId, reason) {
+export async function rejectPublisher(waId, actorWaId, reason) {
   const baseUrl = (config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')
   const url = `${baseUrl}/api/publishers/reject`
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
   if (config.galiluzAppApiKey) headers['X-API-Key'] = config.galiluzAppApiKey
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ waId, reason: reason || undefined }),
-    })
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ waId, actorWaId, reason: reason || undefined }) })
     if (!res.ok) {
       logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers reject failed', res.status)
-      return { success: false }
+      return { applied: false, error: 'http' }
     }
-    return { success: true }
+    return await res.json()
   } catch (err) {
     logger.error(LOG_PREFIXES.CLOUD_API, 'Publishers reject error', err)
-    return { success: false }
+    return { applied: false, error: 'network' }
   }
 }

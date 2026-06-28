@@ -81,6 +81,8 @@ GET routes (`dashboard`, `events`, `publishers`, `whatsapp-groups`, `settings/cr
 | PATCH | `/api/admin/settings/crawler` | Toggle `enabled` and/or `logDecisions`. **Sets only the fields present in the body** so toggling one never wipes the other. |
 | POST/DELETE | `/api/admin/settings/crawler/groups[/:chatId]` | Add / remove a watched group. |
 | POST | `/api/admin/settings/crawler/log-group` | Set (or clear) the WhatsApp group that crawler **AI-decision logs** post to. Body `{ chatId, name }`; empty `chatId` clears; validates `@g.us`. |
+| GET | `/api/admin/settings/approvers` | Configured approvers, resolved `{ approvers:[{publisherId,waId,name}], usingEnvFallback }`. Platform-staff readable. |
+| POST/DELETE | `/api/admin/settings/approvers[/:publisherId]` | Add / remove an approver by `publisherId` (must be an approved publisher with a phone). Super-admin only. Stored as `appSettings.approvers.publisherIds`. |
 
 > **Crawler AI-decision logging** (prod-only, opt-in) — when `logDecisions` is on **and** a log group is set, [ingest.post.ts](../server/api/internal/crawler/ingest.post.ts) posts the message + the AI verdict + reason to that group for every message that **reached the AI stage** (passed the not-too-short / approved-opted-in-publisher / not-duplicate filters): not-an-event · extraction-failed · past-event · duplicate-of-existing · draft-created. Pre-AI skips and transient AI errors are **not** logged. Guarded by `NODE_ENV === 'production'`, so the toggle/selector exist in dev but nothing is sent there. The on/off lives in the `crawler` settings doc (`logDecisions`); the target group in `logGroupChatId`/`logGroupName`.
 
@@ -96,7 +98,7 @@ the in-bot publisher flows were retired.)
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/events/[id]/delete` | Soft delete + cascade; body `deletionType: 'kill' \| 'user_deleted'` (default `user_deleted`). Idempotent. Called by the bot's approver delete. |
+| POST | `/api/events/[id]/delete` | Soft delete; body `deletionType: 'kill' \| 'user_deleted'` (default `user_deleted`) + optional `actorWaId`. **Atomic first-wins** (`findOneAndUpdate` on `deletedAt` absent) so concurrent approvers can't double-delete; stamps `deletedByWaId/Name`. Returns `{ applied:true, eventTitle, publisherPhone, actorName }` to the winner, or `{ applied:false, by }` (who deleted it) to a late caller. Called by the bot's approver delete. |
 | GET | `/api/events/[id]/stats` | eventStats counters (deleted excluded; zeros when absent). Internal-only to prevent analytics enumeration. |
 | POST | `/api/internal/broadcast-progress` | wa-gateway → web: reports broadcast progress `{ broadcastId, sentCount, failedIds[], done }`; updates the `broadcasts` job doc (status → `done` on `done:true`). |
 | GET | `/api/whatsapp-messages` | RateLimit + ApiSecret. Recent raw_messages payloads, `?limit=` capped. |
@@ -109,8 +111,9 @@ section). The bot only approves/rejects (via the approver's buttons).
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/publishers/approve` | Set `status: 'approved'` + `approvedAt` (+ ensure account/owner membership). 404 if no such `waId`. |
-| POST | `/api/publishers/reject` | Cascade soft-delete all the publisher's events + stats stamps, delete their memberships, then ghost-mark (`createdOnBehalf`) or hard-delete the publisher doc. Logs `publisher_rejected` with cascade count. No Cloudinary cleanup in this path. |
+| POST | `/api/publishers/approve` | Body `{ waId, actorWaId? }`. **Atomic first-wins** claim `pending → approved` (stamps `approvedByWaId/Name`, opts into crawler drafts, ensures account/owner membership, posts the log notice). Returns `{ applied:true, publisherName, actorName }` to the winner, or `{ applied:false, resolvedStatus, by, publisherName }` (already approved/rejected, and by whom) to a late approver. |
+| POST | `/api/publishers/reject` | Body `{ waId, actorWaId?, reason? }`. **Atomic first-wins** claim `pending → rejected` (stamps `rejectedByWaId/Name`) THEN cascades (soft-delete the publisher's events + stats, delete memberships, ghost-mark `createdOnBehalf` or hard-delete the doc). Returns the same `{ applied, resolvedStatus, by, publisherName }` shape. `reason` is only for the bot's message to the publisher. |
+| GET | `/api/internal/approvers` | The resolved approver list `{ approvers: [{ waId, name }] }` for the wa-bot to fan out notices to and to authorize incoming approver actions. Resolves the admin-configured publisherIds (env-approver fallback when none). |
 
 ## Auth flow sequences
 

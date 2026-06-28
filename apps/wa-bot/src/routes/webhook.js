@@ -21,6 +21,7 @@ import {
 } from '../consts/index.js'
 import { deleteEvent } from '../services/eventsCreate.service.js'
 import { approvePublisher, rejectPublisher } from '../services/publishers.service.js'
+import { isApprover, getApproverName, getAllApprovers } from '../services/approvers.service.js'
 import { CATEGORY_GROUPS, CATEGORY_ALL_ID } from '../consts/categories.const.js'
 import {
   getPhoneNumberId,
@@ -64,6 +65,68 @@ function storePublisherNameForApprover(approverWaId, publisherWaId, fullName) {
     pendingPublisherNamesByApprover.set(approverWaId, byWaId)
   }
   byWaId.set(publisherWaId, fullName || APPROVER.DEFAULT_PUBLISHER_LABEL)
+}
+
+/** Push a proactive notice to every approver except the one who acted. Best-effort. */
+async function notifyOtherApprovers(phoneNumberId, actorWaId, message) {
+  const actorNorm = normalizePhone(actorWaId)
+  for (const a of getAllApprovers()) {
+    if (a.waId === actorNorm) continue
+    await sendText(phoneNumberId, a.waId, message).catch(() => {})
+  }
+}
+
+const APPROVER_ACTION_ERROR = 'אירעה שגיאה בביצוע הפעולה, נסו שוב מאוחר יותר.'
+
+/**
+ * Reject a publisher and handle the first-wins outcome: winner notifies the publisher + confirms +
+ * proactively notifies the other approvers; a late approver is told it was already handled.
+ */
+async function finishReject(phoneNumberId, from, waId, reason, localName) {
+  const result = await rejectPublisher(waId, from, reason)
+  conversationState.clear(from)
+  const pubName = result.publisherName || localName || APPROVER.DEFAULT_PUBLISHER_LABEL
+  if (result.applied) {
+    const body = reason
+      ? `${PUBLISHER.REJECTED_BODY}\n${PUBLISHER.REJECTED_REASON_LINE}${reason}\n\n${PUBLISHER.REJECTED_FOOTER}`
+      : `${PUBLISHER.REJECTED_BODY}\n\n${PUBLISHER.REJECTED_FOOTER}`
+    await sendInteractiveButtons(phoneNumberId, waId, { body, buttons: [PUBLISHER.REJECTED_BUTTON] })
+    await sendText(phoneNumberId, from, APPROVER.CONFIRM_REJECTED.replace('{fullName}', pubName))
+    await notifyOtherApprovers(phoneNumberId, from, APPROVER.OTHER_REJECTED.replace('{actor}', getApproverName(from) || 'מאשר').replace('{fullName}', pubName))
+  } else if (result.error) {
+    await sendText(phoneNumberId, from, APPROVER_ACTION_ERROR)
+  } else {
+    const by = result.by || 'מאשר אחר'
+    const tmpl = result.resolvedStatus === 'approved' ? APPROVER.ALREADY_APPROVED_BY : APPROVER.ALREADY_REJECTED_BY
+    await sendText(phoneNumberId, from, tmpl.replace('{fullName}', pubName).replace('{by}', by))
+  }
+}
+
+/**
+ * Delete an event and handle the first-wins outcome: winner (optionally) messages the publisher with
+ * the reason + confirms + proactively notifies the other approvers; a late approver is told it was
+ * already deleted.
+ */
+async function finishDelete(phoneNumberId, from, eventId, reason, info) {
+  const result = await deleteEvent(eventId, from)
+  approverEventNotifications.remove(eventId)
+  conversationState.clear(from)
+  const title = result.eventTitle || info?.eventTitle || 'אירוע'
+  if (result.applied) {
+    const publisherPhone = result.publisherPhone || info?.publisherPhone
+    if (reason && publisherPhone) {
+      const body =
+        APPROVER.PUBLISHER_EVENT_DELETED_BODY.replace('{title}', title) +
+        APPROVER.PUBLISHER_EVENT_DELETED_REASON.replace('{reason}', reason)
+      await sendInteractiveButtons(phoneNumberId, publisherPhone, { body, buttons: [{ id: 'contact', title: 'יצירת קשר' }] })
+    }
+    await sendText(phoneNumberId, from, APPROVER.DELETE_EVENT_SUCCESS)
+    await notifyOtherApprovers(phoneNumberId, from, APPROVER.OTHER_DELETED.replace('{actor}', getApproverName(from) || 'מאשר').replace('{title}', title))
+  } else if (result.error) {
+    await sendText(phoneNumberId, from, APPROVER_ACTION_ERROR)
+  } else {
+    await sendText(phoneNumberId, from, APPROVER.ALREADY_DELETED_BY.replace('{by}', result.by || 'מאשר אחר'))
+  }
 }
 
 /**
@@ -179,12 +242,11 @@ function isPublisherRegisterTrigger(text) {
  * approve/reject API endpoints.
  */
 export async function notifyApproverOfRegistration({ phoneNumberId, waId, fullName = '', accountName = '', eventTypesDescription = '', email = '' }) {
-  const approverWaId = config.publishersApproverWaNumber ? normalizePhone(config.publishersApproverWaNumber) : ''
-  if (!approverWaId) {
-    logger.warn(LOG_PREFIXES.WEBHOOK, 'No PUBLISHERS_APPROVER_WA_NUMBER configured — registration not surfaced to an approver')
+  const approvers = getAllApprovers()
+  if (!approvers.length) {
+    logger.warn(LOG_PREFIXES.WEBHOOK, 'No approvers configured — registration not surfaced to an approver')
     return { success: false, error: 'no_approver' }
   }
-  storePublisherNameForApprover(approverWaId, waId, fullName)
   let body = APPROVER.REQUEST_BODY_TEMPLATE
     .replace('{fullName}', fullName)
     .replace('{publishingAs}', accountName)
@@ -196,15 +258,21 @@ export async function notifyApproverOfRegistration({ phoneNumberId, waId, fullNa
     { id: APPROVER.BUTTONS.reject.idPrefix + waId, title: APPROVER.BUTTONS.reject.title },
     { id: APPROVER.BUTTONS.rejectNoReason.idPrefix + waId, title: APPROVER.BUTTONS.rejectNoReason.title },
   ]
-  const sendResult = await sendInteractiveButtons(phoneNumberId, approverWaId, { body, buttons })
-  if (sendResult.success && sendResult.messageId) {
-    messageIdToApproverWaId.set(sendResult.messageId, approverWaId)
-    lastApproverRequestPayloadByMessageId.set(sendResult.messageId, { approverWaId, body, buttons, publisherWaId: waId, fullName })
+  // Fan out to every approver. Per-approver tracking maps (names + 131047 re-engagement) are keyed
+  // by approverWaId, so each gets its own confirmation/queue.
+  let anySuccess = false
+  for (const approver of approvers) {
+    storePublisherNameForApprover(approver.waId, waId, fullName)
+    const sendResult = await sendInteractiveButtons(phoneNumberId, approver.waId, { body, buttons })
+    if (sendResult.success && sendResult.messageId) {
+      messageIdToApproverWaId.set(sendResult.messageId, approver.waId)
+      lastApproverRequestPayloadByMessageId.set(sendResult.messageId, { approverWaId: approver.waId, body, buttons, publisherWaId: waId, fullName })
+      anySuccess = true
+    } else if (!sendResult.success) {
+      logger.error(LOG_PREFIXES.WEBHOOK, 'Notify approver failed', approver.waId, sendResult.error)
+    }
   }
-  if (!sendResult.success) {
-    logger.error(LOG_PREFIXES.WEBHOOK, 'Notify approver failed', sendResult.error)
-  }
-  return sendResult
+  return { success: anySuccess }
 }
 
 /**
@@ -273,9 +341,9 @@ export function handleNotifyApproverEvent(req, res) {
         res.end(JSON.stringify({ error: 'eventId and body required' }))
         return
       }
-      const approverWaId = config.publishersApproverWaNumber ? normalizePhone(config.publishersApproverWaNumber) : ''
-      if (!approverWaId) {
-        logger.warn(LOG_PREFIXES.WEBHOOK, 'No PUBLISHERS_APPROVER_WA_NUMBER — web event not surfaced to an approver')
+      const approvers = getAllApprovers()
+      if (!approvers.length) {
+        logger.warn(LOG_PREFIXES.WEBHOOK, 'No approvers configured — web event not surfaced to an approver')
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ success: false, error: 'no_approver' }))
         return
@@ -285,22 +353,24 @@ export function handleNotifyApproverEvent(req, res) {
         eventTitle: typeof data.eventTitle === 'string' ? data.eventTitle : '',
       })
       const buttons = [{ id: `approver_delete_event_${eventId}`, title: APPROVER.DELETE_EVENT_BUTTON.title }]
-      const sendResult = await sendInteractiveButtons(config.whatsapp.phoneNumberId, approverWaId, { body, buttons })
-      // Register in the same tracking maps as approval requests so a 131047 (24h window /
-      // blocked) failure queues this notification + fires the re-engagement template; the
-      // approver's reply then drains the queue and (re)delivers it with its delete button.
-      if (sendResult.success && sendResult.messageId) {
-        messageIdToApproverWaId.set(sendResult.messageId, approverWaId)
-        lastApproverRequestPayloadByMessageId.set(sendResult.messageId, {
-          approverWaId,
-          body,
-          buttons,
-          templateName: config.approverEventReengagementTemplateName,
-          templateLanguage: config.approverEventReengagementTemplateLanguage,
-        })
+      // Fan out to every approver; each gets its own delete button + 131047 re-engagement tracking.
+      let anySuccess = false
+      for (const approver of approvers) {
+        const sendResult = await sendInteractiveButtons(config.whatsapp.phoneNumberId, approver.waId, { body, buttons })
+        if (sendResult.success && sendResult.messageId) {
+          messageIdToApproverWaId.set(sendResult.messageId, approver.waId)
+          lastApproverRequestPayloadByMessageId.set(sendResult.messageId, {
+            approverWaId: approver.waId,
+            body,
+            buttons,
+            templateName: config.approverEventReengagementTemplateName,
+            templateLanguage: config.approverEventReengagementTemplateLanguage,
+          })
+          anySuccess = true
+        }
       }
       res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ success: true }))
+      res.end(JSON.stringify({ success: anySuccess }))
     } catch (err) {
       logger.error(LOG_PREFIXES.WEBHOOK, 'notify-approver-event failed', err instanceof Error ? err.message : String(err))
       res.writeHead(500, { 'Content-Type': 'application/json' })
@@ -334,36 +404,29 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
     const id = interactive.button_reply?.id || ''
     if (id.startsWith('approve_')) {
       const waId = id.slice(8)
-      const fullName = getAndRemovePublisherName(from, waId)
-      const ok = await approvePublisher(waId)
+      const localName = getAndRemovePublisherName(from, waId)
+      const result = await approvePublisher(waId, from)
       conversationState.clear(from)
-      if (ok.success) {
-        // Approved publishers manage events on the web portal.
+      const pubName = result.publisherName || localName
+      if (result.applied) {
+        // Winner: direct the publisher to the web portal, confirm, and tell the other approvers.
         const loginUrl = `${(config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')}/login`
         await sendText(phoneNumberId, waId, PUBLISHER.APPROVED.body.replace('{loginUrl}', loginUrl))
+        await sendText(phoneNumberId, from, APPROVER.CONFIRM_APPROVED.replace('{fullName}', pubName))
+        await notifyOtherApprovers(phoneNumberId, from, APPROVER.OTHER_APPROVED.replace('{actor}', getApproverName(from) || 'מאשר').replace('{fullName}', pubName))
+      } else if (result.error) {
+        await sendText(phoneNumberId, from, APPROVER_ACTION_ERROR)
+      } else {
+        const by = result.by || 'מאשר אחר'
+        const tmpl = result.resolvedStatus === 'rejected' ? APPROVER.ALREADY_REJECTED_BY : APPROVER.ALREADY_APPROVED_BY
+        await sendText(phoneNumberId, from, tmpl.replace('{fullName}', pubName).replace('{by}', by))
       }
-      await sendText(
-        phoneNumberId,
-        from,
-        APPROVER.CONFIRM_APPROVED.replace('{fullName}', fullName),
-      )
       return
     }
     if (id.startsWith('reject_no_reason_')) {
       const waId = id.slice(17)
-      const fullName = getAndRemovePublisherName(from, waId)
-      await rejectPublisher(waId)
-      conversationState.clear(from)
-      const rejectedBody = `${PUBLISHER.REJECTED_BODY}\n\n${PUBLISHER.REJECTED_FOOTER}`
-      await sendInteractiveButtons(phoneNumberId, waId, {
-        body: rejectedBody,
-        buttons: [PUBLISHER.REJECTED_BUTTON],
-      })
-      await sendText(
-        phoneNumberId,
-        from,
-        APPROVER.CONFIRM_REJECTED.replace('{fullName}', fullName),
-      )
+      const localName = getAndRemovePublisherName(from, waId)
+      await finishReject(phoneNumberId, from, waId, '', localName)
       return
     }
     if (id.startsWith('reject_')) {
@@ -384,19 +447,8 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
     }
     if (id.startsWith('no_reason_')) {
       const waId = id.slice(10)
-      const fullName = getAndRemovePublisherName(from, waId)
-      await rejectPublisher(waId)
-      conversationState.clear(from)
-      const rejectedBody = `${PUBLISHER.REJECTED_BODY}\n\n${PUBLISHER.REJECTED_FOOTER}`
-      await sendInteractiveButtons(phoneNumberId, waId, {
-        body: rejectedBody,
-        buttons: [PUBLISHER.REJECTED_BUTTON],
-      })
-      await sendText(
-        phoneNumberId,
-        from,
-        APPROVER.CONFIRM_REJECTED.replace('{fullName}', fullName),
-      )
+      const localName = getAndRemovePublisherName(from, waId)
+      await finishReject(phoneNumberId, from, waId, '', localName)
       return
     }
     if (id.startsWith('approver_delete_event_')) {
@@ -413,11 +465,14 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
     if (id === 'approver_delete_no_reason') {
       const eventId = state.approverDeleteEventId
       if (eventId) {
-        await deleteEvent(eventId)
-        approverEventNotifications.remove(eventId)
+        await finishDelete(phoneNumberId, from, eventId, '', {
+          publisherPhone: state.approverDeletePublisherPhone,
+          eventTitle: state.approverDeleteEventTitle,
+        })
+      } else {
+        conversationState.clear(from)
       }
-      conversationState.clear(from)
-      return sendText(phoneNumberId, from, APPROVER.DELETE_EVENT_SUCCESS)
+      return
     }
     if (id === 'approver_delete_cancel') {
       conversationState.clear(from)
@@ -429,45 +484,24 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
     const waId = state.publisherWaId
     const reason = String(msg.text.body).trim()
     if (waId) {
-      const fullName = getAndRemovePublisherName(from, waId)
-      await rejectPublisher(waId, reason)
-      conversationState.clear(from)
-      const body = reason
-        ? `${PUBLISHER.REJECTED_BODY}\n${PUBLISHER.REJECTED_REASON_LINE}${reason}\n\n${PUBLISHER.REJECTED_FOOTER}`
-        : `${PUBLISHER.REJECTED_BODY}\n\n${PUBLISHER.REJECTED_FOOTER}`
-      await sendInteractiveButtons(phoneNumberId, waId, {
-        body,
-        buttons: [PUBLISHER.REJECTED_BUTTON],
-      })
-      await sendText(
-        phoneNumberId,
-        from,
-        APPROVER.CONFIRM_REJECTED.replace('{fullName}', fullName),
-      )
+      const localName = getAndRemovePublisherName(from, waId)
+      await finishReject(phoneNumberId, from, waId, reason, localName)
       return
     }
   }
 
   if (msg.type === 'text' && msg.text?.body && state.step === conversationState.STEPS.APPROVER_WAITING_DELETE_REASON) {
     const eventId = state.approverDeleteEventId
-    const publisherPhone = state.approverDeletePublisherPhone
-    const eventTitle = state.approverDeleteEventTitle || 'אירוע'
     const reason = String(msg.text.body).trim()
     if (eventId) {
-      await deleteEvent(eventId)
-      approverEventNotifications.remove(eventId)
-      if (publisherPhone) {
-        const body =
-          APPROVER.PUBLISHER_EVENT_DELETED_BODY.replace('{title}', eventTitle) +
-          APPROVER.PUBLISHER_EVENT_DELETED_REASON.replace('{reason}', reason)
-        await sendInteractiveButtons(phoneNumberId, publisherPhone, {
-          body,
-          buttons: [{ id: 'contact', title: 'יצירת קשר' }],
-        })
-      }
+      await finishDelete(phoneNumberId, from, eventId, reason, {
+        publisherPhone: state.approverDeletePublisherPhone,
+        eventTitle: state.approverDeleteEventTitle,
+      })
+    } else {
+      conversationState.clear(from)
     }
-    conversationState.clear(from)
-    return sendText(phoneNumberId, from, APPROVER.DELETE_EVENT_SUCCESS)
+    return
   }
 
   conversationState.set(from, { step: conversationState.STEPS.WELCOME, welcomeShown: true })
@@ -475,10 +509,7 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
 }
 
 async function processOneMessage(phoneNumberId, from, msg) {
-  const approverWaId = config.publishersApproverWaNumber
-    ? normalizePhone(config.publishersApproverWaNumber)
-    : ''
-  if (approverWaId && normalizePhone(from) === approverWaId) {
+  if (isApprover(from)) {
     return handleApproverFlow(phoneNumberId, from, msg)
   }
 

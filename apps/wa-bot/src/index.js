@@ -4,6 +4,7 @@ import { config } from './config.js'
 import { logger } from './utils/logger.js'
 import { LOG_PREFIXES } from './consts/index.js'
 import { handleGet, handlePost, handleNotifyApprover, handleNotifyApproverEvent } from './routes/webhook.js'
+import { startApproverRefresh } from './services/approvers.service.js'
 
 function parseUrl(req) {
   try {
@@ -49,6 +50,9 @@ const server = createServer((req, res) => {
   res.writeHead(404, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify({ error: 'Not found' }))
 })
+
+// Warm + periodically refresh the approver list (admin-managed; falls back to the env approver).
+startApproverRefresh()
 
 server.listen(config.port, () => {
   logger.info(LOG_PREFIXES.MAIN, `wa-bot listening on port ${config.port}`)

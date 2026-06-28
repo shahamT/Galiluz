@@ -126,6 +126,14 @@ export const APPROVER = {
   },
   CONFIRM_APPROVED: '*{fullName}* אושר כמפרסם בהצלחה ✅',
   CONFIRM_REJECTED: '*{fullName}* לא אושר/ה כמפרסם/ת ❌.',
+  // Multi-approver conflict notices — shown to a late approver whose click is now irrelevant.
+  ALREADY_APPROVED_BY: 'המפרסם *{fullName}* כבר אושר על ידי *{by}* ✅',
+  ALREADY_REJECTED_BY: 'המפרסם *{fullName}* כבר נדחה על ידי *{by}* ❌',
+  ALREADY_DELETED_BY: 'האירוע כבר נמחק על ידי *{by}* 🗑️',
+  // Proactive notice pushed to the OTHER approvers when one of them acts.
+  OTHER_APPROVED: '*{actor}* אישר/ה את המפרסם *{fullName}* ✅',
+  OTHER_REJECTED: '*{actor}* דחה/תה את המפרסם *{fullName}* ❌',
+  OTHER_DELETED: '*{actor}* מחק/ה את האירוע *{title}* 🗑️',
   EVENT_NOTIFICATION_HEADING: '*אירוע חדש פורסם במערכת*',
   DELETE_EVENT_BUTTON: { id: 'approver_delete_event', title: 'מחיקת אירוע 🗑️' },
   DELETE_EVENT_ASK: {
