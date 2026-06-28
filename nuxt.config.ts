@@ -92,11 +92,8 @@ export default defineNuxtConfig({
     otpSecret: process.env.OTP_SECRET || '',
     // WhatsApp Gateway (Green API bridge) — OTP delivery goes through this service.
     waGatewayUrl: process.env.WA_GATEWAY_URL || '',
-    // WhatsApp bot (Cloud API) — web registration notifies the approver through it.
+    // WhatsApp bot (Cloud API) — web registration notifies the approver(s) through it.
     waBotUrl: process.env.WA_BOT_URL || '',
-    // Approver's WhatsApp number — the crawler surfaces each new draft to them via the
-    // gateway (plain message). Same value as the wa-bot's PUBLISHERS_APPROVER_WA_NUMBER.
-    publishersApproverWaNumber: process.env.PUBLISHERS_APPROVER_WA_NUMBER || '',
     // Legacy Cloud API creds — no longer used for OTP (kept for parity; wa-bot has its own).
     waCloudAccessToken: process.env.WA_CLOUD_ACCESS_TOKEN || '',
     waPhoneNumberId: process.env.WA_PHONE_NUMBER_ID || '',

@@ -77,7 +77,6 @@ Create each group, add its variables, and set the value. **Value** column: a lit
 | | `WA_GATEWAY_URL` | enter | gateway URL, e.g. `https://galiluz-wa-gateway.onrender.com` |
 | | `NUXT_PUBLIC_SITE_URL` | `https://galiluz.co.il` | |
 | **galiluz-app-wa-bot** | `GALILUZ_APP_URL` | `https://galiluz.co.il` | |
-| | `PUBLISHERS_APPROVER_WA_NUMBER` | enter | **Fallback only** — approvers are now DB-managed (admin **ניהול מאשרים**); used when none configured. See [flows/approver-management.md](flows/approver-management.md). |
 | | `APPROVER_REENGAGEMENT_TEMPLATE_NAME` | (blank/optional) | |
 | | `APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE` | `he` | |
 | | `LOG_LEVEL` | `info` | |
@@ -92,7 +91,7 @@ Optional web ops add-ons, not grouped (add directly to `galiluz-web` only if use
 Each service's keys = inline + the union of its attached groups. No key repeats within a service:
 
 - **galiluz-web**: NODE_ENV, NODE_VERSION · API_SECRET · MONGODB_URI, MONGODB_DB_NAME · CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_FOLDER · OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MODEL_WEB · SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM, MAIL_TO · TURNSTILE_SECRET_KEY, NUXT_PUBLIC_TURNSTILE_SITE_KEY · NUXT_PUBLIC_POSTHOG_* · OTP_SECRET, WA_GATEWAY_URL, NUXT_PUBLIC_SITE_URL
-- **galiluz-wa-bot**: NODE_ENV, NODE_VERSION · API_SECRET · OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MODEL_WEB* · WA_CLOUD_ACCESS_TOKEN, WA_PHONE_NUMBER_ID, WEBHOOK_VERIFY_TOKEN, APP_SECRET, WHATSAPP_*_PHONE_NUMBER_ID · GALILUZ_APP_URL, PUBLISHERS_APPROVER_WA_NUMBER, APPROVER_REENGAGEMENT_TEMPLATE_*, LOG_LEVEL, ALLOW_MAIN_MENU_FREE_LANGUAGE
+- **galiluz-wa-bot**: NODE_ENV, NODE_VERSION · API_SECRET · OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MODEL_WEB* · WA_CLOUD_ACCESS_TOKEN, WA_PHONE_NUMBER_ID, WEBHOOK_VERIFY_TOKEN, APP_SECRET, WHATSAPP_*_PHONE_NUMBER_ID · GALILUZ_APP_URL, APPROVER_REENGAGEMENT_TEMPLATE_*, LOG_LEVEL, ALLOW_MAIN_MENU_FREE_LANGUAGE  (approvers are DB-managed — no env var)
 - **galiluz-wa-gateway**: NODE_ENV, NODE_VERSION · API_SECRET · GREEN_API_* · WA_LOG_LEVEL · WEB_APP_URL
 
 No key repeats within a service. (* wa-bot inherits `OPENAI_MODEL_WEB` from the shared `galiluz-int-openai` group but doesn't read it — harmless.)

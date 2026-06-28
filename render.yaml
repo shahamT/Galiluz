@@ -195,8 +195,6 @@ envVarGroups:
         sync: false
       - key: WA_BOT_URL           # URL of galiluz-wa-bot — web registration → approver Approve/Reject buttons
         sync: false
-      - key: PUBLISHERS_APPROVER_WA_NUMBER   # approver's WhatsApp number — crawler drafts → gateway message (same value as galiluz-app-wa-bot)
-        sync: false
       - key: NUXT_PUBLIC_SITE_URL
         value: https://galiluz.co.il
 
@@ -204,8 +202,6 @@ envVarGroups:
     envVars:
       - key: GALILUZ_APP_URL
         value: https://galiluz.co.il
-      - key: PUBLISHERS_APPROVER_WA_NUMBER
-        sync: false
       - key: APPROVER_REENGAGEMENT_TEMPLATE_NAME
         sync: false
       - key: APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE

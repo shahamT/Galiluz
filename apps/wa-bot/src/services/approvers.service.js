@@ -5,11 +5,8 @@ import { LOG_PREFIXES } from '../consts/index.js'
 /**
  * Cached approver list, fetched from the web (`GET /api/internal/approvers`). Approvers are
  * configured in the admin portal (publishers picked as approvers); the web resolves them to
- * { waId, name } and falls back to the legacy env approver when none are configured.
- *
- * The bot keeps a small in-memory cache (refreshed on boot + every few minutes) so message
- * processing reads it synchronously. If the web is unreachable, a stale cache (or the bot's own env
- * fallback) keeps the single legacy approver working.
+ * { waId, name }. The bot keeps a small in-memory cache (refreshed on boot + every few minutes) so
+ * message processing reads it synchronously; a transient web failure keeps the stale cache.
  */
 const REFRESH_MS = 2 * 60 * 1000
 let cache = [] // [{ waId, name }]
@@ -33,11 +30,6 @@ async function fetchApprovers() {
   }
 }
 
-function envFallback() {
-  const wa = config.publishersApproverWaNumber ? normalizePhone(config.publishersApproverWaNumber) : ''
-  return wa ? [{ waId: wa, name: 'מאשר' }] : []
-}
-
 /** Refresh the cache from the web (keeps the stale cache on failure). */
 export async function refreshApprovers() {
   const list = await fetchApprovers()
@@ -45,9 +37,9 @@ export async function refreshApprovers() {
   return cache
 }
 
-/** Current approvers (cache, or the env fallback when the cache is empty). Synchronous. */
+/** Current approvers (from the cache). Synchronous. */
 export function getAllApprovers() {
-  return cache.length ? cache : envFallback()
+  return cache
 }
 
 export function isApprover(waId) {
