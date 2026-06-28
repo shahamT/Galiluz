@@ -172,6 +172,8 @@ onMounted(() => {
 </script>
 
 <style lang="scss">
+@use '~/assets/css/breakpoints' as *;
+
 .ApproversSettings {
   display: flex;
   flex-direction: column;
