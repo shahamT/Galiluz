@@ -29,7 +29,7 @@ For the routes that read/write these collections, see [API.md](./API.md).
 | authLogs | `authLogs` | Auth audit (OTP sends/failures, logins, blocks) | **TTL 30 days** | One doc per auth event |
 | raw_messages | `raw_messages` | Raw WhatsApp webhook payloads (written by `apps/wa-listener`) | **TTL 7 days** | One doc per inbound WA message |
 | feedback | `feedback` (hardcoded) | User feedback submissions | Forever | Low volume |
-| appSettings | `appSettings` | Global app settings, one doc per domain keyed by `key` (e.g. `crawler`) | Forever | Tiny |
+| appSettings | `appSettings` | Global app settings, one doc per domain keyed by `key` (e.g. `crawler`, `approvers` = `{ publisherIds[] }` — the DB-managed approver list, see [flows/approver-management.md](flows/approver-management.md)) | Forever | Tiny |
 | crawlerMessages | `crawlerMessages` | Crawler dedup: `{publisherId, groupChatId, textHash, createdAt}` | **TTL 21 days** | One per crawled message |
 | magicLinks | `magicLinks` | One-time login tokens: `{tokenHash, publisherId, target, expiresAt, usedAt}` | **TTL (expiresAt)** | One per issued link |
 | broadcasts | `broadcasts` | Admin WhatsApp broadcast job + record: `{createdBy, createdByName, recipientIds[], recipientCount, messageTemplate, hasImage, imageUrl, status:'sending'\|'done'\|'failed', sentCount, failedIds[], createdAt, updatedAt, completedAt}` — gateway reports per-message progress (`sentCount`/`failedIds`) back; the admin page polls it live | Forever | One per broadcast (low volume) |
