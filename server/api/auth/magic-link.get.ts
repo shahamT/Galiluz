@@ -40,8 +40,10 @@ export default defineEventHandler(async (event) => {
   try { pubObjId = new ObjectId(String(link.publisherId)) } catch { return sendRedirect(event, '/login', 302) }
 
   const publishers = db.collection((config as Record<string, string>).mongodbCollectionPublishers || 'publishers')
-  const pub = await publishers.findOne({ _id: pubObjId }, { projection: { status: 1 } })
-  if (!pub || pub.status !== 'approved') {
+  // Mirror the OTP/session gate: only an approved, ACTIVE, non-deleted publisher gets a session
+  // (a deactivated/soft-deleted publisher must not log in via an outstanding magic link).
+  const pub = await publishers.findOne({ _id: pubObjId }, { projection: { status: 1, isActive: 1, deletedAt: 1 } })
+  if (!pub || pub.status !== 'approved' || pub.isActive === false || pub.deletedAt) {
     await links.updateOne({ _id: link._id }, { $set: { usedAt: now } }) // burn it regardless
     return sendRedirect(event, '/login', 302)
   }

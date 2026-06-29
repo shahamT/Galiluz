@@ -61,6 +61,10 @@ export const MAIN_MENU = {
 export const SUPPORT_WHATSAPP_NUMBER = '972559896278'
 const MAIN_MENU_CONTACT_PREFILL = 'היי, אשמח לשאול שאלה בקשר לגלילו"ז'
 export const MAIN_MENU_CONTACT_LINK = `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(MAIN_MENU_CONTACT_PREFILL)}`
+// Same support number, shown when a removed publisher tries to re-register (account recovery).
+export const SUPPORT_WHATSAPP_DISPLAY = '055-9896278'
+const ACCOUNT_RECOVERY_PREFILL = 'היי, מספר הטלפון שלי נמחק מהמערכת ואני רוצה לשחזר את חשבון המפרסם שלי'
+export const ACCOUNT_RECOVERY_WHATSAPP_LINK = `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(ACCOUNT_RECOVERY_PREFILL)}`
 
 // Contact: Galiluz bot WhatsApp – number, CTA text, prefill message, and deep link
 export const CONTACT_WHATSAPP_NUMBER = '972552835970'
@@ -110,6 +114,7 @@ export const REGISTER_PAGE = {
   errAlreadyApproved: 'המספר שהזנת כבר שייך למפרסם רשום.',
   loginLink: 'מעבר לכניסה',
   errPendingExists: 'כבר נשלחה בקשת הרשמה עם המספר הזה והיא ממתינה לאישור.',
+  errDeleted: 'מספר זה נמחק מהמערכת, צרו אתנו קשר על מנת לשחזר את החשבון:',
 }
 const BOT_START_PREFILL = 'היי'
 export const BOT_WHATSAPP_LINK = `https://wa.me/${CONTACT_WHATSAPP_NUMBER}?text=${encodeURIComponent(BOT_START_PREFILL)}`

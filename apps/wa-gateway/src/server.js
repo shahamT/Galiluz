@@ -6,6 +6,7 @@ import { handleOtp } from './routes/internal.js'
 import { handleDiagnostics } from './routes/diagnostics.js'
 import { handleGroups } from './routes/groups.js'
 import { handleSendMessage } from './routes/sendMessage.js'
+import { handleChatHistory } from './routes/chatHistory.js'
 import { handleBroadcast } from './routes/broadcast.js'
 import { handleLog } from './routes/log.js'
 import { handleWebhook } from './routes/webhook.js'
@@ -38,6 +39,7 @@ export function createGatewayServer() {
       if (pathname === '/internal/diagnostics' && method === 'GET') return handleDiagnostics(req, res)
       if (pathname === '/internal/groups' && method === 'GET') return handleGroups(req, res)
       if (pathname === '/internal/send-message' && method === 'POST') return handleSendMessage(req, res)
+      if (pathname === '/internal/chat-history' && method === 'POST') return handleChatHistory(req, res)
       if (pathname === '/internal/broadcast' && method === 'POST') return handleBroadcast(req, res)
       if (pathname === '/internal/log' && method === 'POST') return handleLog(req, res)
       return sendJson(res, 404, { error: 'not found' })
@@ -55,7 +57,7 @@ export function startServer(port) {
   const server = createGatewayServer()
   server.listen(port, () => {
     logger.info(LOG_PREFIXES.SERVER, `wa-gateway listening on port ${port}`)
-    logger.info(LOG_PREFIXES.SERVER, 'Routes: GET /health, POST /internal/otp, GET /internal/diagnostics, GET /internal/groups, POST /internal/send-message, POST /internal/broadcast, POST /internal/log, POST /webhook/green-api')
+    logger.info(LOG_PREFIXES.SERVER, 'Routes: GET /health, POST /internal/otp, GET /internal/diagnostics, GET /internal/groups, POST /internal/send-message, POST /internal/chat-history, POST /internal/broadcast, POST /internal/log, POST /webhook/green-api')
   })
   return server
 }

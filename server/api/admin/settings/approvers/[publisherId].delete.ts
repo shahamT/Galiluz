@@ -1,9 +1,9 @@
 import { requirePublisherAuth } from '~/server/utils/requirePublisherAuth'
 import { getAppSettingsCollection } from '~/server/utils/appSettings'
 
-/** Admin: remove an approver (by publisherId) from the approvers list. Super-admin only. */
+/** Admin: remove an approver (by publisherId) from the approvers list. Platform-owner only. */
 export default defineEventHandler(async (event) => {
-  const session = await requirePublisherAuth(event, { requireSuperAdmin: true })
+  const session = await requirePublisherAuth(event, { requirePlatformOwner: true })
   const publisherId = getRouterParam(event, 'publisherId')
   if (!publisherId) throw createError({ statusCode: 400, message: 'publisherId required' })
 

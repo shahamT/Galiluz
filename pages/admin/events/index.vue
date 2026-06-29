@@ -13,7 +13,7 @@
       <div class="AdminEvents-container">
         <!-- Filter bar: shared search/filter row + manager-only account/publisher filter directly beneath it -->
         <div class="AdminEvents-filters">
-          <PublisherEventsSearchBar v-model="filter" v-model:search="search" @add-event="showEventForm = true" />
+          <PublisherEventsSearchBar v-model="filter" v-model:search="search" :show-add="authStore.isSuperAdmin" @add-event="showEventForm = true" />
           <AdminPublisherFilterSelect
             v-model="publisherFilter"
             :accounts="pubOptions?.accounts || []"
@@ -96,6 +96,7 @@ definePageMeta({ middleware: 'auth' })
 useHead({ title: 'אירועים | ניהול | גלילו"ז' })
 
 const { capture } = usePosthog()
+const authStore = useAuthStore()
 const PAGE_SIZE = 8
 const filter = ref('future')
 const search = ref('')

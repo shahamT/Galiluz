@@ -14,8 +14,9 @@
       <UiIcon name="manage_accounts" size="sm" class="AdminNavTabs-tabIcon" />
       <span class="AdminNavTabs-label">חשבונות ומפרסמים</span>
       <span class="AdminNavTabs-labelMobile">חשבונות</span>
+      <span v-if="pendingCount > 0" class="AdminNavTabs-badge">{{ pendingCount > 99 ? '99+' : pendingCount }}</span>
     </NuxtLink>
-    <NuxtLink to="/admin/settings" class="AdminNavTabs-tab" :class="{ 'AdminNavTabs-tab--active': isSettings }">
+    <NuxtLink v-if="canSeeSettings" to="/admin/settings" class="AdminNavTabs-tab" :class="{ 'AdminNavTabs-tab--active': isSettings }">
       <UiIcon name="settings" size="sm" class="AdminNavTabs-tabIcon" />
       <span class="AdminNavTabs-label">ניהול</span>
       <span class="AdminNavTabs-labelMobile">ניהול</span>
@@ -27,9 +28,13 @@
 defineOptions({ name: 'AdminNavTabs' })
 
 const route = useRoute()
+const authStore = useAuthStore()
+// Settings = platform governance (crawler/broadcasts/approvers) — viewers have nothing there.
+const canSeeSettings = computed(() => authStore.isSuperAdmin)
+const { count: pendingCount } = useApprovalsCount()
 const isDashboard = computed(() => route.path === '/admin/dashboard' || route.path === '/admin')
 const isEvents = computed(() => route.path.startsWith('/admin/events'))
-const isAccounts = computed(() => route.path.startsWith('/admin/accounts'))
+const isAccounts = computed(() => route.path.startsWith('/admin/accounts') || route.path.startsWith('/admin/account/'))
 const isSettings = computed(() => route.path.startsWith('/admin/settings'))
 </script>
 
@@ -89,6 +94,22 @@ const isSettings = computed(() => route.path.startsWith('/admin/settings'))
 
   &-tabIcon {
     color: inherit;
+    flex-shrink: 0;
+  }
+
+  &-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.2rem;
+    height: 1.2rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--color-danger, #d33);
+    color: #fff;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    line-height: 1;
     flex-shrink: 0;
   }
 
