@@ -32,3 +32,21 @@ async function stampStats(eventId: string, deletedAt: Date) {
       .updateMany({ eventId }, { $set: { deletedAt } }),
   ])
 }
+
+/**
+ * Re-stamp the denormalized `publisherId` on all stats of the given events to the NEW publisher, so when an
+ * event is transferred its historical stats follow the new owner (dashboards scope stats by publisherId)
+ * and nothing keeps pointing at a removed publisher. No-op for an empty list.
+ */
+export async function restampEventStatsPublisher(eventIds: string[], newPublisherId: string) {
+  if (!eventIds.length || !newPublisherId) return
+  const config = useRuntimeConfig() as Record<string, string>
+  const { db } = await getMongoConnection()
+  const filter = { eventId: { $in: eventIds } }
+  const update = { $set: { publisherId: newPublisherId } }
+  await Promise.all([
+    db.collection(config.mongodbCollectionEventStats || 'eventStats').updateMany(filter, update),
+    db.collection(config.mongodbCollectionEventOccurrenceStats || 'eventOccurrenceStats').updateMany(filter, update),
+    db.collection(config.mongodbCollectionEventInteractions || 'eventInteractions').updateMany(filter, update),
+  ])
+}

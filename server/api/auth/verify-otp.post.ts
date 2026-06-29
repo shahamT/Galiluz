@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
   const col = db.collection(config.mongodbCollectionPublishers || 'publishers')
 
   const doc = await col.findOne({ waId })
-  if (!doc || doc.status !== 'approved') {
+  if (!doc || doc.status !== 'approved' || doc.isActive === false) {
     throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'not_registered' })
   }
 

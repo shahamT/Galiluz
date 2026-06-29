@@ -8,10 +8,11 @@ import { getApprovers } from '~/server/utils/approvers'
  * leftover test data.
  */
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requirePlatformStaff: true })
+  await requirePublisherAuth(event, { requirePlatformOwner: true })
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()
-  const approvers = await getApprovers()
+  // Include deactivated approvers in the admin list (shown as paused) — only deleted ones drop off.
+  const approvers = await getApprovers({ includeInactive: true })
   const testDummyCount = await db
     .collection(config.mongodbCollectionPublishers || 'publishers')
     .countDocuments({ isTestDummy: true })

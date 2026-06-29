@@ -13,7 +13,7 @@ import { getApprovers } from '~/server/utils/approvers'
  * configured approver) is genuine. Every dummy is stamped `isTestDummy:true` for cleanup.
  */
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requireSuperAdmin: true })
+  await requirePublisherAuth(event, { requirePlatformOwner: true })
 
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()

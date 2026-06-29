@@ -6,10 +6,14 @@ export type RegistrationPhoneStatus =
   | 'pending_exists' // a completed registration is awaiting approval (verified web reg, or a bot reg) → block
   | 'in_progress' // a web registration was started but its phone isn't verified yet → allow resuming (resend / re-submit)
   | 'ghost_upgrade' // on-behalf ghost → allow completing a real registration
+  | 'deleted' // admin-removed account (soft-deleted) → can't self-register; must contact support to recover
 
 /** Classify a phone for registration eligibility from its (possibly null) publisher doc. */
 export function classifyRegistrationPhone(doc: Record<string, any> | null | undefined): RegistrationPhoneStatus {
   if (!doc) return 'new'
+  // An admin-deleted (soft-deleted) record can't be re-registered (unique waId + transferred events) —
+  // recovery is manual. Checked first, regardless of the retained status.
+  if (doc.deletedAt) return 'deleted'
   if (doc.status === 'approved') return 'already_approved'
   if (doc.status === 'ghost') return 'ghost_upgrade'
   if (doc.status === 'pending') {

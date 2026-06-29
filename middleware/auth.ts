@@ -21,13 +21,21 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo('/login')
   }
 
-  // Role check: only super-admins can access /admin
-  if (isAdminRoute && authenticated && !authStore.isSuperAdmin) {
+  // Role check: any platform staff (owner / super_admin / read-only viewer) can access /admin.
+  // Per-action gating (mutations) is enforced server-side + by hiding controls in the pages.
+  if (isAdminRoute && authenticated && !authStore.isPlatformStaff) {
     return navigateTo('/publisher/dashboard')
   }
 
+  // Sub-area gating (mutations are also server-enforced; this keeps a role out of pages it can't use).
+  // Settings = platform governance: viewers have none; approvers config is owner-only.
+  if (isAdminRoute && authenticated) {
+    if (to.path.startsWith('/admin/settings') && !authStore.isSuperAdmin) return navigateTo('/admin/dashboard')
+    if (to.path.startsWith('/admin/settings/approvers') && !authStore.isPlatformOwner) return navigateTo('/admin/dashboard')
+  }
+
   if (isAuthEntryPage && authenticated) {
-    return navigateTo(authStore.isSuperAdmin ? '/admin' : '/publisher/dashboard')
+    return navigateTo(authStore.isPlatformStaff ? '/admin' : '/publisher/dashboard')
   }
 
   // Auth check passed — signal to protected pages that they can render

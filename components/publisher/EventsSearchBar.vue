@@ -22,7 +22,7 @@
         @input="emit('update:search', $event.target.value)"
       />
     </div>
-    <button type="button" class="EventsSearchBar-addBtn" @click="emit('add-event')">
+    <button v-if="showAdd" type="button" class="EventsSearchBar-addBtn" @click="emit('add-event')">
       <UiIcon name="add" size="sm" />
       אירוע חדש
     </button>
@@ -34,6 +34,8 @@ defineOptions({ name: 'EventsSearchBar' })
 defineProps({
   modelValue: { type: String, default: 'future' },
   search: { type: String, default: '' },
+  // When false (read-only viewer in admin), the "new event" button is hidden.
+  showAdd: { type: Boolean, default: true },
 })
 const emit = defineEmits(['update:modelValue', 'update:search', 'add-event'])
 

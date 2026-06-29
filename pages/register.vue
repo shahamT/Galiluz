@@ -33,6 +33,10 @@
             <NuxtLink to="/login" class="RegisterCard-errorLink">{{ REGISTER_PAGE.loginLink }}</NuxtLink>
           </p>
           <p v-else-if="conflict === 'pending_exists'" class="RegisterCard-error">{{ REGISTER_PAGE.errPendingExists }}</p>
+          <p v-else-if="conflict === 'deleted'" class="RegisterCard-error">
+            {{ REGISTER_PAGE.errDeleted }}
+            <a :href="ACCOUNT_RECOVERY_WHATSAPP_LINK" target="_blank" rel="noopener" class="RegisterCard-errorLink" dir="ltr">{{ SUPPORT_WHATSAPP_DISPLAY }}</a>
+          </p>
           <p v-else-if="submitError" class="RegisterCard-error">{{ submitError }}</p>
 
           <button type="submit" class="RegisterCard-btn" :disabled="loading || !detailsValid">
@@ -116,6 +120,10 @@
             <NuxtLink to="/login" class="RegisterCard-errorLink">{{ REGISTER_PAGE.loginLink }}</NuxtLink>
           </p>
           <p v-else-if="conflict === 'pending_exists'" class="RegisterCard-error">{{ REGISTER_PAGE.errPendingExists }}</p>
+          <p v-else-if="conflict === 'deleted'" class="RegisterCard-error">
+            {{ REGISTER_PAGE.errDeleted }}
+            <a :href="ACCOUNT_RECOVERY_WHATSAPP_LINK" target="_blank" rel="noopener" class="RegisterCard-errorLink" dir="ltr">{{ SUPPORT_WHATSAPP_DISPLAY }}</a>
+          </p>
           <p v-if="cooldownMsg" class="RegisterCard-error">{{ cooldownMsg }}</p>
 
           <p v-if="turnstileEnabled && inAppBrowser" class="RegisterCard-hint">{{ OPEN_IN_BROWSER_HINT }}</p>
@@ -148,7 +156,7 @@ defineOptions({ name: 'RegisterPage' })
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'הצטרפות כמפרסמים | גלילו"ז' })
 
-import { REGISTER_PAGE, TURNSTILE_FAILED_MSG, OPEN_IN_BROWSER_HINT } from '~/consts/ui.const'
+import { REGISTER_PAGE, TURNSTILE_FAILED_MSG, OPEN_IN_BROWSER_HINT, ACCOUNT_RECOVERY_WHATSAPP_LINK, SUPPORT_WHATSAPP_DISPLAY } from '~/consts/ui.const'
 
 const { checkPhone, startRegistration, verifyRegistration } = useRegister()
 const { enabled: turnstileEnabled, render: renderTurnstile, reset: resetTurnstile, remove: removeTurnstile } = useTurnstile()
@@ -296,6 +304,7 @@ async function handleNext() {
   loading.value = true
   try {
     const { status } = await checkPhone(form.phone)
+    if (status === 'deleted') { conflict.value = 'deleted'; return } // admin-removed → contact support to recover
     if (status === 'already_approved') { conflict.value = 'already_approved'; return }
     if (status === 'pending_exists') { conflict.value = 'pending_exists'; return } // verified, awaiting approval
     // 'in_progress' (own unverified registration), ghost, or new → proceed; step 2 resends (cooldown-gated).
@@ -336,8 +345,8 @@ async function handleSubmit() {
     otpRef.value?.focus()
   } catch (err) {
     const msg = err?.data?.message || ''
-    if (msg === 'already_approved' || msg === 'pending_exists') {
-      // Approved (→ login) or awaiting approval → back to step 1 with the message; watcher tears the widget down.
+    if (msg === 'already_approved' || msg === 'pending_exists' || msg === 'deleted') {
+      // Approved (→ login) / awaiting approval / removed (→ contact support) → back to step 1 with the message.
       conflict.value = msg
       state.value = 'details'
     } else if (msg.startsWith('resend_cooldown:')) {
@@ -424,6 +433,7 @@ async function confirmPhoneChange() {
   try {
     // Same conflict validation as step 1: an approved/pending number is rejected here too.
     const { status } = await checkPhone(newPhone.value)
+    if (status === 'deleted') { conflict.value = 'deleted'; return } // admin-removed → contact support to recover
     if (status === 'already_approved') { conflict.value = 'already_approved'; return }
     if (status === 'pending_exists') { conflict.value = 'pending_exists'; return } // verified, awaiting approval
     // 'in_progress'/ghost/new → allow; the OTP goes to that phone and is cooldown-gated.
@@ -438,7 +448,7 @@ async function confirmPhoneChange() {
     otpRef.value?.focus()
   } catch (err) {
     const msg = err?.data?.message || ''
-    if (msg === 'already_approved' || msg === 'pending_exists') conflict.value = msg
+    if (msg === 'already_approved' || msg === 'pending_exists' || msg === 'deleted') conflict.value = msg
     else if (msg.startsWith('resend_cooldown:')) { cooldownError.value = true; startResendCountdown(parseInt(msg.split(':')[1], 10)) }
     else phoneChangeError.value = parseError(err)
     refreshTurnstile() // stayed on the change screen → fresh token for the next attempt

@@ -53,6 +53,11 @@ async function request(method, { httpMethod = 'POST', body = null, useMedia = fa
     let count = 0
     try { const arr = JSON.parse(text); if (Array.isArray(arr)) count = arr.length } catch { /* ignore */ }
     logBody = `${count} contacts`
+  } else if (method === 'getChatHistory') {
+    // Private DM content — log only the message count, never the bodies.
+    let count = 0
+    try { const arr = JSON.parse(text); if (Array.isArray(arr)) count = arr.length } catch { /* ignore */ }
+    logBody = `${count} messages`
   } else {
     logBody = redactSecrets(text).slice(0, 1000)
   }
@@ -73,6 +78,11 @@ async function request(method, { httpMethod = 'POST', body = null, useMedia = fa
  */
 export function sendMessage(chatId, message) {
   return request('sendMessage', { body: { chatId, message, linkPreview: false } })
+}
+
+/** Last `count` messages of a chat (both directions, most-recent first). `chatId` e.g. 972...@c.us. */
+export function getChatHistory(chatId, count = 20) {
+  return request('getChatHistory', { body: { chatId, count } })
 }
 
 /** Instance auth/health state → { stateInstance: 'authorized' | 'notAuthorized' | ... }. */

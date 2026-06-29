@@ -26,9 +26,9 @@
     </template>
 
     <template v-else-if="event">
-      <PublisherEventViewSwitch v-model="activeView" :show-stats="showStats" />
+      <PublisherEventViewSwitch v-model="activeView" :show-stats="showStats" :show-actions="canManage" />
 
-      <template v-if="activeView === 'actions'">
+      <template v-if="activeView === 'actions' && canManage">
         <div class="EventPage-actionsCard">
           <h3 class="EventPage-sectionTitle"><UiIcon name="tune" size="sm" />פעולות</h3>
           <template v-if="!event.isActive">
@@ -297,6 +297,8 @@ const props = defineProps({
   backTo:    { type: String, default: '/publisher/events' },
   backLabel:     { type: String,  default: 'חזרה לאירועים שלי' },
   allowTransfer: { type: Boolean, default: false },
+  // When false, the manage/actions tab is hidden (read-only) — e.g. a platform viewer in the admin portal.
+  canManage: { type: Boolean, default: true },
 })
 
 const route = useRoute()
@@ -311,7 +313,7 @@ const authStore = useAuthStore()
 // Drives the stats tab + panel; the server independently omits the stats payload.
 const showStats = computed(() => authStore.hasFeature('perEventStats'))
 
-const activeView = ref('actions')
+const activeView = ref(props.canManage ? 'actions' : 'preview')
 
 const successBanner = ref('')
 const showCreatedModal = ref(false)

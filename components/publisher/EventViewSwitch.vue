@@ -22,11 +22,13 @@ const props = defineProps({
   modelValue: { type: String, default: 'actions' },
   // When false (account lacks `perEventStats`), the statistics segment is omitted.
   showStats: { type: Boolean, default: true },
+  // When false (read-only viewer), the manage/actions segment is omitted.
+  showActions: { type: Boolean, default: true },
 })
 const emit = defineEmits(['update:modelValue'])
 
 const options = computed(() => [
-  { value: 'actions', label: 'ניהול',         mobileLabel: 'ניהול',   icon: 'tune' },
+  ...(props.showActions ? [{ value: 'actions', label: 'ניהול', mobileLabel: 'ניהול', icon: 'tune' }] : []),
   { value: 'preview', label: 'תצוגת האירוע', mobileLabel: 'תצוגה',   icon: 'event' },
   ...(props.showStats ? [{ value: 'stats', label: 'סטטיסטיקות', mobileLabel: 'נתונים', icon: 'bar_chart' }] : []),
 ])

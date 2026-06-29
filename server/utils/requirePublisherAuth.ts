@@ -15,20 +15,24 @@ export interface PublisherSession {
   activeAccountId?: string
   /** Role in the active business account (from memberships): 'owner' | 'admin' | null. */
   activeRole?: 'owner' | 'admin' | null
-  /** Platform (Galiluz-management) role (from memberships): 'super_admin' | 'viewer' | null. */
-  platformRole?: 'super_admin' | 'viewer' | null
-  /** Platform super-admin — use for per-event "act on any event" checks. */
+  /** Platform (Galiluz-management) role (from memberships): 'platform_owner' | 'super_admin' | 'viewer' | null. */
+  platformRole?: 'platform_owner' | 'super_admin' | 'viewer' | null
+  /** Platform super-admin — use for per-event "act on any event" checks. (Owner is a superset → true.) */
   isSuperAdmin: boolean
-  /** Platform staff (super_admin or viewer) — may read the admin portal. */
+  /** Platform staff (owner / super_admin / viewer) — may read the admin portal. */
   isPlatformStaff: boolean
+  /** The single platform owner — may manage platform staff + the platform account's settings. */
+  isPlatformOwner: boolean
   /** Per-publisher preference flags (raw, stored); resolve with getPublisherPreferences(). */
   preferences?: Record<string, unknown>
 }
 
 export interface AuthOptions {
-  /** Throws 403 unless the user is a platform super_admin (message `manager_only`). */
+  /** Throws 403 unless the user is the platform owner (message `platform_owner_only`) — staff/platform-account governance. */
+  requirePlatformOwner?: boolean
+  /** Throws 403 unless the user is a platform super_admin or owner (message `manager_only`). */
   requireSuperAdmin?: boolean
-  /** Throws 403 unless the user is platform staff (super_admin or viewer) — for admin READ routes. */
+  /** Throws 403 unless the user is platform staff (owner / super_admin / viewer) — for admin READ routes. */
   requirePlatformStaff?: boolean
 }
 
@@ -70,10 +74,11 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
 
     const doc = await collection.findOne(
       { authKey: hash, authKeyExpiresAt: { $gt: new Date() } },
-      { projection: { _id: 1, waId: 1, fullName: 1, publishingAs: 1, accountName: 1, status: 1, accountId: 1, preferences: 1 } },
+      { projection: { _id: 1, waId: 1, fullName: 1, publishingAs: 1, accountName: 1, status: 1, isActive: 1, accountId: 1, preferences: 1 } },
     )
 
-    if (!doc || doc.status !== 'approved') {
+    // Deactivated publishers (isActive === false) keep their data but cannot use a session.
+    if (!doc || doc.status !== 'approved' || doc.isActive === false) {
       throw createError({ statusCode: 401, statusMessage: 'Unauthorized', message: 'Invalid or expired token' })
     }
 
@@ -95,9 +100,13 @@ export async function requirePublisherAuth(event: H3Event, options: AuthOptions 
       platformRole: roles.platformRole,
       isSuperAdmin: roles.isSuperAdmin,
       isPlatformStaff: roles.isPlatformStaff,
+      isPlatformOwner: roles.isPlatformOwner,
       preferences: doc.preferences || {},
     }
 
+    if (options.requirePlatformOwner && !session.isPlatformOwner) {
+      throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'platform_owner_only' })
+    }
     if (options.requireSuperAdmin && !session.isSuperAdmin) {
       throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'manager_only' })
     }
