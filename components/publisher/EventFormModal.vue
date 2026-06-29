@@ -718,9 +718,14 @@ function initFromData(data) {
   // Suppress the occurrences-length auto-default while loading saved occurrences;
   // otherwise the watcher would reset multiDayEvent to false right after we restore it.
   suppressMultiDayDefault = true
+  // When editing an event with no occurrences (e.g. a crawler draft where no date
+  // was extracted), show NO date rows rather than the new-event today-08:00 default —
+  // that fake default looks complete and gets published as-is. Empty list = the user
+  // sees no occurrence and validation forces them to add one (mirrors applyAiResult).
+  // The today-08:00 default is reserved for creating a brand-new event only.
   form.occurrences = data.occurrences?.length
     ? data.occurrences.map(o => ({ _key: nextKey(), date: o.date || '', hasTime: o.hasTime !== false, startTime: normalizeTime(o.startTime), endTime: normalizeTime(o.endTime), _frozen: (o.date || '') < today }))
-    : [freshOccurrence()]
+    : []
   form.multiDayEvent = data.multiDayEvent !== false
   nextTick(() => { suppressMultiDayDefault = false })
   form.mainCategory = data.mainCategory || ''
@@ -758,7 +763,9 @@ function restoreFromDraft(draft) {
   form.shortDescription = d.shortDescription || ''
   form.description = d.description || ''
   suppressMultiDayDefault = true
-  form.occurrences = (d.occurrences?.length ? d.occurrences : [freshOccurrence()]).map(o => ({ ...o, _key: nextKey() }))
+  // Restored draft keeps whatever occurrences it held; if it had none, show no rows
+  // (never the today-08:00 default) so validation forces an explicit occurrence.
+  form.occurrences = (d.occurrences?.length ? d.occurrences : []).map(o => ({ ...o, _key: nextKey() }))
   form.multiDayEvent = d.multiDayEvent !== false
   nextTick(() => { suppressMultiDayDefault = false })
   form.mainCategory = d.mainCategory || ''
