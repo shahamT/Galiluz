@@ -2,7 +2,7 @@
   <!-- Mobile: drill-in list of settings (CSS-hidden on desktop, which redirects to the first subpage). -->
   <nav class="AdminSettingsList">
     <NuxtLink
-      v-for="item in ADMIN_SETTINGS_NAV"
+      v-for="item in navItems"
       :key="item.to"
       :to="item.to"
       class="AdminSettingsList-row"
@@ -15,16 +15,16 @@
 </template>
 
 <script setup>
-import { ADMIN_SETTINGS_NAV } from '~/consts/adminSettingsNav.js'
-
 defineOptions({ name: 'AdminSettingsIndex' })
 
+const navItems = useAdminSettingsNav()
+
 // On desktop there's a persistent sidebar, so /admin/settings jumps straight to
-// the first subpage (the list above is CSS-hidden on desktop). Client-only to
-// avoid an SSR/viewport mismatch.
+// the first subpage the user can access (the list above is CSS-hidden on desktop).
+// Client-only to avoid an SSR/viewport mismatch.
 onMounted(() => {
   if (window.matchMedia('(min-width: 769px)').matches) {
-    navigateTo(ADMIN_SETTINGS_NAV[0]?.to || '/admin/settings/crawler', { replace: true })
+    navigateTo(navItems.value[0]?.to || '/admin/dashboard', { replace: true })
   }
 })
 </script>

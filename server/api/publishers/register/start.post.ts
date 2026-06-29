@@ -56,6 +56,7 @@ export default defineEventHandler(async (event) => {
 
   const doc = await col.findOne({ waId })
   const cls = classifyRegistrationPhone(doc)
+  if (cls === 'deleted') throw createError({ statusCode: 409, statusMessage: 'Conflict', message: 'deleted' })
   if (cls === 'already_approved') throw createError({ statusCode: 409, statusMessage: 'Conflict', message: 'already_approved' })
   if (cls === 'pending_exists') throw createError({ statusCode: 409, statusMessage: 'Conflict', message: 'pending_exists' })
   // 'in_progress' (a web registration mid phone-verification), 'ghost_upgrade', and 'new'

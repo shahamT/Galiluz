@@ -8,7 +8,7 @@ import { getAppSettingsCollection } from '~/server/utils/appSettings'
  * The publisher must be approved and have a waId (approvers act + receive messages over WhatsApp).
  */
 export default defineEventHandler(async (event) => {
-  const session = await requirePublisherAuth(event, { requireSuperAdmin: true })
+  const session = await requirePublisherAuth(event, { requirePlatformOwner: true })
   const body = await readBody<{ publisherId?: string }>(event)
   const publisherId = typeof body?.publisherId === 'string' ? body.publisherId.trim() : ''
 
@@ -19,9 +19,9 @@ export default defineEventHandler(async (event) => {
   const { db } = await getMongoConnection()
   const pub = await db
     .collection(config.mongodbCollectionPublishers || 'publishers')
-    .findOne({ _id: objectId }, { projection: { status: 1, waId: 1 } })
-  if (!pub || pub.status !== 'approved' || !pub.waId) {
-    throw createError({ statusCode: 400, message: 'publisher must be approved and have a phone' })
+    .findOne({ _id: objectId }, { projection: { status: 1, waId: 1, isActive: 1, deletedAt: 1 } })
+  if (!pub || pub.status !== 'approved' || !pub.waId || pub.isActive === false || pub.deletedAt) {
+    throw createError({ statusCode: 400, message: 'publisher must be approved, active and have a phone' })
   }
 
   const col = await getAppSettingsCollection()

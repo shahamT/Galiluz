@@ -38,11 +38,12 @@ export default defineEventHandler(async (event) => {
 
   const { db } = await getMongoConnection()
   const col = db.collection(config.mongodbCollectionPublishers || 'publishers')
-  const doc = await col.findOne({ waId }, { projection: { status: 1, otpBlockedUntil: 1, otpExpiresAt: 1, otpSentCount: 1, otpSentWindowStart: 1 } })
+  const doc = await col.findOne({ waId }, { projection: { status: 1, isActive: 1, otpBlockedUntil: 1, otpExpiresAt: 1, otpSentCount: 1, otpSentWindowStart: 1 } })
 
-  // Login is for APPROVED publishers only. (Registration uses its own public endpoints.)
-  if (!doc || doc.status !== 'approved') {
-    console.info(`[Auth] OTP request for unregistered/unapproved phone: ${waId}`)
+  // Login is for APPROVED, ACTIVE publishers only. (Registration uses its own public endpoints;
+  // a deactivated publisher keeps its data but cannot receive an OTP / log in.)
+  if (!doc || doc.status !== 'approved' || doc.isActive === false) {
+    console.info(`[Auth] OTP request for unregistered/unapproved/inactive phone: ${waId}`)
     throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'not_registered' })
   }
 

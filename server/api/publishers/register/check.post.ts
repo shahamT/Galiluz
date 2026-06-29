@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const { db } = await getMongoConnection()
   const col = db.collection(config.mongodbCollectionPublishers || 'publishers')
-  const doc = await col.findOne({ waId }, { projection: { status: 1, createdOnBehalf: 1, phoneVerified: 1 } })
+  const doc = await col.findOne({ waId }, { projection: { status: 1, createdOnBehalf: 1, phoneVerified: 1, deletedAt: 1 } })
 
   return { status: classifyRegistrationPhone(doc) }
 })

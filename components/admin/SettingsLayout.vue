@@ -3,7 +3,7 @@
     <!-- Desktop: persistent sidebar of settings. Hidden on mobile (drill-in instead). -->
     <aside class="AdminSettings-sidebar" :style="{ height: sidebarHeight }">
       <NuxtLink
-        v-for="item in ADMIN_SETTINGS_NAV"
+        v-for="item in navItems"
         :key="item.to"
         :to="item.to"
         class="AdminSettings-link"
@@ -21,10 +21,9 @@
 </template>
 
 <script setup>
-import { ADMIN_SETTINGS_NAV } from '~/consts/adminSettingsNav.js'
-
 defineOptions({ name: 'AdminSettingsLayout' })
 const route = useRoute()
+const navItems = useAdminSettingsNav()
 
 // Pin the sidebar to the visible viewport: header + tabs sit above .AppShell-scroller (the
 // only scroll region), so the sidebar fills the scroller's height minus the content padding,

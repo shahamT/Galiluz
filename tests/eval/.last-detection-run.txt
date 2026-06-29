@@ -1,0 +1,37 @@
+model: gpt-4o
+
+── KEEP (real events → expect isEvent:true) ──
+✓  ⭐ אקסטאטיק ראש פינה (recurring dance, dated 25.6)
+✓  מסיבת יום העצמאות (שבת 04.07)
+✓  טעימת יין ביער מרפא דפנה (הערב 20:30)
+✓  מסיבת בייס (25.6 22:00)
+✓  גאווה גלילית (מוצ"ש 27.6.26)
+✓  קבלת שבת בנחל (שישי 26.6 15:30)
+✓  Career Boost נטוורקינג (רביעי 1.7 19:00)
+✓  La ZuZ (חמישי 16.7 21:00)
+✓  עידן אלתרמן סטנדאפ (2.7)
+✓  משה אשכנזי סטנדאפ (חמישי 9.7)
+✓  אירוע פתיחה הטריבל מייקרס (one launch event)
+✓  ⭐ Groovement (monthly groove night, this upcoming one)
+✓  ⭐ יריד של הפילוסופ (monthly fair, dated 3.7)
+✓  ⭐ ערב מונדיאל בפילוסופ (tonight, specific match)
+✓  ⭐ ג'אם אקוסטי (weekly jam, this week רביעי)
+✓  ערב השקה של חאנע (חמישי 2.7 18:00)
+✓  CONTROL — multi-day festival (one continuous event)
+✓  CONTROL — one-time dated workshop
+✗ DROPPED  וולנס על הנחל — themed 4-session program (varied subjects)
+✓  סטודיו פתוח — defined 5-session art series (first session 15.7)
+
+── REJECT (edge cases → expect isEvent:false) ──
+✓  TARGET (a) קייצת שלאגר 2026 — a whole season/program, not one event
+✓  TARGET (b) שיעורי היפהופ — recurring weekly class, no date
+✓  (a) staff memo listing many separate events across a week
+✓  (a) invented — festival season, 3 separate dated shows
+✓  (b) invented — weekly pilates class, monthly fee
+
+── overall ──
+KEEP-recall (real events kept): 19/20 = 95%  [HARD gate]
+REJECT-rate (edge cases filtered): 5/5 = 100%  [maximize]
+
+ISSUES (1):
+  KEEP DROPPED: וולנס על הנחל — themed 4-session program (varied subjects) :: סדרה של מפגשים ללא תאריך ספציפי

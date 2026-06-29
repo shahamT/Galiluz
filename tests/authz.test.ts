@@ -6,17 +6,30 @@ import {
   hasCapability,
   isSuperAdmin,
   isPlatformStaff,
+  isPlatformOwner,
   deriveActiveRoles,
 } from '~/server/utils/authz'
 
 describe('ROLE_CAPABILITIES', () => {
-  it('super_admin holds every platform capability (and not the account-only one is irrelevant)', () => {
+  it('super_admin holds every operational platform capability, but NOT platform governance', () => {
     for (const cap of [
       CAPABILITIES.VIEW_ADMIN, CAPABILITIES.MANAGE_EVENTS_ANY, CAPABILITIES.TRANSFER_EVENT,
       CAPABILITIES.MANAGE_BROADCASTS, CAPABILITIES.MANAGE_CRAWLER, CAPABILITIES.APPROVE_PUBLISHERS,
-      CAPABILITIES.MANAGE_STAFF,
+      CAPABILITIES.MANAGE_ACCOUNTS,
     ]) {
       expect(roleHasCapability('super_admin', cap)).toBe(true)
+    }
+    // Platform governance (manage staff + platform-account settings) is owner-only.
+    expect(roleHasCapability('super_admin', CAPABILITIES.MANAGE_PLATFORM)).toBe(false)
+  })
+
+  it('platform_owner holds everything super_admin does PLUS platform governance', () => {
+    for (const cap of [
+      CAPABILITIES.VIEW_ADMIN, CAPABILITIES.MANAGE_EVENTS_ANY, CAPABILITIES.TRANSFER_EVENT,
+      CAPABILITIES.MANAGE_BROADCASTS, CAPABILITIES.MANAGE_CRAWLER, CAPABILITIES.APPROVE_PUBLISHERS,
+      CAPABILITIES.MANAGE_ACCOUNTS, CAPABILITIES.MANAGE_PLATFORM,
+    ]) {
+      expect(roleHasCapability('platform_owner', cap)).toBe(true)
     }
   })
 
@@ -24,7 +37,8 @@ describe('ROLE_CAPABILITIES', () => {
     expect(roleHasCapability('viewer', CAPABILITIES.VIEW_ADMIN)).toBe(true)
     for (const cap of [
       CAPABILITIES.MANAGE_EVENTS_ANY, CAPABILITIES.TRANSFER_EVENT, CAPABILITIES.MANAGE_BROADCASTS,
-      CAPABILITIES.MANAGE_CRAWLER, CAPABILITIES.APPROVE_PUBLISHERS, CAPABILITIES.MANAGE_STAFF,
+      CAPABILITIES.MANAGE_CRAWLER, CAPABILITIES.APPROVE_PUBLISHERS, CAPABILITIES.MANAGE_ACCOUNTS,
+      CAPABILITIES.MANAGE_PLATFORM,
     ]) {
       expect(roleHasCapability('viewer', cap)).toBe(false)
     }
@@ -73,17 +87,25 @@ describe('hasCapability (platform + active business role union)', () => {
   })
 })
 
-describe('isSuperAdmin / isPlatformStaff', () => {
-  it('isSuperAdmin only for super_admin', () => {
+describe('isSuperAdmin / isPlatformStaff / isPlatformOwner', () => {
+  it('isSuperAdmin for super_admin AND platform_owner (owner is a superset)', () => {
     expect(isSuperAdmin('super_admin')).toBe(true)
+    expect(isSuperAdmin('platform_owner')).toBe(true)
     expect(isSuperAdmin('viewer')).toBe(false)
     expect(isSuperAdmin(null)).toBe(false)
   })
-  it('isPlatformStaff for super_admin and viewer', () => {
+  it('isPlatformStaff for owner, super_admin and viewer', () => {
+    expect(isPlatformStaff('platform_owner')).toBe(true)
     expect(isPlatformStaff('super_admin')).toBe(true)
     expect(isPlatformStaff('viewer')).toBe(true)
     expect(isPlatformStaff(null)).toBe(false)
     expect(isPlatformStaff('owner')).toBe(false)
+  })
+  it('isPlatformOwner ONLY for platform_owner', () => {
+    expect(isPlatformOwner('platform_owner')).toBe(true)
+    expect(isPlatformOwner('super_admin')).toBe(false)
+    expect(isPlatformOwner('viewer')).toBe(false)
+    expect(isPlatformOwner(null)).toBe(false)
   })
 })
 
@@ -130,6 +152,19 @@ describe('deriveActiveRoles (memberships → session roles)', () => {
     expect(r.platformRole).toBe('super_admin')
     expect(r.isSuperAdmin).toBe(true)
     expect(r.isPlatformStaff).toBe(true)
+    expect(r.isPlatformOwner).toBe(false)
+  })
+
+  it('platform_owner membership → owner + super_admin + staff flags, business role independent', () => {
+    const r = deriveActiveRoles(
+      [{ accountId: 'A', role: 'owner' }, { accountId: 'PLATFORM', role: 'platform_owner' }],
+      'A',
+    )
+    expect(r.platformRole).toBe('platform_owner')
+    expect(r.isPlatformOwner).toBe(true)
+    expect(r.isSuperAdmin).toBe(true)
+    expect(r.isPlatformStaff).toBe(true)
+    expect(r.activeRole).toBe('owner')
   })
 
   it('viewer-only staffer (no business membership): platform role set, active account = pointer/undefined', () => {

@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const [accountDocs, publisherDocs] = await Promise.all([
     accountsCol.find(NOT_DELETED, { projection: { _id: 1, title: 1 } }).toArray(),
     publishersCol
-      .find(NOT_DELETED, { projection: { _id: 1, waId: 1, accountId: 1, accountName: 1, fullName: 1, status: 1 } })
+      .find(NOT_DELETED, { projection: { _id: 1, waId: 1, accountId: 1, accountName: 1, fullName: 1, status: 1, isActive: 1 } })
       .toArray(),
   ])
 
@@ -43,6 +43,7 @@ export default defineEventHandler(async (event) => {
         accountId: p.accountId || '',
         accountName,
         status: p.status || '',
+        isActive: p.isActive !== false,
       }
     })
     .sort((x, y) => collator.compare(x.name, y.name))

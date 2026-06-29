@@ -43,10 +43,10 @@ export default defineEventHandler(async (event) => {
   const accountsCol = db.collection(config.mongodbCollectionAccounts || 'accounts')
   const publishersCol = db.collection(config.mongodbCollectionPublishers || 'publishers')
 
-  // Defensive: only approved, non-deleted publishers among the selected ids ever get messaged.
+  // Defensive: only approved, ACTIVE, non-deleted publishers among the selected ids ever get messaged.
   const docs = await publishersCol
     .find(
-      { ...NOT_DELETED, _id: { $in: publisherIds.map((id) => new ObjectId(id)) }, status: 'approved' },
+      { ...NOT_DELETED, _id: { $in: publisherIds.map((id) => new ObjectId(id)) }, status: 'approved', isActive: { $ne: false } },
       { projection: { _id: 1, waId: 1, fullName: 1, accountId: 1, accountName: 1 } },
     )
     .toArray()

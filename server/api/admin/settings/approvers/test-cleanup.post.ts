@@ -9,7 +9,7 @@ import { softDeleteEventStatsData } from '~/server/utils/eventStats.service'
  * (A rejected dummy is already hard-deleted by reject.post.ts; this handles approved/pending leftovers.)
  */
 export default defineEventHandler(async (event) => {
-  await requirePublisherAuth(event, { requireSuperAdmin: true })
+  await requirePublisherAuth(event, { requirePlatformOwner: true })
 
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()

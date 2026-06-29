@@ -8,12 +8,17 @@ import { getAppSetting } from '~/server/utils/appSettings'
  * doc `key:'approvers'` — and resolved here to `{ waId, name }` for the wa-bot. When the list is
  * empty, no one is notified (the admin must keep at least one approver).
  */
-export interface Approver { publisherId: string; waId: string; name: string }
+export interface Approver { publisherId: string; waId: string; name: string; isActive?: boolean }
 
 const normWa = (v: unknown): string => String(v ?? '').replace(/\D/g, '')
 
-/** Resolve the configured approvers (approved publishers with a phone). Empty when none configured. */
-export async function getApprovers(): Promise<Approver[]> {
+/**
+ * Resolve the configured approvers (approved publishers with a phone). Empty when none configured.
+ * By default returns only ACTIVE, non-deleted approvers — these are the ones who receive notices and may
+ * authorize actions (a deactivated/deleted approver must not). The admin LIST passes `{ includeInactive }`
+ * so a deactivated approver stays visible (with `isActive:false`); deleted approvers are never returned.
+ */
+export async function getApprovers(opts: { includeInactive?: boolean } = {}): Promise<Approver[]> {
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()
   const publishers = db.collection(config.mongodbCollectionPublishers || 'publishers')
@@ -27,11 +32,13 @@ export async function getApprovers(): Promise<Approver[]> {
   const objectIds = ids
     .map((id) => { try { return new ObjectId(id) } catch { return null } })
     .filter((x): x is ObjectId => x !== null)
+  const filter: Record<string, unknown> = { _id: { $in: objectIds }, status: 'approved', deletedAt: { $exists: false } }
+  if (!opts.includeInactive) filter.isActive = { $ne: false }
   const rows = await publishers
-    .find({ _id: { $in: objectIds }, status: 'approved' }, { projection: { _id: 1, waId: 1, fullName: 1 } })
+    .find(filter, { projection: { _id: 1, waId: 1, fullName: 1, isActive: 1 } })
     .toArray()
   return rows
-    .map((p) => ({ publisherId: p._id.toString(), waId: normWa(p.waId), name: String(p.fullName || '') || normWa(p.waId) }))
+    .map((p) => ({ publisherId: p._id.toString(), waId: normWa(p.waId), name: String(p.fullName || '') || normWa(p.waId), isActive: p.isActive !== false }))
     .filter((a) => a.waId)
 }
 

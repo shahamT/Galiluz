@@ -5,6 +5,7 @@ import { NOT_DELETED } from '~/server/utils/eventsQuery'
 import { getEventLogsCollection } from '~/server/utils/eventLogs.service'
 import { resolveExposedContactPhone } from '~/server/utils/contactPhone'
 import { ensureAccountForPublisher } from '~/server/utils/accountScope'
+import { restampEventStatsPublisher } from '~/server/utils/eventStats.service'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event, { requireSuperAdmin: true })
@@ -64,6 +65,9 @@ export default defineEventHandler(async (event) => {
   }
 
   await eventsCol.updateOne({ _id: objectId }, { $set: $setFields })
+
+  // Move the event's stats to the new publisher (stats are scoped by the denormalized publisherId).
+  await restampEventStatsPublisher([id], targetPublisherId)
 
   try {
     const logs = await getEventLogsCollection()

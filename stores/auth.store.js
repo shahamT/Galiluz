@@ -2,9 +2,11 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const authReady = ref(false)
   const isLoggedIn = computed(() => !!user.value)
-  /** Platform super-admin (full Galiluz management) — from the platform membership (`platformRole`). */
-  const isSuperAdmin = computed(() => user.value?.platformRole === 'super_admin')
-  /** Any platform staff (super_admin or read-only viewer) — may see the admin portal. */
+  /** The single platform owner — may manage platform staff + the platform account's settings. */
+  const isPlatformOwner = computed(() => user.value?.platformRole === 'platform_owner')
+  /** Platform super-admin (full Galiluz management). The owner is a strict superset → true. */
+  const isSuperAdmin = computed(() => user.value?.platformRole === 'super_admin' || user.value?.platformRole === 'platform_owner')
+  /** Any platform staff (owner / super_admin / read-only viewer) — may see the admin portal. */
   const isPlatformStaff = computed(() => !!user.value?.platformRole)
   /** Any authenticated user can act on their own resources. */
   const canManageOwn = computed(() => !!user.value)
@@ -39,5 +41,5 @@ export const useAuthStore = defineStore('auth', () => {
     authReady.value = false
   }
 
-  return { user, authReady, isLoggedIn, isSuperAdmin, isPlatformStaff, canManageOwn, hasFeature, hasPreference, setUser, login, logout, setAuthReady, resetAuthReady }
+  return { user, authReady, isLoggedIn, isPlatformOwner, isSuperAdmin, isPlatformStaff, canManageOwn, hasFeature, hasPreference, setUser, login, logout, setAuthReady, resetAuthReady }
 })

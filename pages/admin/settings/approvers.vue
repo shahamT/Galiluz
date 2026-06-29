@@ -35,6 +35,7 @@
           <UiIcon name="verified_user" size="sm" class="ApproversSettings-itemIcon" />
           <span class="ApproversSettings-itemName">
             {{ a.name }}
+            <span v-if="a.isActive === false" class="ApproversSettings-itemPaused">מושהה</span>
             <span class="ApproversSettings-itemSub" dir="ltr">{{ formatPhone(a.waId) }}</span>
           </span>
           <button
@@ -244,6 +245,7 @@ onMounted(() => {
   &-itemIcon { color: var(--color-text-light); flex-shrink: 0; }
   &-itemName { flex: 1; font-weight: 600; font-size: var(--font-size-sm); min-width: 0; display: flex; flex-direction: column; gap: 1px; }
   &-itemSub { font-weight: 400; font-size: var(--font-size-xs); color: var(--color-text-light); }
+  &-itemPaused { align-self: flex-start; font-size: var(--font-size-xs); font-weight: 600; color: #a12626; background: rgba(211,51,51,0.12); border-radius: var(--radius-full); padding: 0.05rem 0.45rem; }
   &-remove {
     flex-shrink: 0; background: none; border: none; cursor: pointer; color: var(--color-text-light);
     border-radius: var(--radius-full); padding: 4px; display: inline-flex;
