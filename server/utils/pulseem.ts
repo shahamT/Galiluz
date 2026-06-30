@@ -2,10 +2,15 @@
  * SMS delivery via Pulseem's Direct Send API (api.pulseem.com — the transactional
  * "שליחה ישירה" API, NOT the campaign ui-api). Used for OTP (when the OTP method setting is
  * 'sms') and for crawler draft notices (when the crawler draftNoticeMethod is 'sms'). Sends
- * from the configured sender (the WhatsApp-business / contact-us number).
+ * from the configured sender (the WhatsApp-business / contact-us number, e.g. 0559896278).
  *
- * Mirrors the WhatsApp gateway path: in dev it echoes the message to the terminal; a missing
- * API key in production throws 503; a transient send failure is logged, not thrown.
+ * Pulseem quirks (learned empirically — the swagger has no examples):
+ *  - Auth header is `APIKey` (NOT `X-Api-Key`).
+ *  - The send needs `sendId`, a `referenceList` parallel to `toNumberList`, and
+ *    `isAutomaticUnsubscribeLink` — omitting them makes the server 500 on send.
+ *  - It returns **HTTP 200 even on logical failure**, with `{ status:'Error'|'Success', success, error }`.
+ *    So success must be read from the body, not the HTTP status.
+ *  - The sender must be a NUMERIC, account-verified number (alphanumeric senders are rejected).
  */
 
 /** Concise Hebrew OTP SMS body. */
@@ -23,8 +28,8 @@ export function toLocalIsraeliNumber(waId: string): string {
 
 /**
  * Send an arbitrary SMS via Pulseem Direct Send. Recipient is normalized to local Israeli
- * format. Best-effort: logs (not throws) on a non-2xx / transport error, except a missing API
- * key in production (throws 503) so a misconfigured SMS toggle fails loudly. Dev echoes the text.
+ * format. Best-effort: logs (not throws) on any failure, except a missing API key in production
+ * (throws 503) so a misconfigured SMS toggle fails loudly. Dev echoes the text.
  */
 export async function sendSms(phone: string, text: string): Promise<void> {
   const config = useRuntimeConfig() as Record<string, string>
@@ -46,24 +51,33 @@ export async function sendSms(phone: string, text: string): Promise<void> {
     return
   }
 
+  const sendId = `glz-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
   try {
     const res = await fetch(`${baseUrl}/api/v1/SmsApi/SendSms`, {
       method: 'POST',
-      // Auth header per the Direct Send API security scheme. (Some Pulseem docs show
-      // `X-Api-Key`; if a real send returns 401, switch this header name.)
       headers: { 'Content-Type': 'application/json', APIKey: apiKey },
       body: JSON.stringify({
+        sendId,
         isAsync: false,
+        cbkUrl: '',
         smsSendData: {
           fromNumber,
           toNumberList: [to],
+          referenceList: [sendId],
           textList: [text],
+          isAutomaticUnsubscribeLink: false,
         },
       }),
     })
-    if (!res.ok) {
-      const detail = (await res.text().catch(() => '')).slice(0, 200)
-      console.error(`[SMS] Pulseem send failed (${res.status}): ${detail}`)
+
+    // Pulseem returns 200 even on logical failure — read success from the body.
+    const raw = await res.text().catch(() => '')
+    let parsed: { status?: string; success?: number; error?: string } | null = null
+    try { parsed = raw ? JSON.parse(raw) : null } catch { /* non-JSON body */ }
+    const delivered = res.ok && !!parsed && (parsed.status === 'Success' || (typeof parsed.success === 'number' && parsed.success >= 1))
+    if (!delivered) {
+      const detail = parsed?.error || raw.slice(0, 200) || `HTTP ${res.status}`
+      console.error(`[SMS] Pulseem send failed (HTTP ${res.status}): ${detail}`)
     }
   } catch (err) {
     console.error('[SMS] Failed to reach Pulseem:', err instanceof Error ? err.message : String(err))
