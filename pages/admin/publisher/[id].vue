@@ -20,9 +20,17 @@
           <span class="PubDetail-avatar">{{ initials(pub.name) }}</span>
           <div class="PubDetail-headMain">
             <div class="PubDetail-titleRow">
-              <h1 class="PubDetail-title">{{ pub.name }}</h1>
-              <span class="PubDetail-chip" :class="`PubDetail-chip--${pub.status}`">{{ statusLabel(pub.status) }}</span>
-              <span v-if="!pub.isActive" class="PubDetail-chip PubDetail-chip--danger">מושהה</span>
+              <template v-if="canManage && editingName">
+                <input v-model="nameDraft" class="PubDetail-titleInput" type="text" maxlength="80" @keyup.enter="saveName" />
+                <button class="PubDetail-btn PubDetail-btn--primary" :disabled="busy" @click="saveName">שמירה</button>
+                <button class="PubDetail-btn" @click="cancelName">ביטול</button>
+              </template>
+              <template v-else>
+                <h1 class="PubDetail-title">{{ pub.name }}</h1>
+                <button v-if="canManage" class="PubDetail-iconBtn" title="עריכת שם" @click="startName"><UiIcon name="edit" size="sm" /></button>
+                <span class="PubDetail-chip" :class="`PubDetail-chip--${pub.status}`">{{ statusLabel(pub.status) }}</span>
+                <span v-if="!pub.isActive" class="PubDetail-chip PubDetail-chip--danger">מושהה</span>
+              </template>
             </div>
             <div class="PubDetail-meta">
               <span class="PubDetail-metaItem"><UiIcon name="call" size="xs" /> <span dir="ltr">{{ formatPhone(pub.phone) }}</span></span>
@@ -154,6 +162,20 @@ const showChat = ref(false)
 function errMsg(e) { const m = e?.data?.message || e?.message || ''; return ERR[m] || 'הפעולה נכשלה' }
 async function run(fn, after) { busy.value = true; actionError.value = ''; try { await fn(); if (after) await after(); else await refresh() } catch (e) { actionError.value = errMsg(e) } finally { busy.value = false } }
 
+// Name editing (mirrors the account title edit)
+const editingName = ref(false)
+const nameDraft = ref('')
+function startName() { nameDraft.value = pub.value?.name || ''; editingName.value = true }
+function cancelName() { editingName.value = false }
+function saveName() {
+  const fullName = nameDraft.value.trim()
+  if (!fullName) { actionError.value = 'יש להזין שם'; return }
+  run(async () => {
+    await $fetch(`/api/admin/publisher/${route.params.id}`, { method: 'PATCH', body: { fullName } })
+    editingName.value = false
+  })
+}
+
 // Accounts
 const addAccountId = ref('')
 function addToAccount() {
@@ -226,6 +248,10 @@ function formatDate(v) { if (!v) return ''; try { return new Date(v).toLocaleDat
   &-headMain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--spacing-sm); }
   &-titleRow { display: flex; align-items: center; gap: var(--spacing-sm); flex-wrap: wrap; }
   &-title { margin: 0; font-size: var(--font-size-2xl); font-weight: 700; color: var(--brand-dark-green); }
+  &-titleInput {
+    flex: 1; min-width: 12rem; padding: var(--spacing-sm); border: 1px solid var(--color-border);
+    border-radius: var(--radius-md); font-size: var(--font-size-lg); font-family: inherit;
+  }
   &-meta { display: flex; align-items: center; gap: var(--spacing-md); flex-wrap: wrap; }
   &-metaItem { display: inline-flex; align-items: center; gap: 0.25rem; font-size: var(--font-size-sm); color: var(--color-text-light); }
   &-types { margin: 0; font-size: var(--font-size-sm); color: var(--color-text); }
