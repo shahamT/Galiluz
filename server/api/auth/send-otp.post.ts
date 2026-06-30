@@ -2,7 +2,7 @@ import { getMongoConnection } from '~/server/utils/mongodb'
 import { checkAuthRateLimit, checkPhoneRateLimit } from '~/server/utils/rateLimit'
 import { logAuthEvent } from '~/server/utils/authLog'
 import { verifyTurnstileToken } from '~/server/utils/turnstile'
-import { normaliseIsraeliPhone, generateAndStoreOtp, sendOtpViaGateway } from '~/server/utils/otp'
+import { normaliseIsraeliPhone, generateAndStoreOtp, deliverOtp } from '~/server/utils/otp'
 
 export default defineEventHandler(async (event) => {
   await checkAuthRateLimit(event)
@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
 
   const now = new Date()
   const otp = await generateAndStoreOtp(col, waId, doc, now)
-  await sendOtpViaGateway(waId, otp)
+  await deliverOtp(waId, otp)
 
   await logAuthEvent(event, 'otp_sent', waId)
   return { success: true }
