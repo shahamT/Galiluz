@@ -98,6 +98,11 @@ export default defineNuxtConfig({
     webauthnOrigin: process.env.WEBAUTHN_ORIGIN || '',
     // WhatsApp Gateway (Green API bridge) — OTP delivery goes through this service.
     waGatewayUrl: process.env.WA_GATEWAY_URL || '',
+    // Pulseem SMS (Direct Send API) — used when the OTP method setting is 'sms'. Optional:
+    // only needed once an admin flips OTP delivery to SMS (default stays WhatsApp).
+    pulseemApiKey: process.env.PULSEEM_API_KEY || '',
+    pulseemFromNumber: process.env.PULSEEM_FROM_NUMBER || '',
+    pulseemApiUrl: process.env.PULSEEM_API_URL || 'https://api.pulseem.com',
     // WhatsApp bot (Cloud API) — web registration notifies the approver(s) through it.
     waBotUrl: process.env.WA_BOT_URL || '',
     // Legacy Cloud API creds — no longer used for OTP (kept for parity; wa-bot has its own).

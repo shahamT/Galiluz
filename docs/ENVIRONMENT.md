@@ -77,6 +77,9 @@ Create each group, add its variables, and set the value. **Value** column: a lit
 | | `WA_GATEWAY_URL` | enter | gateway URL, e.g. `https://galiluz-wa-gateway.onrender.com` |
 | | `NUXT_PUBLIC_SITE_URL` | `https://galiluz.co.il` | also the WebAuthn rpID/origin source |
 | | `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` | (blank/optional) | auto-derived from `NUXT_PUBLIC_SITE_URL`; set only for a non-primary domain |
+| | `PULSEEM_API_KEY` | 🔒 enter | only if OTP method = SMS (Admin → Settings → OTP); Pulseem Direct Send API key |
+| | `PULSEEM_FROM_NUMBER` | enter | SMS sender = the WhatsApp-business/contact number |
+| | `PULSEEM_API_URL` | (blank/optional) | default `https://api.pulseem.com` |
 | **galiluz-app-wa-bot** | `GALILUZ_APP_URL` | `https://galiluz.co.il` | |
 | | `APPROVER_REENGAGEMENT_TEMPLATE_NAME` | (blank/optional) | |
 | | `APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE` | `he` | |
@@ -91,7 +94,7 @@ Optional web ops add-ons, not grouped (add directly to `galiluz-web` only if use
 
 Each service's keys = inline + the union of its attached groups. No key repeats within a service:
 
-- **galiluz-web**: NODE_ENV, NODE_VERSION · API_SECRET · MONGODB_URI, MONGODB_DB_NAME · CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_FOLDER · OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MODEL_WEB · SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM, MAIL_TO · TURNSTILE_SECRET_KEY, NUXT_PUBLIC_TURNSTILE_SITE_KEY · NUXT_PUBLIC_POSTHOG_* · OTP_SECRET, WA_GATEWAY_URL, NUXT_PUBLIC_SITE_URL
+- **galiluz-web**: NODE_ENV, NODE_VERSION · API_SECRET · MONGODB_URI, MONGODB_DB_NAME · CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_FOLDER · OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MODEL_WEB · SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM, MAIL_TO · TURNSTILE_SECRET_KEY, NUXT_PUBLIC_TURNSTILE_SITE_KEY · NUXT_PUBLIC_POSTHOG_* · OTP_SECRET, WA_GATEWAY_URL, NUXT_PUBLIC_SITE_URL · PULSEEM_API_KEY, PULSEEM_FROM_NUMBER, PULSEEM_API_URL (only when OTP method = SMS)
 - **galiluz-wa-bot**: NODE_ENV, NODE_VERSION · API_SECRET · OPENAI_API_KEY, OPENAI_MODEL, OPENAI_MODEL_WEB* · WA_CLOUD_ACCESS_TOKEN, WA_PHONE_NUMBER_ID, WEBHOOK_VERIFY_TOKEN, APP_SECRET, WHATSAPP_*_PHONE_NUMBER_ID · GALILUZ_APP_URL, APPROVER_REENGAGEMENT_TEMPLATE_*, LOG_LEVEL, ALLOW_MAIN_MENU_FREE_LANGUAGE  (approvers are DB-managed — no env var)
 - **galiluz-wa-gateway**: NODE_ENV, NODE_VERSION · API_SECRET · GREEN_API_* · WA_LOG_LEVEL · WEB_APP_URL
 

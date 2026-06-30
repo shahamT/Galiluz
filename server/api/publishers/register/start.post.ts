@@ -1,7 +1,7 @@
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { checkAuthRateLimit, checkPhoneRateLimit } from '~/server/utils/rateLimit'
 import { verifyTurnstileToken } from '~/server/utils/turnstile'
-import { normaliseIsraeliPhone, generateAndStoreOtp, sendOtpViaGateway } from '~/server/utils/otp'
+import { normaliseIsraeliPhone, generateAndStoreOtp, deliverOtp } from '~/server/utils/otp'
 import { classifyRegistrationPhone, isValidEmail, isTwoWordName } from '~/server/utils/registration'
 
 /**
@@ -90,7 +90,7 @@ export default defineEventHandler(async (event) => {
   // The upsert doesn't touch OTP fields, so `doc` still reflects the send-cap state
   // (null for a brand-new publisher → fresh window).
   const otp = await generateAndStoreOtp(col, waId, doc, now)
-  await sendOtpViaGateway(waId, otp)
+  await deliverOtp(waId, otp)
 
   return { success: true }
 })
