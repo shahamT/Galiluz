@@ -6,7 +6,7 @@
     </NuxtLink>
     <NuxtLink to="/publisher/events" class="PublisherNavTabs-tab" :class="{ 'PublisherNavTabs-tab--active': isEvents }">
       <UiIcon name="event_note" size="sm" class="PublisherNavTabs-tabIcon" />
-      האירועים שלי
+      אירועים
     </NuxtLink>
   </nav>
 </template>

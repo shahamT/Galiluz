@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
     // Event counts scope by the tenant key (same as the portal events list) — not the publisher-set.
     eventsPubFilter: getAccountEventFilter(session),
     logsPubFilter: { publisherId: { $in: accountPublisherIds } },
+    selfPublisherId: session.publisherId,
     filter,
     includeStats: features.globalStats,
   })

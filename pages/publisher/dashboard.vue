@@ -7,7 +7,7 @@
     <div class="PublisherDashboard-body">
     <div class="PublisherDashboard-header">
       <h1 class="PublisherDashboard-title">דשבורד אירועים</h1>
-      <p class="PublisherDashboard-greeting">ברוך/ה הבאה {{ authStore.user?.fullName }}, כאן תוכל/י לקבל מבט מלמעלה על כל האירועים שפרסמת!</p>
+      <p class="PublisherDashboard-greeting">ברוך/ה הבאה {{ authStore.user?.fullName }}, כאן תוכל/י לקבל מבט מלמעלה על כל האירועים בחשבון שלך!</p>
     </div>
 
     <PublisherDashboardEventsOverview :counts="data?.eventCounts || { total: 0, future: 0, past: 0, drafts: 0 }" @add-event="showEventForm = true" />
