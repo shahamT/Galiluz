@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { deriveActiveRoles, type ResolvedRoles } from '~/server/utils/authz'
+import { NOT_DELETED } from '~/server/utils/eventsQuery'
 import type { PublisherSession } from '~/server/utils/requirePublisherAuth'
 
 /**
@@ -170,6 +171,45 @@ export async function getAccountPublisherIds(session: PublisherSession): Promise
     .toArray()
 
   return rows.map((r) => String(r.publisherId)).filter(Boolean)
+}
+
+/**
+ * A publisher's BUSINESS accounts (owner/admin memberships) joined with the account's display
+ * info — for the login account-picker (shown only when there are 2+) and a future account switcher.
+ * Excludes the platform account and soft-deleted accounts. Sorted owner-first, then by title.
+ */
+export async function getPublisherBusinessAccounts(
+  publisherId: string,
+): Promise<Array<{ accountId: string; title: string; logo: string | null; role: string }>> {
+  const config = useRuntimeConfig() as Record<string, string>
+  const { db } = await getMongoConnection()
+  const memberships = db.collection(config.mongodbCollectionMemberships || 'memberships')
+  const accountsCol = db.collection(config.mongodbCollectionAccounts || 'accounts')
+
+  const rows = await memberships
+    .find({ publisherId, status: 'active', role: { $in: ['owner', 'admin'] } }, { projection: { accountId: 1, role: 1 } })
+    .toArray()
+  if (!rows.length) return []
+
+  const ids = rows
+    .map((r) => { try { return new ObjectId(String(r.accountId)) } catch { return null } })
+    .filter((v): v is ObjectId => v !== null)
+  const accs = await accountsCol
+    .find({ _id: { $in: ids }, kind: { $ne: 'platform' }, ...NOT_DELETED }, { projection: { title: 1, logo: 1 } })
+    .toArray()
+  const byId = new Map(accs.map((a) => [a._id.toString(), a]))
+
+  const result = rows
+    .map((r) => {
+      const acc = byId.get(String(r.accountId))
+      if (!acc) return null
+      return { accountId: String(r.accountId), title: String(acc.title || ''), logo: (acc.logo as string) || null, role: String(r.role) }
+    })
+    .filter((v): v is { accountId: string; title: string; logo: string | null; role: string } => v !== null)
+
+  const priority: Record<string, number> = { owner: 0, admin: 1 }
+  result.sort((a, b) => (priority[a.role] ?? 9) - (priority[b.role] ?? 9) || a.title.localeCompare(b.title, 'he'))
+  return result
 }
 
 /**

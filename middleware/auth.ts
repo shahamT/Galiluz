@@ -27,10 +27,18 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo('/publisher/dashboard')
   }
 
+  // Staff who haven't enrolled a passkey yet (auto-migrate grace) are forced to the passkey
+  // settings page until they add one — the server already gave them a session, this just blocks the UI.
+  if (authenticated && authStore.mfaEnrollRequired && to.path !== '/admin/settings/security') {
+    return navigateTo('/admin/settings/security')
+  }
+
   // Sub-area gating (mutations are also server-enforced; this keeps a role out of pages it can't use).
-  // Settings = platform governance: viewers have none; approvers config is owner-only.
+  // Governance settings are super_admin/owner; the "my passkeys" page + the settings landing are
+  // open to ANY platform staff (incl. viewer), so everyone can manage their own passkeys.
   if (isAdminRoute && authenticated) {
-    if (to.path.startsWith('/admin/settings') && !authStore.isSuperAdmin) return navigateTo('/admin/dashboard')
+    const staffOkSettings = to.path === '/admin/settings' || to.path === '/admin/settings/security'
+    if (to.path.startsWith('/admin/settings') && !staffOkSettings && !authStore.isSuperAdmin) return navigateTo('/admin/dashboard')
     if (to.path.startsWith('/admin/settings/approvers') && !authStore.isPlatformOwner) return navigateTo('/admin/dashboard')
   }
 

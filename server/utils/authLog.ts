@@ -11,6 +11,10 @@ export type AuthAction =
   | 'blocked'
   | 'otp_request_unregistered'
   | 'publisher_rejected'
+  | 'mfa_challenged'
+  | 'mfa_failed'
+  | 'passkey_enrolled'
+  | 'passkey_reset'
 
 export async function logAuthEvent(
   event: H3Event,

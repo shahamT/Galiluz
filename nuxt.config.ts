@@ -81,6 +81,8 @@ export default defineNuxtConfig({
     mongodbCollectionAppSettings: process.env.MONGODB_COLLECTION_APP_SETTINGS || 'appSettings',
     mongodbCollectionCrawlerMessages: process.env.MONGODB_COLLECTION_CRAWLER_MESSAGES || 'crawlerMessages',
     mongodbCollectionMagicLinks: process.env.MONGODB_COLLECTION_MAGIC_LINKS || 'magicLinks',
+    // WebAuthn passkeys (staff second factor) — one doc per enrolled credential.
+    mongodbCollectionWebauthnCredentials: process.env.MONGODB_COLLECTION_WEBAUTHN_CREDENTIALS || 'webauthnCredentials',
     cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
     cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
     cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
@@ -90,6 +92,10 @@ export default defineNuxtConfig({
     openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     // OTP authentication
     otpSecret: process.env.OTP_SECRET || '',
+    // WebAuthn (passkey) — staff second factor. Empty → derived in server/utils/webauthn.ts
+    // from public.siteUrl (prod) / localhost:3000 (dev). Override per-env only if needed.
+    webauthnRpId: process.env.WEBAUTHN_RP_ID || '',
+    webauthnOrigin: process.env.WEBAUTHN_ORIGIN || '',
     // WhatsApp Gateway (Green API bridge) — OTP delivery goes through this service.
     waGatewayUrl: process.env.WA_GATEWAY_URL || '',
     // Pulseem SMS (Direct Send API) — used when the OTP method setting is 'sms'. Optional:

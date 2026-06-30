@@ -41,6 +41,7 @@ async function ensureIndexes() {
   const crawlerMessages = db.collection(config.mongodbCollectionCrawlerMessages || 'crawlerMessages')
   const magicLinks = db.collection(config.mongodbCollectionMagicLinks || 'magicLinks')
   const memberships = db.collection(config.mongodbCollectionMemberships || 'memberships')
+  const webauthnCredentials = db.collection(config.mongodbCollectionWebauthnCredentials || 'webauthnCredentials')
 
   const DAY = 24 * 60 * 60
 
@@ -91,6 +92,11 @@ async function ensureIndexes() {
     memberships.createIndex({ publisherId: 1, accountId: 1 }, { unique: true }),
     memberships.createIndex({ accountId: 1 }),
     memberships.createIndex({ publisherId: 1 }),
+
+    // Passkeys (staff 2nd factor): {publisherId} = a user's credentials; {credentialId} unique = the
+    // assertion lookup (and prevents the same authenticator enrolling twice).
+    webauthnCredentials.createIndex({ publisherId: 1 }),
+    webauthnCredentials.createIndex({ credentialId: 1 }, { unique: true }),
   ])
 
   // Crawler dedup lookup key MUST be unique so the ingest claim (insertOne → E11000 on a

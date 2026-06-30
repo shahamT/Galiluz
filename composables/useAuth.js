@@ -6,8 +6,45 @@ export function useAuth() {
   }
 
   async function verifyOtp(phone, otp) {
-    // Server sets HttpOnly cookie; we only receive user info back
+    // Server sets the HttpOnly session cookie (for publishers, and for staff still in the
+    // passkey-enrollment grace window). Staff WITH a passkey get no session yet — they return
+    // { mfaRequired, authOptions } and the caller runs the passkey step (verifyPasskey).
     const res = await $fetch('/api/auth/verify-otp', { method: 'POST', body: { phone, otp } })
+    if (res.mfaRequired) return res
+    authStore.login(res.user)
+    return res
+  }
+
+  async function verifyPasskey(authOptions) {
+    // Browser-only WebAuthn ceremony — dynamic import keeps it out of the SSR bundle.
+    const { startAuthentication } = await import('@simplewebauthn/browser')
+    const assertion = await startAuthentication({ optionsJSON: authOptions })
+    const res = await $fetch('/api/auth/verify-passkey', { method: 'POST', body: { response: assertion } })
+    authStore.login(res.user)
+    return res
+  }
+
+  async function registerPasskey(deviceName = '') {
+    const { startRegistration } = await import('@simplewebauthn/browser')
+    const options = await $fetch('/api/auth/passkey/register-options', { method: 'POST' })
+    const attestation = await startRegistration({ optionsJSON: options })
+    return $fetch('/api/auth/passkey/register-verify', { method: 'POST', body: { response: attestation, deviceName } })
+  }
+
+  async function listPasskeys() {
+    return $fetch('/api/auth/passkey/credentials')
+  }
+
+  async function deletePasskey(id) {
+    return $fetch(`/api/auth/passkey/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  }
+
+  async function listMyAccounts() {
+    return $fetch('/api/auth/accounts')
+  }
+
+  async function selectAccount(accountId) {
+    const res = await $fetch('/api/auth/select-account', { method: 'POST', body: { accountId } })
     authStore.login(res.user)
     return res
   }
@@ -30,5 +67,5 @@ export function useAuth() {
     }
   }
 
-  return { sendOtp, verifyOtp, logout, checkAuth }
+  return { sendOtp, verifyOtp, verifyPasskey, registerPasskey, listPasskeys, deletePasskey, listMyAccounts, selectAccount, logout, checkAuth }
 }

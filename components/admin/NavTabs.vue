@@ -29,8 +29,9 @@ defineOptions({ name: 'AdminNavTabs' })
 
 const route = useRoute()
 const authStore = useAuthStore()
-// Settings = platform governance (crawler/broadcasts/approvers) — viewers have nothing there.
-const canSeeSettings = computed(() => authStore.isSuperAdmin)
+// Settings (ניהול): governance pages are super_admin/owner, but every staffer has the
+// "my passkeys" settings page here — so the tab shows for any platform staff (incl. viewer).
+const canSeeSettings = computed(() => authStore.isPlatformStaff)
 const { count: pendingCount } = useApprovalsCount()
 const isDashboard = computed(() => route.path === '/admin/dashboard' || route.path === '/admin')
 const isEvents = computed(() => route.path.startsWith('/admin/events'))

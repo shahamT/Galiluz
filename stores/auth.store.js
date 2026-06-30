@@ -10,6 +10,8 @@ export const useAuthStore = defineStore('auth', () => {
   const isPlatformStaff = computed(() => !!user.value?.platformRole)
   /** Any authenticated user can act on their own resources. */
   const canManageOwn = computed(() => !!user.value)
+  /** Staff who haven't enrolled a passkey yet (auto-migrate grace) — client forces enrollment. */
+  const mfaEnrollRequired = computed(() => user.value?.mfaEnrollRequired === true)
   /**
    * Account-level feature entitlement check (UI gating only — the server
    * independently withholds gated data). The server sends a fully-resolved map
@@ -41,5 +43,5 @@ export const useAuthStore = defineStore('auth', () => {
     authReady.value = false
   }
 
-  return { user, authReady, isLoggedIn, isPlatformOwner, isSuperAdmin, isPlatformStaff, canManageOwn, hasFeature, hasPreference, setUser, login, logout, setAuthReady, resetAuthReady }
+  return { user, authReady, isLoggedIn, isPlatformOwner, isSuperAdmin, isPlatformStaff, canManageOwn, mfaEnrollRequired, hasFeature, hasPreference, setUser, login, logout, setAuthReady, resetAuthReady }
 })
