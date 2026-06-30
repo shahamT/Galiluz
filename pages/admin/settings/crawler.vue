@@ -34,6 +34,29 @@
       </div>
     </section>
 
+    <!-- Draft-notice delivery channel (to the publisher) -->
+    <section class="CrawlerSettings-card">
+      <div class="CrawlerSettings-sectionHead">
+        <h2 class="CrawlerSettings-sectionTitle">ערוץ יידוע למפרסם</h2>
+      </div>
+      <p class="CrawlerSettings-sectionHint">כשנוצרת טיוטה אוטומטית, באיזה ערוץ לשלוח למפרסם את ההודעה עם הקישור לעריכה. ברירת המחדל היא וואטסאפ.</p>
+      <div class="CrawlerSettings-methods">
+        <button
+          v-for="opt in noticeMethods"
+          :key="opt.value"
+          type="button"
+          class="CrawlerSettings-method"
+          :class="{ 'CrawlerSettings-method--active': draftNoticeMethod === opt.value }"
+          :disabled="savingNoticeMethod"
+          @click="setDraftNoticeMethod(opt.value)"
+        >
+          <UiIcon :name="opt.icon" size="sm" class="CrawlerSettings-itemIcon" />
+          <span class="CrawlerSettings-itemName">{{ opt.label }}</span>
+          <UiIcon v-if="draftNoticeMethod === opt.value" name="check_circle" size="sm" />
+        </button>
+      </div>
+    </section>
+
     <!-- AI-decision log (prod only) -->
     <section class="CrawlerSettings-card">
       <div class="CrawlerSettings-toggleRow">
@@ -162,6 +185,14 @@ const allPublishers = ref([])
 const savingToggle = ref(false)
 const showAddGroup = ref(false)
 
+// Draft-notice delivery channel to the publisher (whatsapp | sms).
+const draftNoticeMethod = ref('whatsapp')
+const savingNoticeMethod = ref(false)
+const noticeMethods = [
+  { value: 'whatsapp', label: 'וואטסאפ', icon: 'chat' },
+  { value: 'sms', label: 'SMS', icon: 'sms' },
+]
+
 // AI-decision log (prod only): on/off + the target WhatsApp group.
 const logDecisions = ref(false)
 const logGroup = ref(null)
@@ -216,6 +247,7 @@ async function loadSettings() {
   groups.value = Array.isArray(res?.groups) ? res.groups : []
   logDecisions.value = res?.logDecisions === true
   logGroup.value = res?.logGroup || null
+  draftNoticeMethod.value = res?.draftNoticeMethod === 'sms' ? 'sms' : 'whatsapp'
 }
 async function loadPublishers() {
   const [opted, all] = await Promise.all([
@@ -237,6 +269,21 @@ async function toggleEnabled() {
     console.error('[crawler-settings] toggle failed', err)
   } finally {
     savingToggle.value = false
+  }
+}
+
+async function setDraftNoticeMethod(next) {
+  if (savingNoticeMethod.value || next === draftNoticeMethod.value) return
+  savingNoticeMethod.value = true
+  const prev = draftNoticeMethod.value
+  draftNoticeMethod.value = next // optimistic
+  try {
+    await $fetch('/api/admin/settings/crawler', { method: 'PATCH', body: { draftNoticeMethod: next } })
+  } catch (err) {
+    draftNoticeMethod.value = prev // revert on failure
+    console.error('[crawler-settings] notice method failed', err)
+  } finally {
+    savingNoticeMethod.value = false
   }
 }
 
@@ -357,6 +404,18 @@ onMounted(() => {
   &-sectionHead { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-sm); }
   &-sectionTitle { margin: 0; font-size: var(--font-size-lg); font-weight: 600; color: var(--brand-dark-green); }
   &-sectionHint { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-light); }
+
+  &-methods { display: flex; gap: var(--spacing-sm); @include mobile { flex-direction: column; } }
+  &-method {
+    flex: 1; display: flex; align-items: center; gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1.5px solid var(--color-border); border-radius: var(--radius-md);
+    background: transparent; cursor: pointer; font-family: var(--font-family-body);
+    transition: border-color 0.15s, background 0.15s;
+    &:not(:disabled):hover { border-color: var(--brand-dark-green); }
+    &:disabled { opacity: 0.6; cursor: default; }
+    &--active { border-color: var(--brand-dark-green); background: var(--brand-dark-green-tint-light); }
+  }
 
   &-addBtn {
     display: inline-flex; align-items: center; gap: var(--spacing-xs);

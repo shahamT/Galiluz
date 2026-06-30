@@ -14,6 +14,7 @@ import { uploadBufferToCloudinary } from '~/server/utils/cloudinary'
 import { safeFetchImage } from '~/server/utils/safeImageFetch'
 import { issueMagicLink } from '~/server/utils/magicLink'
 import { notifyLog } from '~/server/utils/notifyLog'
+import { sendSms } from '~/server/utils/pulseem'
 import { maybeSweepExpiredCrawlerDrafts } from '~/server/utils/crawlerCleanup'
 import { logEventCreation } from '~/server/utils/eventLogs.service'
 import { getCategoriesList } from '~/consts/events.const.js'
@@ -305,35 +306,48 @@ export default defineEventHandler(async (event) => {
     // `?modal=edit` makes the details page open the edit modal on arrival
     // (EventDetailView reads route.query.modal) — the publisher lands ready to review.
     const link = await issueMagicLink(publisherId, `/publisher/events/${draftId}?modal=edit`)
-    const gatewayUrl = (config.waGatewayUrl || process.env.WA_GATEWAY_URL || '').replace(/\/$/, '')
     const apiSecret = config.apiSecret || process.env.API_SECRET || ''
     // Dev convenience (mirrors the OTP terminal print): surface the link so it can
     // be tested without a reachable gateway. Never log it in production.
     if (link && process.env.NODE_ENV !== 'production') {
       console.info(`[Crawler][DEV] Magic link for ${waId}: ${link}`)
     }
-    if (link && gatewayUrl) {
+    if (link) {
       const message = buildCrawlerNotification(String(publisher.fullName || ''), String(eventObj.Title || ''), link)
-      await $fetch(`${gatewayUrl}/internal/send-message`, {
-        method: 'POST',
-        headers: { 'x-api-secret': apiSecret },
-        body: { phone: waId, message },
-        timeout: 15000,
-      })
-      notified = true
+      // Delivery channel is configurable on the crawler settings page (default WhatsApp).
+      // When the WhatsApp business account is unavailable, the owner can switch this to SMS.
+      const method = crawler.draftNoticeMethod === 'sms' ? 'sms' : 'whatsapp'
+      if (method === 'sms') {
+        // SMS can't render WhatsApp bold (*) — strip the markers.
+        await sendSms(waId, message.replace(/\*/g, ''))
+        notified = true
+      } else {
+        const gatewayUrl = (config.waGatewayUrl || process.env.WA_GATEWAY_URL || '').replace(/\/$/, '')
+        if (gatewayUrl) {
+          await $fetch(`${gatewayUrl}/internal/send-message`, {
+            method: 'POST',
+            headers: { 'x-api-secret': apiSecret },
+            body: { phone: waId, message },
+            timeout: 15000,
+          })
+          notified = true
+        }
+      }
 
       // Only AFTER the publisher was notified, surface the new draft to the log group
       // (plain notice; best-effort — notifyLog never throws).
-      const account = await resolveAccountTitle({ accountId: publisher.accountId, accountName: publisher.accountName, waId })
-      const logMsg = buildApproverDraftNotification({
-        title: String(eventObj.Title || ''),
-        account,
-        publisherName: String(publisher.fullName || ''),
-        phone: waId,
-        eventId: draftId,
-        groupName,
-      })
-      await notifyLog(logMsg)
+      if (notified) {
+        const account = await resolveAccountTitle({ accountId: publisher.accountId, accountName: publisher.accountName, waId })
+        const logMsg = buildApproverDraftNotification({
+          title: String(eventObj.Title || ''),
+          account,
+          publisherName: String(publisher.fullName || ''),
+          phone: waId,
+          eventId: draftId,
+          groupName,
+        })
+        await notifyLog(logMsg)
+      }
     }
   } catch (err) {
     console.error('[crawler/ingest] notify failed:', err instanceof Error ? err.message : String(err))
