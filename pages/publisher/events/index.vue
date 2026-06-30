@@ -6,8 +6,8 @@
 
     <div class="PublisherEvents-body">
       <div class="PublisherEvents-header">
-        <h1 class="PublisherEvents-title">האירועים שלי</h1>
-        <p class="PublisherEvents-description">כאן תוכל/י לנהל, לערוך ולעקוב אחר כל האירועים שפרסמת.</p>
+        <h1 class="PublisherEvents-title">אירועים</h1>
+        <p class="PublisherEvents-description">כאן תוכל/י לנהל, לערוך ולעקוב אחר כל האירועים בחשבון שלך.</p>
       </div>
 
       <div class="PublisherEvents-container">
@@ -83,7 +83,7 @@
 <script setup>
 defineOptions({ name: 'PublisherEvents' })
 definePageMeta({ middleware: 'auth' })
-useHead({ title: 'האירועים שלי | גלילו"ז' })
+useHead({ title: 'אירועים | גלילו"ז' })
 
 const route = useRoute()
 const router = useRouter()

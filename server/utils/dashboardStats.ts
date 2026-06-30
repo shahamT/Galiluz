@@ -1,3 +1,4 @@
+import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { getTodayIsrael } from '~/server/utils/eventFirstOccurrence'
 
@@ -29,6 +30,9 @@ export interface DashboardScope {
   logsPubFilter: Record<string, unknown>
   /** 'all' | 'active' | 'month' — date scope for the filtered stats. */
   filter: string
+  /** The viewer's own publisherId — the actor name is OMITTED on their own log rows
+   *  (so the account feed only names OTHER publishers' actions). */
+  selfPublisherId?: string
   /** Account entitlement `globalStats`. When false, `totals` is null and top-event
    *  rows omit view/visitor numbers (ranking is preserved). Gated by the caller. */
   includeStats: boolean
@@ -41,7 +45,7 @@ export interface DashboardScope {
  * scoping inputs; the date/deletedAt logic and aggregation shape are identical for both.
  */
 export async function computeDashboard(scope: DashboardScope) {
-  const { statsPubFilter, eventsPubFilter, logsPubFilter, filter, includeStats } = scope
+  const { statsPubFilter, eventsPubFilter, logsPubFilter, filter, includeStats, selfPublisherId } = scope
 
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()
@@ -240,14 +244,33 @@ export async function computeDashboard(scope: DashboardScope) {
   // ── 6. Recent logs ────────────────────────────────────────────────────────
   const rawLogs = await logsCol.find(
     { ...logsPubFilter, action: { $in: PUBLISHER_LOG_ACTIONS } },
-    { sort: { createdAt: -1 }, limit: 6, projection: { action: 1, title: 1, rawTitle: 1, createdAt: 1 } },
+    { sort: { createdAt: -1 }, limit: 6, projection: { action: 1, title: 1, rawTitle: 1, createdAt: 1, publisherId: 1 } },
   ).toArray()
 
-  const recentLogs = rawLogs.map((l: any) => ({
-    action: l.action,
-    title: l.title || l.rawTitle || '',
-    createdAt: l.createdAt instanceof Date ? l.createdAt.toISOString() : (l.createdAt || ''),
-  }))
+  // Resolve actor names for rows performed by OTHER publishers in the scope, so the account
+  // feed names who did what (the viewer's own rows stay nameless — handled in the map below).
+  const otherPubIds = [...new Set(
+    rawLogs.map((l: any) => (l.publisherId ? String(l.publisherId) : '')).filter((id: string) => id && id !== selfPublisherId),
+  )]
+  const nameById: Record<string, string> = {}
+  if (otherPubIds.length) {
+    const pubsCol = db.collection(config.mongodbCollectionPublishers || 'publishers')
+    const objIds = otherPubIds.map((id) => { try { return new ObjectId(id) } catch { return null } }).filter(Boolean) as ObjectId[]
+    const pubs = await pubsCol.find({ _id: { $in: objIds } }, { projection: { fullName: 1 } }).toArray()
+    for (const p of pubs) nameById[p._id.toString()] = (p.fullName as string) || ''
+  }
+
+  const recentLogs = rawLogs.map((l: any) => {
+    const pid = l.publisherId ? String(l.publisherId) : ''
+    return {
+      action: l.action,
+      title: l.title || l.rawTitle || '',
+      createdAt: l.createdAt instanceof Date ? l.createdAt.toISOString() : (l.createdAt || ''),
+      // Name of the acting publisher — only when it's NOT the viewer (so the feed can show
+      // "<name> created …" for account-mates, and second-person phrasing for the viewer).
+      publisherName: pid && pid !== selfPublisherId ? (nameById[pid] || '') : '',
+    }
+  })
 
   // When `globalStats` is off, keep the ranking (title + date) but withhold the
   // view/visitor numbers — they must not reach the browser.

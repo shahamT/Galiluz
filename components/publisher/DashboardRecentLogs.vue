@@ -23,7 +23,12 @@
         </span>
         <div class="DashboardRecentLogs-info">
           <span class="DashboardRecentLogs-text">
-            {{ prefixFor(log.action) }} <strong>{{ truncateTitle(log.title) }}</strong>{{ suffixFor(log.action) }}
+            <template v-if="log.publisherName">
+              <span class="DashboardRecentLogs-author">{{ log.publisherName }}</span> {{ prefixForOther(log.action) }} <strong>{{ truncateTitle(log.title) }}</strong>{{ suffixFor(log.action) }}
+            </template>
+            <template v-else>
+              {{ prefixFor(log.action) }} <strong>{{ truncateTitle(log.title) }}</strong>{{ suffixFor(log.action) }}
+            </template>
           </span>
           <span class="DashboardRecentLogs-time">{{ relativeTime(log.createdAt) }}</span>
         </div>
@@ -61,6 +66,17 @@ function prefixFor(action) {
   if (action === 'event_deactivated') return 'הפכת את'
   if (action === 'event_edited') return 'עדכנת את'
   if (action === 'event_deleted') return 'מחקת אירוע:'
+  return ''
+}
+
+// Third-person phrasing used when the actor is another publisher in the account
+// (the name is rendered before this verb).
+function prefixForOther(action) {
+  if (action === 'event_created') return 'יצר/ה את'
+  if (action === 'event_activated') return 'פרסם/ה את'
+  if (action === 'event_deactivated') return 'הפך/ה את'
+  if (action === 'event_edited') return 'עדכן/ה את'
+  if (action === 'event_deleted') return 'מחק/ה אירוע:'
   return ''
 }
 
@@ -140,6 +156,11 @@ function relativeTime(iso) {
     font-size: var(--font-size-sm);
     color: var(--color-text);
     line-height: 1.4;
+  }
+
+  &-author {
+    font-weight: 600;
+    color: var(--brand-dark-green);
   }
 
   &-time {
