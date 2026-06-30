@@ -13,7 +13,7 @@ Related docs: [DATA_MODEL.md](DATA_MODEL.md) (memberships/accounts shapes), [API
 ## Authentication: staff need a second factor (passkey)
 Authorization (below) decides *what* a role can do; authentication decides *who gets in*. Publishers log in with **WhatsApp OTP** alone. **Platform staff** (anyone with a `platformRole`) must additionally present a **WebAuthn passkey** every login — true MFA, enforced at login:
 - `verify-otp` mints a session for publishers as today, but for staff returns `{ mfaRequired }` + a short-lived pre-auth token (no usable session yet); `verify-passkey` completes the assertion and only then issues the real session. Magic-link login is refused for staff (no passkey bypass).
-- **Per-staffer auto-migrate:** a staffer with no passkey can log in via OTP once but is forced to enroll at `/admin/security` before using the portal (`mfaEnrollRequired`); after enrolling ≥1, the passkey is required.
+- **Per-staffer auto-migrate:** a staffer with no passkey can log in via OTP once but is forced to enroll at `/admin/settings/security` (ניהול → "מפתחות הגישה שלי", a settings page open to all platform staff incl. viewer) before using the portal (`mfaEnrollRequired`); after enrolling ≥1, the passkey is required.
 - **Recovery:** the `platform_owner` resets a staffer's passkeys ([admin/publisher/[id]/reset-passkeys.post.ts](../server/api/admin/publisher/[id]/reset-passkeys.post.ts), owner-only) → they re-enroll OTP-only next login; [scripts/reset-passkeys.js](../scripts/reset-passkeys.js) is the owner's break-glass. Implementation: [server/utils/webauthn.ts](../server/utils/webauthn.ts) + `server/api/auth/passkey/*`.
 
 ---

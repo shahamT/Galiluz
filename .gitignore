@@ -111,3 +111,6 @@ apps/wa-listener/data/media/
 apps/wa-listener/.wwebjs_cache/
 apps/wa-listener/*.log
 tests/eval/.last-run.txt
+
+# Eval run reports (best-effort writes; regenerated each `npm run eval:*`)
+tests/eval/.last-*.txt

@@ -16,11 +16,6 @@
       <span class="AdminNavTabs-labelMobile">חשבונות</span>
       <span v-if="pendingCount > 0" class="AdminNavTabs-badge">{{ pendingCount > 99 ? '99+' : pendingCount }}</span>
     </NuxtLink>
-    <NuxtLink to="/admin/security" class="AdminNavTabs-tab" :class="{ 'AdminNavTabs-tab--active': isSecurity }">
-      <UiIcon name="key" size="sm" class="AdminNavTabs-tabIcon" />
-      <span class="AdminNavTabs-label">מפתחות גישה</span>
-      <span class="AdminNavTabs-labelMobile">מפתחות</span>
-    </NuxtLink>
     <NuxtLink v-if="canSeeSettings" to="/admin/settings" class="AdminNavTabs-tab" :class="{ 'AdminNavTabs-tab--active': isSettings }">
       <UiIcon name="settings" size="sm" class="AdminNavTabs-tabIcon" />
       <span class="AdminNavTabs-label">ניהול</span>
@@ -34,13 +29,13 @@ defineOptions({ name: 'AdminNavTabs' })
 
 const route = useRoute()
 const authStore = useAuthStore()
-// Settings = platform governance (crawler/broadcasts/approvers) — viewers have nothing there.
-const canSeeSettings = computed(() => authStore.isSuperAdmin)
+// Settings (ניהול): governance pages are super_admin/owner, but every staffer has the
+// "my passkeys" settings page here — so the tab shows for any platform staff (incl. viewer).
+const canSeeSettings = computed(() => authStore.isPlatformStaff)
 const { count: pendingCount } = useApprovalsCount()
 const isDashboard = computed(() => route.path === '/admin/dashboard' || route.path === '/admin')
 const isEvents = computed(() => route.path.startsWith('/admin/events'))
 const isAccounts = computed(() => route.path.startsWith('/admin/accounts') || route.path.startsWith('/admin/account/'))
-const isSecurity = computed(() => route.path.startsWith('/admin/security'))
 const isSettings = computed(() => route.path.startsWith('/admin/settings'))
 </script>
 

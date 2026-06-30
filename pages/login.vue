@@ -132,20 +132,20 @@
         </form>
       </template>
 
-      <!-- State: select account (publisher in 2+ business accounts) -->
+      <!-- State: select context — business account(s) and/or the management portal -->
       <template v-else-if="state === 'selectAccount'">
         <h1 class="LoginCard-title">בחירת חשבון</h1>
-        <p class="LoginCard-subtitle">לאיזה חשבון להיכנס?</p>
+        <p class="LoginCard-subtitle">לאן להיכנס?</p>
 
         <p v-if="selectError" class="LoginCard-error">{{ selectError }}</p>
 
         <ul class="LoginCard-accounts">
           <li v-for="acc in accountChoices" :key="acc.accountId">
-            <button type="button" class="LoginCard-account" :disabled="loading" @click="chooseAccount(acc.accountId)">
-              <img :src="acc.logo || '/logos/galiluz-icon.svg'" :alt="acc.title" class="LoginCard-accountLogo" />
+            <button type="button" class="LoginCard-account" :disabled="loading" @click="chooseAccount(acc)">
+              <img :src="acc.logo" :alt="acc.title" class="LoginCard-accountLogo" />
               <span class="LoginCard-accountText">
                 <span class="LoginCard-accountName">{{ acc.title }}</span>
-                <span class="LoginCard-accountRole">{{ roleLabel(acc.role) }}</span>
+                <span class="LoginCard-accountRole">{{ acc.roleLabel }}</span>
               </span>
             </button>
           </li>
@@ -395,35 +395,62 @@ async function proceedAfterAuth(res) {
     state.value = 'enrollPasskey'
     return
   }
+
+  // Build the list of contexts the user can enter: their business account(s) (publisher
+  // portal) plus, if they're platform staff, the management portal. Shown only when there
+  // are 2+ choices (e.g. a publisher who is ALSO a super-admin gets business + management).
+  const choices = []
   try {
     const accounts = await listMyAccounts()
-    if (Array.isArray(accounts) && accounts.length >= 2) {
-      accountChoices.value = accounts
-      state.value = 'selectAccount'
-      return
+    for (const a of (Array.isArray(accounts) ? accounts : [])) {
+      choices.push({
+        kind: 'business',
+        accountId: a.accountId,
+        title: a.title,
+        logo: a.logo || '/logos/galiluz-icon.svg',
+        roleLabel: a.role === 'owner' ? 'בעלים' : 'מנהל/ת',
+      })
     }
-  } catch { /* couldn't load accounts — fall through to normal navigation */ }
+  } catch { /* couldn't load business accounts — continue with whatever we have */ }
+
+  if (authStore.isPlatformStaff) {
+    const pr = authStore.user?.platformRole
+    choices.push({
+      kind: 'admin',
+      accountId: '__admin__',
+      title: 'ניהול הפלטפורמה',
+      logo: '/logos/galiluz-icon.svg',
+      roleLabel: pr === 'platform_owner' ? 'בעלים' : pr === 'viewer' ? 'צפייה בלבד' : 'סופר אדמין',
+    })
+  }
+
+  if (choices.length >= 2) {
+    accountChoices.value = choices
+    state.value = 'selectAccount'
+    return
+  }
   state.value = 'success'
   finishLogin(res)
 }
 
-async function chooseAccount(accountId) {
+async function chooseAccount(choice) {
   if (loading.value) return
   selectError.value = ''
   loading.value = true
   try {
-    const res = await selectAccount(accountId)
+    if (choice.kind === 'admin') {
+      // Enter the management portal; the active business account is left unchanged.
+      state.value = 'success'
+      setTimeout(() => navigateTo('/admin'), 800)
+      return
+    }
+    await selectAccount(choice.accountId)
     state.value = 'success'
-    finishLogin(res)
+    setTimeout(() => navigateTo('/publisher/dashboard'), 800)
   } catch {
     selectError.value = 'בחירת החשבון נכשלה. נסו שוב.'
-  } finally {
     loading.value = false
   }
-}
-
-function roleLabel(role) {
-  return role === 'owner' ? 'בעלים' : role === 'admin' ? 'מנהל/ת' : ''
 }
 
 // First-time staff enrollment from the login screen: create a passkey, refresh the session

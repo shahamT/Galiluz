@@ -10,4 +10,6 @@ export const ADMIN_SETTINGS_NAV = [
   { to: '/admin/settings/crawler', label: 'קראולר וואטסאפ — טיוטות אוטומטיות', icon: 'smart_toy', minRole: 'super_admin' },
   { to: '/admin/settings/approvers', label: 'ניהול מאשרים', icon: 'verified_user', minRole: 'owner' },
   { to: '/admin/settings/broadcast-messages', label: 'שליחת הודעות למפרסמים', icon: 'send', minRole: 'super_admin' },
+  // Every staffer manages their own passkeys here (incl. read-only viewers) — minRole 'staff'.
+  { to: '/admin/settings/security', label: 'מפתחות הגישה שלי', icon: 'key', minRole: 'staff' },
 ]
