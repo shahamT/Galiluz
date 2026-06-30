@@ -8,11 +8,17 @@ import { setAppSetting } from '~/server/utils/appSettings'
  */
 export default defineEventHandler(async (event) => {
   const session = await requirePublisherAuth(event, { requireSuperAdmin: true })
-  const body = await readBody<{ enabled?: unknown; logDecisions?: unknown }>(event)
+  const body = await readBody<{ enabled?: unknown; logDecisions?: unknown; draftNoticeMethod?: unknown }>(event)
 
-  const patch: Record<string, boolean> = {}
+  const patch: Record<string, boolean | string> = {}
   if (body && 'enabled' in body) patch.enabled = body.enabled === true
   if (body && 'logDecisions' in body) patch.logDecisions = body.logDecisions === true
+  if (body && 'draftNoticeMethod' in body) {
+    if (body.draftNoticeMethod !== 'whatsapp' && body.draftNoticeMethod !== 'sms') {
+      throw createError({ statusCode: 400, message: 'invalid draftNoticeMethod' })
+    }
+    patch.draftNoticeMethod = body.draftNoticeMethod
+  }
   if (Object.keys(patch).length === 0) {
     throw createError({ statusCode: 400, message: 'no settable field provided' })
   }
