@@ -16,6 +16,11 @@
       <span class="AdminNavTabs-labelMobile">חשבונות</span>
       <span v-if="pendingCount > 0" class="AdminNavTabs-badge">{{ pendingCount > 99 ? '99+' : pendingCount }}</span>
     </NuxtLink>
+    <NuxtLink to="/admin/security" class="AdminNavTabs-tab" :class="{ 'AdminNavTabs-tab--active': isSecurity }">
+      <UiIcon name="key" size="sm" class="AdminNavTabs-tabIcon" />
+      <span class="AdminNavTabs-label">מפתחות גישה</span>
+      <span class="AdminNavTabs-labelMobile">מפתחות</span>
+    </NuxtLink>
     <NuxtLink v-if="canSeeSettings" to="/admin/settings" class="AdminNavTabs-tab" :class="{ 'AdminNavTabs-tab--active': isSettings }">
       <UiIcon name="settings" size="sm" class="AdminNavTabs-tabIcon" />
       <span class="AdminNavTabs-label">ניהול</span>
@@ -35,6 +40,7 @@ const { count: pendingCount } = useApprovalsCount()
 const isDashboard = computed(() => route.path === '/admin/dashboard' || route.path === '/admin')
 const isEvents = computed(() => route.path.startsWith('/admin/events'))
 const isAccounts = computed(() => route.path.startsWith('/admin/accounts') || route.path.startsWith('/admin/account/'))
+const isSecurity = computed(() => route.path.startsWith('/admin/security'))
 const isSettings = computed(() => route.path.startsWith('/admin/settings'))
 </script>
 

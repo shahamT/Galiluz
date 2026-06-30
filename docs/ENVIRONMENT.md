@@ -75,7 +75,8 @@ Create each group, add its variables, and set the value. **Value** column: a lit
 | | `NUXT_PUBLIC_POSTHOG_IN_DEV` | `false` | |
 | **galiluz-app-web** | `OTP_SECRET` | 🔒 enter | ≥32 chars |
 | | `WA_GATEWAY_URL` | enter | gateway URL, e.g. `https://galiluz-wa-gateway.onrender.com` |
-| | `NUXT_PUBLIC_SITE_URL` | `https://galiluz.co.il` | |
+| | `NUXT_PUBLIC_SITE_URL` | `https://galiluz.co.il` | also the WebAuthn rpID/origin source |
+| | `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` | (blank/optional) | auto-derived from `NUXT_PUBLIC_SITE_URL`; set only for a non-primary domain |
 | **galiluz-app-wa-bot** | `GALILUZ_APP_URL` | `https://galiluz.co.il` | |
 | | `APPROVER_REENGAGEMENT_TEMPLATE_NAME` | (blank/optional) | |
 | | `APPROVER_REENGAGEMENT_TEMPLATE_LANGUAGE` | `he` | |

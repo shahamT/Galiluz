@@ -27,6 +27,12 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo('/publisher/dashboard')
   }
 
+  // Staff who haven't enrolled a passkey yet (auto-migrate grace) are forced to the security
+  // page until they add one — the server already gave them a session, this just blocks the UI.
+  if (authenticated && authStore.mfaEnrollRequired && to.path !== '/admin/security') {
+    return navigateTo('/admin/security')
+  }
+
   // Sub-area gating (mutations are also server-enforced; this keeps a role out of pages it can't use).
   // Settings = platform governance: viewers have none; approvers config is owner-only.
   if (isAdminRoute && authenticated) {

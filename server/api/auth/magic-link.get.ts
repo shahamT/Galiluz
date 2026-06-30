@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
 import { hashMagicToken } from '~/server/utils/magicLink'
 import { checkRateLimit } from '~/server/utils/rateLimit'
+import { resolvePublisherRoles } from '~/server/utils/accountScope'
 
 const AUTH_KEY_EXPIRY_MS = 60 * 60 * 1000 // 1 hour — same as OTP login
 
@@ -42,10 +43,18 @@ export default defineEventHandler(async (event) => {
   const publishers = db.collection((config as Record<string, string>).mongodbCollectionPublishers || 'publishers')
   // Mirror the OTP/session gate: only an approved, ACTIVE, non-deleted publisher gets a session
   // (a deactivated/soft-deleted publisher must not log in via an outstanding magic link).
-  const pub = await publishers.findOne({ _id: pubObjId }, { projection: { status: 1, isActive: 1, deletedAt: 1 } })
+  const pub = await publishers.findOne({ _id: pubObjId }, { projection: { status: 1, isActive: 1, deletedAt: 1, accountId: 1 } })
   if (!pub || pub.status !== 'approved' || pub.isActive === false || pub.deletedAt) {
     await links.updateOne({ _id: link._id }, { $set: { usedAt: now } }) // burn it regardless
     return sendRedirect(event, '/login', 302)
+  }
+
+  // Platform staff must clear the passkey second factor — a magic link must never mint a staff
+  // session that bypasses it. Burn the link and send them through the normal OTP + passkey login.
+  const roles = await resolvePublisherRoles({ publisherId: pubObjId.toString(), accountId: pub.accountId })
+  if (roles.isPlatformStaff) {
+    await links.updateOne({ _id: link._id }, { $set: { usedAt: now } })
+    return sendRedirect(event, '/login?error=staff_passkey', 302)
   }
 
   // Issue a normal session (mirrors verify-otp).

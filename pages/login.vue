@@ -89,6 +89,69 @@
         </div>
       </template>
 
+      <!-- State: passkey (staff second factor) -->
+      <template v-else-if="state === 'passkey'">
+        <h1 class="LoginCard-title">אימות דו-שלבי</h1>
+        <p class="LoginCard-subtitle">אשרו את הכניסה עם מפתח הגישה שלכם — טביעת אצבע, זיהוי פנים או מפתח אבטחה.</p>
+
+        <p v-if="passkeyError" class="LoginCard-error">{{ passkeyError }}</p>
+
+        <button class="LoginCard-btn" :disabled="loading" @click="runPasskey">
+          <span v-if="loading" class="LoginCard-spinner" />
+          <template v-else>אימות עם מפתח גישה</template>
+        </button>
+
+        <div class="LoginCard-actions">
+          <button class="LoginCard-linkBtn" @click="resetToPhone">חזרה</button>
+        </div>
+      </template>
+
+      <!-- State: first-time staff passkey enrollment -->
+      <template v-else-if="state === 'enrollPasskey'">
+        <h1 class="LoginCard-title">הגדרת מפתח גישה</h1>
+        <p class="LoginCard-subtitle">לחשבונות צוות נדרש מפתח גישה (Passkey) כגורם אימות שני. צרו מפתח כדי להמשיך — טביעת אצבע, זיהוי פנים או מפתח אבטחה.</p>
+
+        <form class="LoginCard-form" @submit.prevent="createFirstPasskey">
+          <div class="LoginCard-field">
+            <input
+              v-model="enrollName"
+              type="text"
+              class="LoginCard-input"
+              placeholder="שם המכשיר — למשל: לפטופ עבודה"
+              :disabled="loading"
+              maxlength="60"
+            />
+          </div>
+
+          <p v-if="enrollError" class="LoginCard-error">{{ enrollError }}</p>
+
+          <button type="submit" class="LoginCard-btn" :disabled="loading || !enrollName.trim()">
+            <span v-if="loading" class="LoginCard-spinner" />
+            <template v-else>יצירת מפתח גישה</template>
+          </button>
+        </form>
+      </template>
+
+      <!-- State: select account (publisher in 2+ business accounts) -->
+      <template v-else-if="state === 'selectAccount'">
+        <h1 class="LoginCard-title">בחירת חשבון</h1>
+        <p class="LoginCard-subtitle">לאיזה חשבון להיכנס?</p>
+
+        <p v-if="selectError" class="LoginCard-error">{{ selectError }}</p>
+
+        <ul class="LoginCard-accounts">
+          <li v-for="acc in accountChoices" :key="acc.accountId">
+            <button type="button" class="LoginCard-account" :disabled="loading" @click="chooseAccount(acc.accountId)">
+              <img :src="acc.logo || '/logos/galiluz-icon.svg'" :alt="acc.title" class="LoginCard-accountLogo" />
+              <span class="LoginCard-accountText">
+                <span class="LoginCard-accountName">{{ acc.title }}</span>
+                <span class="LoginCard-accountRole">{{ roleLabel(acc.role) }}</span>
+              </span>
+            </button>
+          </li>
+        </ul>
+      </template>
+
       <!-- State: success -->
       <template v-else-if="state === 'success'">
         <div class="LoginCard-success">
@@ -107,7 +170,7 @@ defineOptions({ name: 'LoginPage' })
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'כניסה | גלילו"ז' })
 
-const { sendOtp, verifyOtp } = useAuth()
+const { sendOtp, verifyOtp, verifyPasskey, registerPasskey, listMyAccounts, selectAccount, checkAuth } = useAuth()
 const { capture } = usePosthog()
 const authStore = useAuthStore()
 const { enabled: turnstileEnabled, render: renderTurnstile, reset: resetTurnstile, remove: removeTurnstile } = useTurnstile()
@@ -117,13 +180,22 @@ const { enabled: turnstileEnabled, render: renderTurnstile, reset: resetTurnstil
 // last-used number ourselves and pre-fill it on return — deterministic, device-local.
 const LAST_PHONE_KEY = 'galiluz:lastPhone'
 
-const state = ref('phone') // 'phone' | 'otp' | 'success'
+const state = ref('phone') // 'phone' | 'otp' | 'passkey' | 'enrollPasskey' | 'selectAccount' | 'success'
 const phone = ref('')
 const otpCode = ref('')
 const otpInputRef = ref(null)
 const loading = ref(false)
 const error = ref('')
 const notRegistered = ref(false)
+// Staff second factor: options returned by verify-otp, completed in the 'passkey' state.
+const mfaAuthOptions = ref(null)
+const passkeyError = ref('')
+// Multi-account picker: business accounts to choose from after auth (shown only when 2+).
+const accountChoices = ref([])
+const selectError = ref('')
+// First-time staff passkey enrollment (shown when a staffer has no passkey yet).
+const enrollName = ref('')
+const enrollError = ref('')
 const resendCountdown = ref(0)
 const cooldownError = ref(false) // a send hit the 60s cooldown → show the live countdown text
 let countdownTimer = null
@@ -278,17 +350,17 @@ async function handleVerifyOtp() {
   error.value = ''
   loading.value = true
   try {
-    await verifyOtp(phone.value, otpCode.value)
-    state.value = 'success'
-    const returnTo = route.query.returnTo
-    setTimeout(() => {
-      const rt = String(returnTo || '')
-      if (rt.startsWith('/') && !rt.startsWith('//') && !rt.startsWith('/\\')) {
-        navigateTo(rt)
-      } else {
-        navigateTo(authStore.isSuperAdmin ? '/admin' : '/publisher/dashboard')
-      }
-    }, 800)
+    const res = await verifyOtp(phone.value, otpCode.value)
+    // Staff with a passkey: OTP passed but no session yet — run the passkey assertion.
+    if (res?.mfaRequired) {
+      mfaAuthOptions.value = res.authOptions
+      state.value = 'passkey'
+      loading.value = false
+      await nextTick()
+      runPasskey() // auto-trigger the native prompt
+      return
+    }
+    await proceedAfterAuth(res)
   } catch (err) {
     error.value = parseErrorMessage(err)
     otpCode.value = ''
@@ -299,12 +371,102 @@ async function handleVerifyOtp() {
   }
 }
 
+async function runPasskey() {
+  if (!mfaAuthOptions.value || loading.value) return
+  passkeyError.value = ''
+  loading.value = true
+  try {
+    const res = await verifyPasskey(mfaAuthOptions.value)
+    await proceedAfterAuth(res)
+  } catch {
+    // Cancelled prompt / no matching authenticator / failed verification — let them retry.
+    passkeyError.value = 'האימות נכשל או בוטל. נסו שוב.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// After full authentication: publishers in 2+ business accounts pick one first; everyone
+// else proceeds straight to the portal. (Staff still in passkey-enrollment grace skip the
+// picker — they're routed to enrollment.)
+async function proceedAfterAuth(res) {
+  if (res?.mfaEnrollRequired) {
+    // First-time staff: enroll a passkey here (login-styled) before continuing.
+    state.value = 'enrollPasskey'
+    return
+  }
+  try {
+    const accounts = await listMyAccounts()
+    if (Array.isArray(accounts) && accounts.length >= 2) {
+      accountChoices.value = accounts
+      state.value = 'selectAccount'
+      return
+    }
+  } catch { /* couldn't load accounts — fall through to normal navigation */ }
+  state.value = 'success'
+  finishLogin(res)
+}
+
+async function chooseAccount(accountId) {
+  if (loading.value) return
+  selectError.value = ''
+  loading.value = true
+  try {
+    const res = await selectAccount(accountId)
+    state.value = 'success'
+    finishLogin(res)
+  } catch {
+    selectError.value = 'בחירת החשבון נכשלה. נסו שוב.'
+  } finally {
+    loading.value = false
+  }
+}
+
+function roleLabel(role) {
+  return role === 'owner' ? 'בעלים' : role === 'admin' ? 'מנהל/ת' : ''
+}
+
+// First-time staff enrollment from the login screen: create a passkey, refresh the session
+// (clears mfaEnrollRequired), then enter the admin portal. Only staff ever reach this state.
+async function createFirstPasskey() {
+  if (!enrollName.value.trim() || loading.value) return
+  enrollError.value = ''
+  loading.value = true
+  try {
+    await registerPasskey(enrollName.value.trim())
+    await checkAuth()
+    state.value = 'success'
+    setTimeout(() => navigateTo('/admin'), 800)
+  } catch {
+    enrollError.value = 'יצירת מפתח הגישה נכשלה או בוטלה. נסו שוב.'
+    loading.value = false
+  }
+}
+
+function finishLogin(res) {
+  const returnTo = route.query.returnTo
+  setTimeout(() => {
+    const rt = String(returnTo || '')
+    if (rt.startsWith('/') && !rt.startsWith('//') && !rt.startsWith('/\\')) {
+      navigateTo(rt)
+    } else {
+      navigateTo(authStore.isSuperAdmin ? '/admin' : '/publisher/dashboard')
+    }
+  }, 800)
+}
+
 function resetToPhone() {
   state.value = 'phone'
   otpCode.value = ''
   error.value = ''
   cooldownError.value = false
   notRegistered.value = false
+  mfaAuthOptions.value = null
+  passkeyError.value = ''
+  accountChoices.value = []
+  selectError.value = ''
+  enrollName.value = ''
+  enrollError.value = ''
   clearInterval(countdownTimer)
   resendCountdown.value = 0
 }
@@ -566,6 +728,63 @@ onUnmounted(() => {
   &-successIcon {
     font-size: 3rem;
     color: var(--brand-dark-green);
+  }
+
+  &-accounts {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  &-account {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-background);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: start;
+    font-family: var(--font-family-body);
+    transition: border-color 0.15s, background 0.15s;
+
+    &:not(:disabled):hover { border-color: var(--brand-dark-green); background: var(--brand-dark-green-tint-light); }
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+  }
+
+  &-accountLogo {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius-md);
+    object-fit: contain;
+    background: var(--color-surface);
+    flex-shrink: 0;
+  }
+
+  &-accountText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &-accountName {
+    font-weight: 700;
+    color: var(--brand-dark-green);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &-accountRole {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-light);
   }
 }
 </style>

@@ -28,6 +28,8 @@
     "@flasd/whatsapp-formatting": "^0.2.0",
     "@galiluz/event-format": "file:packages/event-format",
     "@pinia/nuxt": "^0.5.1",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.2",
     "@tiptap/extension-character-count": "^3.24.0",
     "@tiptap/extension-placeholder": "^3.24.0",
     "@tiptap/starter-kit": "^3.24.0",
