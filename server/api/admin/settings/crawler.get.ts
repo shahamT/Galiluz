@@ -14,5 +14,7 @@ export default defineEventHandler(async (event) => {
     logGroup: doc?.logGroupChatId
       ? { chatId: doc.logGroupChatId as string, name: (doc.logGroupName as string) || (doc.logGroupChatId as string) }
       : null,
+    // Channel for the "we drafted your event" notice sent to the publisher (default WhatsApp).
+    draftNoticeMethod: doc?.draftNoticeMethod === 'sms' ? 'sms' : 'whatsapp',
   }
 })
