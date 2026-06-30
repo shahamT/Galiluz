@@ -19,6 +19,13 @@
           <div class="UserAvatar-publishingAs">{{ authStore.user?.publishingAs }}</div>
           <div class="UserAvatar-phone" dir="ltr">{{ displayPhone }}</div>
         </div>
+        <template v-if="canSwitch">
+          <div class="UserAvatar-divider" aria-hidden="true" />
+          <button type="button" class="UserAvatar-switch" @click="openSwitch">
+            <UiIcon name="swap_horiz" size="sm" />
+            החלפת חשבון
+          </button>
+        </template>
         <div class="UserAvatar-divider" aria-hidden="true" />
         <button type="button" class="UserAvatar-logout" @click="handleLogout">
           <UiIcon name="logout" size="sm" />
@@ -26,6 +33,12 @@
         </button>
       </div>
     </Transition>
+
+    <LayoutSwitchAccountModal
+      v-if="showSwitch"
+      :business-accounts="businessAccounts"
+      @close="showSwitch = false"
+    />
   </div>
 </template>
 
@@ -33,12 +46,37 @@
 defineOptions({ name: 'UserAvatar' })
 
 const authStore = useAuthStore()
-const { logout } = useAuth()
+const { logout, listMyAccounts } = useAuth()
 const route = useRoute()
 const isProtectedRoute = computed(() => route.path.startsWith('/publisher') || route.path.startsWith('/admin'))
 
 const open = ref(false)
 const root = ref(null)
+
+// Account switcher: the switchable business accounts are loaded lazily the first time the
+// menu opens. The "החלפת חשבון" button shows only when the user has 2+ contexts to choose
+// from (business accounts + the management portal for platform staff) — single-account
+// publishers never see a dead-end. A failed/expired fetch simply leaves the button hidden.
+const businessAccounts = ref([])
+const accountsLoaded = ref(false)
+const showSwitch = ref(false)
+const canSwitch = computed(() =>
+  businessAccounts.value.length + (authStore.isPlatformStaff ? 1 : 0) >= 2
+)
+
+watch(open, async (isOpen) => {
+  if (!isOpen || accountsLoaded.value) return
+  accountsLoaded.value = true
+  try {
+    const accounts = await listMyAccounts()
+    businessAccounts.value = Array.isArray(accounts) ? accounts : []
+  } catch { /* expired/unavailable — keep the switch button hidden */ }
+})
+
+function openSwitch() {
+  open.value = false
+  showSwitch.value = true
+}
 
 const initials = computed(() => {
   const words = (authStore.user?.fullName || '').trim().split(/\s+/)
@@ -173,6 +211,24 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
   &-divider {
     height: 1px;
     background: var(--color-border);
+  }
+
+  &-switch {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family-body);
+    color: var(--color-text);
+    transition: background 0.15s;
+
+    &:hover { background: var(--color-surface); }
   }
 
   &-logout {
