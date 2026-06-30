@@ -1,5 +1,7 @@
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto'
 import type { Collection, Document } from 'mongodb'
+import { getAppSetting } from '~/server/utils/appSettings'
+import { sendOtpViaSms } from '~/server/utils/pulseem'
 
 /**
  * Shared OTP machinery for phone verification. Used by BOTH the login flow
@@ -124,6 +126,23 @@ export async function sendOtpViaGateway(waId: string, otp: string): Promise<void
     console.error('[Auth] CRITICAL: WA_GATEWAY_URL missing in production — OTP not sent')
     throw createError({ statusCode: 503, statusMessage: 'Service Unavailable', message: 'messaging_unavailable' })
   }
+}
+
+/**
+ * Deliver an OTP via the channel configured in appSettings('otp').method — 'sms' (Pulseem) or
+ * 'whatsapp' (the gateway). Default WhatsApp. A failure reading the setting never breaks login:
+ * it falls back to WhatsApp. Used by BOTH login (send-otp) and registration (register/start).
+ */
+export async function deliverOtp(waId: string, otp: string): Promise<void> {
+  let method = 'whatsapp'
+  try {
+    const setting = await getAppSetting('otp')
+    if (setting?.method === 'sms') method = 'sms'
+  } catch (err) {
+    console.error('[Auth] failed to read OTP method setting, defaulting to whatsapp:', err instanceof Error ? err.message : err)
+  }
+  if (method === 'sms') return sendOtpViaSms(waId, otp)
+  return sendOtpViaGateway(waId, otp)
 }
 
 /**
