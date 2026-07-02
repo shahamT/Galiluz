@@ -36,6 +36,13 @@ export interface DashboardScope {
   /** Account entitlement `globalStats`. When false, `totals` is null and top-event
    *  rows omit view/visitor numbers (ranking is preserved). Gated by the caller. */
   includeStats: boolean
+  /** When true, scope the KPI stats collections to the account's OWN events (by `event.accountId`,
+   *  derived from `eventsPubFilter`) instead of by the member-publisher set that `statsPubFilter`
+   *  carries. Prevents a publisher who belongs to more than one account from leaking their other
+   *  account's views/interactions into this dashboard's totals. Equivalent to publisherId-scoping
+   *  for the common one-publisher-per-account case. The activity feed (`logsPubFilter`) is NOT
+   *  affected. Left off for the admin (platform-wide) dashboard. */
+  scopeStatsToAccountEvents?: boolean
 }
 
 /**
@@ -45,7 +52,7 @@ export interface DashboardScope {
  * scoping inputs; the date/deletedAt logic and aggregation shape are identical for both.
  */
 export async function computeDashboard(scope: DashboardScope) {
-  const { statsPubFilter, eventsPubFilter, logsPubFilter, filter, includeStats, selfPublisherId } = scope
+  const { statsPubFilter, eventsPubFilter, logsPubFilter, filter, includeStats, selfPublisherId, scopeStatsToAccountEvents } = scope
 
   const config = useRuntimeConfig() as Record<string, string>
   const { db } = await getMongoConnection()
@@ -56,12 +63,32 @@ export async function computeDashboard(scope: DashboardScope) {
   const interactionsCol = db.collection(config.mongodbCollectionEventInteractions || 'eventInteractions')
   const logsCol = db.collection(config.mongodbCollectionEventLogs || 'eventLogs')
 
+  // Account-scoped dashboards scope the KPI STATS by the account's OWN events (the `event.accountId`
+  // tenant key, matching how event counts already scope), NOT by the member-publisher set:
+  // publisherId-scoping over-counts when a publisher belongs to more than one account (a merged/
+  // multi-account publisher would otherwise leak their OTHER account's views/interactions here).
+  // For the common one-publisher-per-account case this is a no-op. All non-deleted published events
+  // carry an accountId, so the id set is complete; deleted events' stats are dropped by the
+  // `deletedAt` guard below anyway.
+  //
+  // The activity FEED (`logsPubFilter`) is deliberately left publisherId-scoped: event-scoping it
+  // would hide `event_deleted` entries for legacy events whose (now-deleted) doc has no accountId,
+  // dropping real deletion history from the feed. The feed's only residual cross-account bleed is a
+  // dual-account member's name in the last-6 list — cosmetic, and not worth that regression.
+  let statsScope = statsPubFilter
+  if (scopeStatsToAccountEvents) {
+    const scopedIds = (await eventsCol
+      .find({ ...eventsPubFilter }, { projection: { _id: 1 } })
+      .toArray()).map((e) => e._id.toString())
+    statsScope = { eventId: { $in: scopedIds } }
+  }
+
   // Stats filters always exclude soft-deleted events' data (stamped with deletedAt on delete)
   const pubFilter = {
-    ...statsPubFilter,
+    ...statsScope,
     deletedAt: { $exists: false },
   }
-  devLog('computeDashboard scope', { statsPubFilter, eventsPubFilter, logsPubFilter, filter, pubFilter })
+  devLog('computeDashboard scope', { statsPubFilter, eventsPubFilter, logsPubFilter, scopeStatsToAccountEvents, filter, pubFilter })
   const today = getTodayIsrael()
   const [yr, mo] = today.split('-')
   const monthPrefix = `${yr}-${mo}`

@@ -23,6 +23,10 @@ export default defineEventHandler(async (event) => {
     // Event counts scope by the tenant key (same as the portal events list) — not the publisher-set.
     eventsPubFilter: getAccountEventFilter(session),
     logsPubFilter: { publisherId: { $in: accountPublisherIds } },
+    // Scope stats + activity to the account's OWN events (by event.accountId), so a publisher
+    // who belongs to more than one account doesn't leak their other account's numbers here.
+    // Super-admins keep platform-wide totals (statsPubFilter {}), so this stays off for them.
+    scopeStatsToAccountEvents: !session.isSuperAdmin,
     selfPublisherId: session.publisherId,
     filter,
     includeStats: features.globalStats,
