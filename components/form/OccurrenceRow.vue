@@ -8,32 +8,27 @@
           <div class="OccurrenceRow-dateWrap">
             <FormField label="תאריך" required :error="errors.date">
               <div class="OccurrenceRow-dateField">
-                <!-- Native <input type=date> shows mm/dd/yyyy on US-locale browsers; we render our own
-                     dd/mm/yyyy text and open the native calendar via showPicker(). Value stays ISO. -->
-                <div class="OccurrenceRow-dateControl">
-                  <button
-                    type="button"
-                    class="FormInput OccurrenceRow-dateInput OccurrenceRow-dateBtn"
-                    :class="{ 'OccurrenceRow-dateBtn--placeholder': !displayDate }"
-                    :disabled="frozen"
-                    @click="openPicker"
-                  >
-                    <span>{{ displayDate || 'בחרו תאריך' }}</span>
-                    <UiIcon name="calendar_month" size="sm" class="OccurrenceRow-dateIcon" />
-                  </button>
-                  <input
-                    ref="dateEl"
-                    v-model="local.date"
-                    type="date"
-                    class="OccurrenceRow-dateNative"
-                    :min="minDate"
-                    :disabled="frozen"
-                    tabindex="-1"
-                    aria-hidden="true"
-                    @change="emit('update:modelValue', local)"
-                  />
-                </div>
+                <!-- In-house picker (FormDatePickerModal): the native <input type=date> can't be
+                     opened programmatically on iOS Safari and renders mm/dd/yyyy on US-locale
+                     browsers. The button shows dd/mm/yyyy; the value stays ISO yyyy-mm-dd. -->
+                <button
+                  type="button"
+                  class="FormInput OccurrenceRow-dateInput OccurrenceRow-dateBtn"
+                  :class="{ 'OccurrenceRow-dateBtn--placeholder': !displayDate }"
+                  :disabled="frozen"
+                  @click="pickerOpen = true"
+                >
+                  <span>{{ displayDate || 'בחרו תאריך' }}</span>
+                  <UiIcon name="calendar_month" size="sm" class="OccurrenceRow-dateIcon" />
+                </button>
                 <span v-if="weekdayLabel" class="OccurrenceRow-dayChip">{{ weekdayLabel }}</span>
+                <FormDatePickerModal
+                  v-if="pickerOpen"
+                  :model-value="local.date"
+                  :min="minDate"
+                  @update:model-value="onDatePicked"
+                  @close="pickerOpen = false"
+                />
               </div>
             </FormField>
           </div>
@@ -48,15 +43,14 @@
         <div v-if="!allDay" class="OccurrenceRow-group2">
           <div class="OccurrenceRow-timeWrap OccurrenceRow-timeWrap--start">
             <FormField label="התחלה" required :error="errors.startTime">
-              <div class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': frozen }">
-                <select :value="startH" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onStartHChange">
-                  <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
-                </select>
-                <span class="OccurrenceRow-timeSep">:</span>
-                <select :value="startM" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onStartMChange">
-                  <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
-                </select>
-              </div>
+              <button
+                type="button"
+                class="FormInput OccurrenceRow-timeBtn"
+                :disabled="frozen"
+                @click="startPickerOpen = true"
+              >
+                {{ startH }}:{{ startM }}
+              </button>
             </FormField>
           </div>
           <div class="OccurrenceRow-timeWrap">
@@ -66,15 +60,15 @@
                 <input v-model="hasEndTime" type="checkbox" class="OccurrenceRow-toggleInput" :disabled="frozen" @change="onHasEndTimeChange" />
                 <span class="OccurrenceRow-toggleTrack" />
               </label>
-              <div v-if="hasEndTime" class="OccurrenceRow-timePicker" :class="{ 'OccurrenceRow-timePicker--disabled': frozen }">
-                <select :value="endH" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onEndHChange">
-                  <option v-for="h in endHoursFiltered" :key="h" :value="h">{{ h }}</option>
-                </select>
-                <span class="OccurrenceRow-timeSep">:</span>
-                <select :value="endM" :disabled="frozen" class="OccurrenceRow-timeSelect" @change="onEndMChange">
-                  <option v-for="m in endMinutesFiltered" :key="m" :value="m">{{ m }}</option>
-                </select>
-              </div>
+              <button
+                v-if="hasEndTime"
+                type="button"
+                class="FormInput OccurrenceRow-timeBtn"
+                :disabled="frozen"
+                @click="endPickerOpen = true"
+              >
+                {{ endH }}:{{ endM }}
+              </button>
             </div>
           </div>
         </div>
@@ -108,6 +102,24 @@
       <span v-if="errors.date" class="OccurrenceRow-errorText">{{ errors.date }}</span>
       <span v-if="errors.startTime" class="OccurrenceRow-errorText">{{ errors.startTime }}</span>
     </div>
+
+    <!-- Time pickers (self-teleporting) -->
+    <FormTimePickerModal
+      v-if="startPickerOpen"
+      :model-value="local.startTime"
+      title="שעת התחלה"
+      @update:model-value="onStartPicked"
+      @close="startPickerOpen = false"
+    />
+    <FormTimePickerModal
+      v-if="endPickerOpen"
+      :model-value="local.endTime"
+      :min="local.startTime"
+      :duration-from="local.startTime"
+      title="שעת סיום"
+      @update:model-value="onEndPicked"
+      @close="endPickerOpen = false"
+    />
 
     <!-- Confirm delete modal -->
     <Teleport to="body">
@@ -144,7 +156,8 @@ watch(() => props.modelValue, (val) => {
   Object.assign(local, { ...val })
 }, { deep: true })
 
-const minDate = computed(() => props.frozen ? undefined : new Date().toISOString().slice(0, 10))
+// getTodayDateString() is local-time (a UTC slice is a day behind Israel until 02:00/03:00).
+const minDate = computed(() => props.frozen ? '' : getTodayDateString())
 
 // Display the ISO date (YYYY-MM-DD) as DD/MM/YYYY regardless of the browser's locale.
 const displayDate = computed(() => {
@@ -152,17 +165,11 @@ const displayDate = computed(() => {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : ''
 })
 
-// Open the (visually hidden) native date input's calendar; value/min/validation stay native.
-const dateEl = ref(null)
-function openPicker() {
-  if (props.frozen) return
-  const el = dateEl.value
-  if (!el) return
-  if (typeof el.showPicker === 'function') {
-    try { el.showPicker(); return } catch { /* not allowed here — fall back */ }
-  }
-  el.focus()
-  el.click()
+const pickerOpen = ref(false)
+function onDatePicked(iso) {
+  local.date = iso
+  emit('update:modelValue', local)
+  pickerOpen.value = false
 }
 
 // Hebrew weekday chip beside the date — recomputes live as local.date changes.
@@ -178,9 +185,6 @@ const weekdayLabel = computed(() => {
 const allDay = ref(!local.hasTime)
 const hasEndTime = ref(!!local.endTime)
 
-const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
-const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
-
 function parseTime(t) {
   if (!t) return { h: '08', m: '00' }
   const [h = '08', m = '00'] = String(t).split(':')
@@ -191,20 +195,6 @@ const startH = computed(() => parseTime(local.startTime).h)
 const startM = computed(() => parseTime(local.startTime).m)
 const endH = computed(() => parseTime(local.endTime).h)
 const endM = computed(() => parseTime(local.endTime).m)
-
-// End time options filtered to be after start time
-const endHoursFiltered = computed(() => {
-  const sh = parseInt(startH.value, 10)
-  return hours.filter(h => parseInt(h, 10) >= sh)
-})
-
-const endMinutesFiltered = computed(() => {
-  const sh = parseInt(startH.value, 10)
-  const sm = parseInt(startM.value, 10)
-  const eh = parseInt(endH.value, 10)
-  if (eh === sh) return minutes.filter(m => parseInt(m, 10) > sm)
-  return minutes
-})
 
 function toMins(h, m) { return parseInt(h, 10) * 60 + parseInt(m, 10) }
 
@@ -228,23 +218,20 @@ function setStart(h, m) {
 
 function setEnd(h, m) { local.endTime = `${h}:${m}`; emit('update:modelValue', local) }
 
-function onStartHChange(e) { setStart(e.target.value, startM.value) }
-function onStartMChange(e) { setStart(startH.value, e.target.value) }
+const startPickerOpen = ref(false)
+const endPickerOpen = ref(false)
 
-function onEndHChange(e) {
-  const newH = e.target.value
-  const sh = parseInt(startH.value, 10)
-  const sm = parseInt(startM.value, 10)
-  const nh = parseInt(newH, 10)
-  const em = parseInt(endM.value, 10)
-  // If same hour as start, ensure minute is after start minute
-  const safeM = (nh === sh && em <= sm)
-    ? (minutes.find(m => parseInt(m, 10) > sm) || '59')
-    : endM.value
-  setEnd(newH, safeM)
+function onStartPicked(t) {
+  const { h, m } = parseTime(t)
+  setStart(h, m)
+  startPickerOpen.value = false
 }
 
-function onEndMChange(e) { setEnd(endH.value, e.target.value) }
+function onEndPicked(t) {
+  const { h, m } = parseTime(t)
+  setEnd(h, m)
+  endPickerOpen.value = false
+}
 
 function onAllDayChange() {
   local.hasTime = !allDay.value
@@ -392,10 +379,6 @@ function confirmRemove() {
     padding: var(--spacing-xs) var(--spacing-sm);
   }
 
-  &-dateControl {
-    position: relative;
-  }
-
   &-dateBtn {
     appearance: none;
     -webkit-appearance: none;
@@ -417,65 +400,19 @@ function confirmRemove() {
     flex-shrink: 0;
   }
 
-  // The real <input type="date"> overlays the button (so showPicker anchors the calendar there)
-  // but is invisible and click-through — the button handles the click.
-  &-dateNative {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  &-timePicker {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
+  &-timeBtn {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 4.25rem;
     direction: ltr;
-    border: 1.5px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-background);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    transition: border-color 0.15s;
-
-    &:focus-within {
-      border-color: var(--brand-dark-green);
-    }
-
-    &--disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-  }
-
-  &-timeSelect {
-    border: none;
-    outline: none;
-    background: transparent;
+    text-align: center;
     font-size: var(--font-size-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
     font-family: var(--font-family-body);
     color: var(--color-text);
     cursor: pointer;
-    padding: 0;
-    width: 1.6rem;
-    text-align: center;
-    appearance: none;
-    -webkit-appearance: none;
 
-    &:disabled {
-      cursor: not-allowed;
-    }
-  }
-
-  &-timeSep {
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-text-muted);
-    line-height: 1;
+    &:disabled { opacity: 0.4; cursor: not-allowed; }
   }
 
   &-allDayWrap {
