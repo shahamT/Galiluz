@@ -5,6 +5,7 @@ import { softDeleteEventStatsData } from '~/server/utils/eventStats.service'
 import { logAuthEvent } from '~/server/utils/authLog'
 import { ensureAccountForPublisher, resolveAccountTitle } from '~/server/utils/accountScope'
 import { notifyLog } from '~/server/utils/notifyLog'
+import { notifyPublisherWhatsApp, buildApprovedMessage, buildRejectedMessage, getLoginUrl } from '~/server/utils/notifyPublisher'
 
 /**
  * Shared publisher approve/reject core — the ATOMIC first-wins claim + side effects, used by BOTH the
@@ -69,11 +70,15 @@ export async function approvePublisher(db: Db, config: Record<string, string>, w
     `אושר על ידי: *${actor.actorName}*`,
   ].join('\n')
   await notifyLog(msg)
+  // Tell the publisher they're in (via the gateway — the Cloud API can't reach cold users without
+  // templates). Sent from the core so BOTH trigger paths notify: bot approve-button AND admin portal.
+  await notifyPublisherWhatsApp(waId, buildApprovedMessage(getLoginUrl()))
   return { applied: true, publisherName: pubDoc.fullName || '', actorName: actor.actorName }
 }
 
-/** Reject a pending publisher (atomic). Winner: soft-delete their events+stats, then ghost (on-behalf) or hard-delete. */
-export async function rejectPublisher(db: Db, config: Record<string, string>, waId: string, actor: ActorInfo, event?: H3Event): Promise<ApprovalResult> {
+/** Reject a pending publisher (atomic). Winner: soft-delete their events+stats, then ghost (on-behalf) or hard-delete.
+ *  `reason` is only for the notice to the publisher (never persisted). */
+export async function rejectPublisher(db: Db, config: Record<string, string>, waId: string, actor: ActorInfo, event?: H3Event, reason?: string): Promise<ApprovalResult> {
   const collection = db.collection(config.mongodbCollectionPublishers || 'publishers')
   const now = new Date()
 
@@ -117,5 +122,10 @@ export async function rejectPublisher(db: Db, config: Record<string, string>, wa
   }
 
   if (event) await logAuthEvent(event, 'publisher_rejected', waId, { cascadedEvents: theirEvents.length })
+  // Tell the publisher (gateway — see approvePublisher). Skipped for on-behalf ghosts: they never
+  // asked to register, so there's no request to report the outcome of.
+  if (!doc.createdOnBehalf) {
+    await notifyPublisherWhatsApp(waId, buildRejectedMessage(reason))
+  }
   return { applied: true, publisherName: doc.fullName || '', actorName: actor.actorName }
 }
