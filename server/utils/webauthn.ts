@@ -10,7 +10,9 @@ import type {
   AuthenticationResponseJSON,
   AuthenticatorTransportFuture,
 } from '@simplewebauthn/server'
+import { ObjectId } from 'mongodb'
 import { getMongoConnection } from '~/server/utils/mongodb'
+import { resolvePublisherRoles } from '~/server/utils/accountScope'
 
 /**
  * WebAuthn (passkey) machinery — the staff SECOND factor on top of WhatsApp OTP.
@@ -22,6 +24,7 @@ import { getMongoConnection } from '~/server/utils/mongodb'
 
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000   // time to complete a register/auth ceremony
 export const MFA_PENDING_TTL_MS = 5 * 60 * 1000  // time to complete the passkey step after OTP
+export const ENROLL_TOKEN_TTL_MS = 15 * 60 * 1000 // time to open a cross-device enroll link + finish
 
 const RP_NAME = 'גלילו״ז'
 
@@ -70,10 +73,22 @@ export function hashMfaToken(token: string): string {
   return createHmac('sha256', otpSecret()).update(token).digest('hex')
 }
 
+/** Hash for the cross-device enrollment-link token (same HMAC; stored in a distinct field). */
+export function hashEnrollToken(token: string): string {
+  return hashMfaToken(token)
+}
+
 function credentialsCollection() {
   const config = useRuntimeConfig() as Record<string, string>
   return getMongoConnection().then(({ db }) =>
     db.collection(config.mongodbCollectionWebauthnCredentials || 'webauthnCredentials'),
+  )
+}
+
+function publishersCollection() {
+  const config = useRuntimeConfig() as Record<string, string>
+  return getMongoConnection().then(({ db }) =>
+    db.collection(config.mongodbCollectionPublishers || 'publishers'),
   )
 }
 
@@ -116,13 +131,94 @@ export async function verifyRegistration(opts: { response: RegistrationResponseJ
     requireUserVerification: true,
   })
   if (!verification.verified || !verification.registrationInfo) return null
-  const { credential } = verification.registrationInfo
+  const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo
   return {
     credentialId: credential.id,
     publicKey: Buffer.from(credential.publicKey).toString('base64'),
     counter: credential.counter,
     transports: credential.transports,
+    deviceType: credentialDeviceType, // 'singleDevice' | 'multiDevice' (synced passkeys are multiDevice)
+    backedUp: credentialBackedUp,      // backup-eligible / synced across the user's devices
   }
+}
+
+// ── Shared enrollment path (used by both the session-based register-* endpoints and the
+//    token-based cross-device enroll-* endpoints, so the ceremony logic lives in one place) ──
+
+/** Build registration options + stash the ceremony challenge on the publisher doc. */
+export async function startPasskeyEnrollment(publisherId: string, userName: string) {
+  const existing = await listCredentials(publisherId)
+  const options = await buildRegistrationOptions({ publisherId, userName, existing })
+  const col = await publishersCollection()
+  await col.updateOne(
+    { _id: new ObjectId(publisherId) },
+    { $set: { webauthnChallenge: options.challenge, webauthnChallengeExpiresAt: new Date(Date.now() + CHALLENGE_TTL_MS) } },
+  )
+  return options
+}
+
+/** Verify an attestation against the stored challenge, store the credential, return the list. */
+export async function finishPasskeyEnrollment(publisherId: string, response: unknown, deviceName?: string) {
+  if (!response || typeof response !== 'object') {
+    throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'invalid_input' })
+  }
+  const col = await publishersCollection()
+  const credsCol = await credentialsCollection()
+  const now = new Date()
+  const doc = await col.findOne(
+    { _id: new ObjectId(publisherId) },
+    { projection: { webauthnChallenge: 1, webauthnChallengeExpiresAt: 1 } },
+  )
+  if (!doc?.webauthnChallenge || !doc.webauthnChallengeExpiresAt || doc.webauthnChallengeExpiresAt <= now) {
+    throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'challenge_expired' })
+  }
+  let verified: Awaited<ReturnType<typeof verifyRegistration>> = null
+  try {
+    verified = await verifyRegistration({ response: response as RegistrationResponseJSON, expectedChallenge: String(doc.webauthnChallenge) })
+  } catch {
+    verified = null
+  }
+  if (!verified) throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'registration_failed' })
+
+  const name = typeof deviceName === 'string' && deviceName.trim() ? deviceName.trim().slice(0, 60) : 'מפתח גישה'
+  try {
+    await credsCol.insertOne({
+      publisherId,
+      credentialId: verified.credentialId,
+      publicKey: verified.publicKey,
+      counter: verified.counter,
+      transports: verified.transports || [],
+      deviceType: verified.deviceType,
+      backedUp: verified.backedUp,
+      deviceName: name,
+      createdAt: now,
+      lastUsedAt: now,
+    })
+  } catch (err) {
+    if ((err as { code?: number })?.code === 11000) {
+      throw createError({ statusCode: 409, statusMessage: 'Conflict', message: 'already_enrolled' })
+    }
+    throw err
+  }
+  await col.updateOne({ _id: new ObjectId(publisherId) }, { $unset: { webauthnChallenge: '', webauthnChallengeExpiresAt: '' } })
+  const credentials = (await listCredentials(publisherId)).map((c) => ({
+    id: c.credentialId, deviceName: c.deviceName || '', createdAt: c.createdAt, lastUsedAt: c.lastUsedAt,
+  }))
+  return { credentials }
+}
+
+/** Resolve a publisher from a valid, unexpired cross-device enroll token (platform staff only). */
+export async function resolvePublisherByEnrollToken(
+  token: string,
+): Promise<{ publisherId: string; userName: string; waId: string; label: string } | null> {
+  if (!token || typeof token !== 'string') return null
+  const col = await publishersCollection()
+  const doc = await col.findOne({ enrollTokenKey: hashEnrollToken(token), enrollTokenExpiresAt: { $gt: new Date() } })
+  if (!doc || doc.status !== 'approved' || doc.isActive === false) return null
+  const publisherId = doc._id.toString()
+  const roles = await resolvePublisherRoles({ publisherId, accountId: doc.accountId })
+  if (!roles.isPlatformStaff) return null
+  return { publisherId, userName: doc.fullName || doc.waId, waId: doc.waId, label: doc.fullName || '' }
 }
 
 // ── Authentication (assert an existing passkey at login) ──

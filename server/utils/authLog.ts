@@ -15,6 +15,7 @@ export type AuthAction =
   | 'mfa_failed'
   | 'passkey_enrolled'
   | 'passkey_reset'
+  | 'enroll_link_created'
 
 export async function logAuthEvent(
   event: H3Event,
