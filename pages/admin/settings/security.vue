@@ -53,6 +53,30 @@
       </button>
     </div>
     <p v-if="addError" class="AdminSecurity-error">{{ addError }}</p>
+
+    <div class="AdminSecurity-card AdminSecurity-otherDevice">
+      <h2 class="AdminSecurity-cardTitle">הוספת מכשיר נוסף</h2>
+      <p class="AdminSecurity-muted">
+        כדי להוסיף מפתח גישה בטלפון או במכשיר אחר, צרו קישור וסרקו אותו במכשיר החדש. הקישור חד-פעמי,
+        תקף ל-15 דקות, ורק מוסיף מפתח — עדיין צריך קוד OTP כדי להתחבר.
+      </p>
+
+      <button v-if="!enrollLink" class="AdminSecurity-addBtn AdminSecurity-otherDeviceBtn" :disabled="linkBusy" @click="makeEnrollLink">
+        <span v-if="linkBusy" class="AdminSecurity-spinner" />
+        <template v-else>יצירת קישור הוספה</template>
+      </button>
+
+      <div v-else class="AdminSecurity-linkBox">
+        <img v-if="enrollQr" :src="enrollQr" alt="קוד QR להוספת מכשיר" class="AdminSecurity-qr" />
+        <div class="AdminSecurity-linkRow">
+          <input class="AdminSecurity-input" :value="enrollLink" readonly @focus="$event.target.select()" />
+          <button class="AdminSecurity-addBtn" @click="copyLink">{{ copied ? 'הועתק ✓' : 'העתקה' }}</button>
+        </div>
+        <p class="AdminSecurity-muted">סרקו את הקוד עם הטלפון (או פתחו את הקישור בו). תקף עד {{ formatTime(enrollExpiresAt) }}.</p>
+        <button class="AdminSecurity-removeBtn" @click="resetLink">יצירת קישור חדש</button>
+      </div>
+      <p v-if="linkError" class="AdminSecurity-error">{{ linkError }}</p>
+    </div>
   </div>
 </template>
 
@@ -60,7 +84,7 @@
 defineOptions({ name: 'AdminSettingsSecurity' })
 
 const authStore = useAuthStore()
-const { registerPasskey, listPasskeys, deletePasskey, checkAuth } = useAuth()
+const { registerPasskey, listPasskeys, deletePasskey, createEnrollLink, checkAuth } = useAuth()
 
 const credentials = ref([])
 const loading = ref(true)
@@ -116,6 +140,53 @@ async function remove(id) {
   } finally {
     busy.value = false
   }
+}
+
+// ── Add another device (cross-device enrollment link) ──
+const enrollLink = ref('')
+const enrollExpiresAt = ref('')
+const enrollQr = ref('')
+const linkBusy = ref(false)
+const linkError = ref('')
+const copied = ref(false)
+
+async function makeEnrollLink() {
+  if (linkBusy.value) return
+  linkError.value = ''
+  linkBusy.value = true
+  try {
+    const res = await createEnrollLink()
+    enrollLink.value = res.url
+    enrollExpiresAt.value = res.expiresAt
+    try {
+      const QRCode = (await import('qrcode')).default
+      enrollQr.value = await QRCode.toDataURL(res.url, { width: 220, margin: 1 })
+    } catch { enrollQr.value = '' }
+  } catch {
+    linkError.value = 'יצירת הקישור נכשלה'
+  } finally {
+    linkBusy.value = false
+  }
+}
+
+function resetLink() {
+  enrollLink.value = ''
+  enrollQr.value = ''
+  enrollExpiresAt.value = ''
+  copied.value = false
+}
+
+async function copyLink() {
+  try {
+    await navigator.clipboard.writeText(enrollLink.value)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 1500)
+  } catch { /* clipboard blocked — the user can select the field manually */ }
+}
+
+function formatTime(iso) {
+  if (!iso) return ''
+  try { return new Date(iso).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) } catch { return '' }
 }
 
 onMounted(load)
@@ -258,5 +329,29 @@ onMounted(load)
     animation: adminSecSpin 0.7s linear infinite;
   }
   @keyframes adminSecSpin { to { transform: rotate(360deg); } }
+
+  &-otherDevice { margin-top: var(--spacing-md); }
+
+  &-linkBox {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+  }
+
+  &-qr {
+    width: 200px;
+    height: 200px;
+    align-self: center;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: #fff;
+  }
+
+  &-linkRow {
+    display: flex;
+    gap: var(--spacing-sm);
+    @include mobile { flex-direction: column; }
+  }
 }
 </style>

@@ -35,6 +35,12 @@ export function useAuth() {
     return $fetch('/api/auth/passkey/credentials')
   }
 
+  // Mint a short-lived, single-use cross-device enrollment link (open it on the new device to
+  // enroll that device's own passkey). Returns { url, expiresAt }.
+  async function createEnrollLink() {
+    return $fetch('/api/auth/passkey/enroll-link', { method: 'POST' })
+  }
+
   async function deletePasskey(id) {
     return $fetch(`/api/auth/passkey/${encodeURIComponent(id)}`, { method: 'DELETE' })
   }
@@ -67,5 +73,5 @@ export function useAuth() {
     }
   }
 
-  return { sendOtp, verifyOtp, verifyPasskey, registerPasskey, listPasskeys, deletePasskey, listMyAccounts, selectAccount, logout, checkAuth }
+  return { sendOtp, verifyOtp, verifyPasskey, registerPasskey, listPasskeys, deletePasskey, createEnrollLink, listMyAccounts, selectAccount, logout, checkAuth }
 }
