@@ -145,19 +145,13 @@ export const APPROVER = {
   },
   DELETE_EVENT_SUCCESS: 'האירוע נמחק בהצלחה ✅',
   DELETE_EVENT_CANCELLED: 'הפעולה בוטלה.',
-  PUBLISHER_EVENT_DELETED_BODY: 'האירוע הבא נמחק על ידי מנהל\n*{title}*',
-  PUBLISHER_EVENT_DELETED_REASON: '\nהודעה מהמנהל:\n{reason}',
 }
 
-// --- PUBLISHER (web-portal redirect + approve/reject result messages) ---
+// --- PUBLISHER (web-portal redirect) ---
+// The approve/reject/event-deleted result notices moved to the WEB (server/utils/notifyPublisher.ts),
+// sent via the wa-gateway — the Cloud API can't reach cold users without (unavailable) templates.
 
 export const PUBLISHER = {
-  APPROVED: {
-    // On approval, direct the publisher to the web portal (login page). {loginUrl} is injected
-    // at send time. (Reply buttons can't carry URLs, so this is sent as text.)
-    body:
-      '*את/ה מאושר/ת!* (תרתי משמע 😉)\nפרסמו את האירוע הראשון שלכם בגלילו"ז\n{loginUrl}',
-  },
   // Single redirect shown for every publisher action (publish / update / delete an event, or
   // register) — the whole publisher lifecycle lives on the web portal now. {loginUrl}/{registerUrl}
   // are injected at send time (reply buttons can't carry URLs, so this is sent as text and
@@ -170,8 +164,4 @@ export const PUBLISHER = {
       'כניסה לאיזור האישי 👇\n{loginUrl}\n\n' +
       'הצטרפות כמפרסמים 👇\n{registerUrl}',
   },
-  REJECTED_BODY: '*לצערנו* הבקשה שלך לפרסום בגלילו"ז נדחתה... 😣',
-  REJECTED_REASON_LINE: '*סיבת הדחייה:* ',
-  REJECTED_FOOTER: '_ניתן לבקש אישור מחדש_',
-  REJECTED_BUTTON: { id: 'back_to_main', title: 'בחזרה לתפריט הראשי' },
 }

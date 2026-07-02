@@ -79,18 +79,16 @@ async function notifyOtherApprovers(phoneNumberId, actorWaId, message) {
 const APPROVER_ACTION_ERROR = 'אירעה שגיאה בביצוע הפעולה, נסו שוב מאוחר יותר.'
 
 /**
- * Reject a publisher and handle the first-wins outcome: winner notifies the publisher + confirms +
- * proactively notifies the other approvers; a late approver is told it was already handled.
+ * Reject a publisher and handle the first-wins outcome: winner confirms + proactively notifies the
+ * other approvers; a late approver is told it was already handled. The publisher's rejection notice
+ * (with the reason) is sent by the WEB on the winner path, via the wa-gateway — the Cloud API can't
+ * reach cold users without (unavailable) templates.
  */
 async function finishReject(phoneNumberId, from, waId, reason, localName) {
   const result = await rejectPublisher(waId, from, reason)
   conversationState.clear(from)
   const pubName = result.publisherName || localName || APPROVER.DEFAULT_PUBLISHER_LABEL
   if (result.applied) {
-    const body = reason
-      ? `${PUBLISHER.REJECTED_BODY}\n${PUBLISHER.REJECTED_REASON_LINE}${reason}\n\n${PUBLISHER.REJECTED_FOOTER}`
-      : `${PUBLISHER.REJECTED_BODY}\n\n${PUBLISHER.REJECTED_FOOTER}`
-    await sendInteractiveButtons(phoneNumberId, waId, { body, buttons: [PUBLISHER.REJECTED_BUTTON] })
     await sendText(phoneNumberId, from, APPROVER.CONFIRM_REJECTED.replace('{fullName}', pubName))
     await notifyOtherApprovers(phoneNumberId, from, APPROVER.OTHER_REJECTED.replace('{actor}', getApproverName(from) || 'מאשר').replace('{fullName}', pubName))
   } else if (result.error) {
@@ -103,23 +101,17 @@ async function finishReject(phoneNumberId, from, waId, reason, localName) {
 }
 
 /**
- * Delete an event and handle the first-wins outcome: winner (optionally) messages the publisher with
- * the reason + confirms + proactively notifies the other approvers; a late approver is told it was
- * already deleted.
+ * Delete an event and handle the first-wins outcome: winner confirms + proactively notifies the
+ * other approvers; a late approver is told it was already deleted. The publisher's deleted-notice
+ * (when a reason was given) is sent by the WEB on the winner path, via the wa-gateway — the reason
+ * travels in the delete request body.
  */
 async function finishDelete(phoneNumberId, from, eventId, reason, info) {
-  const result = await deleteEvent(eventId, from)
+  const result = await deleteEvent(eventId, from, reason)
   approverEventNotifications.remove(eventId)
   conversationState.clear(from)
   const title = result.eventTitle || info?.eventTitle || 'אירוע'
   if (result.applied) {
-    const publisherPhone = result.publisherPhone || info?.publisherPhone
-    if (reason && publisherPhone) {
-      const body =
-        APPROVER.PUBLISHER_EVENT_DELETED_BODY.replace('{title}', title) +
-        APPROVER.PUBLISHER_EVENT_DELETED_REASON.replace('{reason}', reason)
-      await sendInteractiveButtons(phoneNumberId, publisherPhone, { body, buttons: [{ id: 'contact', title: 'יצירת קשר' }] })
-    }
     await sendText(phoneNumberId, from, APPROVER.DELETE_EVENT_SUCCESS)
     await notifyOtherApprovers(phoneNumberId, from, APPROVER.OTHER_DELETED.replace('{actor}', getApproverName(from) || 'מאשר').replace('{title}', title))
   } else if (result.error) {
@@ -409,9 +401,9 @@ async function handleApproverFlow(phoneNumberId, from, msg) {
       conversationState.clear(from)
       const pubName = result.publisherName || localName
       if (result.applied) {
-        // Winner: direct the publisher to the web portal, confirm, and tell the other approvers.
-        const loginUrl = `${(config.galiluzAppUrl || 'https://galiluz.co.il').replace(/\/$/, '')}/login`
-        await sendText(phoneNumberId, waId, PUBLISHER.APPROVED.body.replace('{loginUrl}', loginUrl))
+        // Winner: confirm + tell the other approvers. The publisher's "you're approved" notice
+        // (with the login link) is sent by the WEB via the wa-gateway — the Cloud API can't reach
+        // cold users without (unavailable) templates.
         await sendText(phoneNumberId, from, APPROVER.CONFIRM_APPROVED.replace('{fullName}', pubName))
         await notifyOtherApprovers(phoneNumberId, from, APPROVER.OTHER_APPROVED.replace('{actor}', getApproverName(from) || 'מאשר').replace('{fullName}', pubName))
       } else if (result.error) {

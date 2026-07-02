@@ -23,12 +23,17 @@ notified** (`X אישר/מחק את …`).
         │  POST /api/publishers/{approve|reject}  or  /api/events/[id]/delete   { …, actorWaId: from }
         ▼
  web  ATOMIC first-wins claim (findOneAndUpdate on status:'pending' / deletedAt absent) + stamp actor
-        │  applied:true  → side effects (notify publisher, log) → return { publisherName/eventTitle, … }
+        │  applied:true  → side effects (notify publisher via wa-gateway*, log) → return { publisherName/eventTitle, … }
         │  applied:false → return { by }  (who already did it)
         ▼
  wa-bot  winner: confirm to actor + notifyOtherApprovers("X handled …")
          loser:  "כבר אושר/נדחה/נמחק על ידי X"
 ```
+\* The publisher's approved/rejected/event-deleted notice is composed + sent by the WEB
+([server/utils/notifyPublisher.ts](../../server/utils/notifyPublisher.ts) → gateway `/internal/send-message`,
+Green API) — not by the bot: the Cloud API can't reach a cold user without pre-approved templates
+(unavailable while the business is unverified). This also means admin-portal approve/reject notifies
+the publisher, not just the bot-button path.
 
 ## 3. Components
 | File | Role |
@@ -41,6 +46,7 @@ notified** (`X אישר/מחק את …`).
 | [apps/wa-bot/src/services/approvers.service.js](../../apps/wa-bot/src/services/approvers.service.js) | Cached approver list (boot + 2-min refresh); `isApprover`, `getApproverName`, `getAllApprovers` |
 | [apps/wa-bot/src/routes/webhook.js](../../apps/wa-bot/src/routes/webhook.js) | Fan-out, `isApprover` routing, winner/loser branch, `notifyOtherApprovers`, `finishReject`/`finishDelete` |
 | [server/utils/notifyApprover.ts](../../server/utils/notifyApprover.ts) · [notifyApproverEvent.ts](../../server/utils/notifyApproverEvent.ts) | Web → bot triggers (unchanged contract; bot now fans out) |
+| [server/utils/notifyPublisher.ts](../../server/utils/notifyPublisher.ts) | Publisher-facing approved/rejected/event-deleted notices via wa-gateway (Green API — reaches cold users; fire-and-forget) |
 | […/approvers/test-request.post.ts](../../server/api/admin/settings/approvers/test-request.post.ts) · [test-cleanup.post.ts](../../server/api/admin/settings/approvers/test-cleanup.post.ts) | Super-admin test harness (dummy registration + cleanup) |
 
 ## 4. Data model

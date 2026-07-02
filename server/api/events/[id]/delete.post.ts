@@ -6,13 +6,16 @@ import { logEventDeletion } from '~/server/utils/eventLogs.service'
 import { softDeleteEventStatsData } from '~/server/utils/eventStats.service'
 import { deleteEventCloudinaryMedia } from '~/server/utils/eventMedia.service'
 import { resolveActorName } from '~/server/utils/approvers'
+import { notifyPublisherWhatsApp, buildEventDeletedMessage } from '~/server/utils/notifyPublisher'
 
 const LOG_PREFIX = '[EventsAPI] Delete'
 
-/** Body: optional deletionType + the acting approver's waId (for first-wins conflict reporting). */
+/** Body: optional deletionType + the acting approver's waId (for first-wins conflict reporting) +
+ *  optional reason — when given, the publisher is notified with it (via the gateway). */
 interface DeleteBody {
   deletionType?: 'kill' | 'user_deleted'
   actorWaId?: string
+  reason?: string
 }
 
 /**
@@ -29,6 +32,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<DeleteBody>(event).catch(() => ({} as DeleteBody))
   const deletionType = body?.deletionType === 'kill' ? 'kill' : 'user_deleted'
   const actorWaId = typeof body?.actorWaId === 'string' ? body.actorWaId.trim() : ''
+  const reason = typeof body?.reason === 'string' ? body.reason.trim() : ''
 
   let objectId: ObjectId
   try { objectId = new ObjectId(id) } catch { throw createError({ statusCode: 400, statusMessage: 'Bad Request', message: 'invalid id' }) }
@@ -83,6 +87,12 @@ export default defineEventHandler(async (event) => {
   })
   await softDeleteEventStatsData(id, deletedAt)
   await deleteEventCloudinaryMedia(doc, correlationId)
+
+  // Approver gave a reason → tell the publisher (gateway; the bot's Cloud API can't reach cold
+  // users). Matches the old bot behavior: no reason, no publisher message.
+  if (reason && publisherPhone && deletionType === 'user_deleted') {
+    await notifyPublisherWhatsApp(publisherPhone, buildEventDeletedMessage(title || 'אירוע', reason))
+  }
 
   console.info(LOG_PREFIX, correlationId, 'soft-deleted', JSON.stringify({ id, deletionType, by: actorName }))
   return { applied: true, id, eventTitle: title || '', publisherPhone, actorName }
